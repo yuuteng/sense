@@ -16,6 +16,7 @@ Page({
     inviteText: '邀请成员',
     dissolveText: '解散账本',
     dissolveConfirm: false,
+    loading: true,
   },
 
   onLoad(query) {
@@ -23,12 +24,12 @@ Page({
     this.setData({
       bookId: this.bookId,
       ic: {
-        pencil: icons.get('pencil', '#2b5cff', 1.7),
-        list: icons.get('list', '#2b5cff', 1.7),
-        star: icons.get('check', '#2b5cff', 2),
-        arrow: icons.get('arrowRight', '#2b5cff', 1.9),
-        chevron: icons.get('chevron', '#8b867b', 2),
-        trash: icons.get('trash', '#dc2626', 1.7),
+        pencil: icons.get('pencil', '#0089c0', 1.7),
+        invite: icons.get('share', '#0089c0', 1.7),
+        star: icons.get('check', '#0089c0', 2),
+        arrow: icons.get('arrowRight', '#0089c0', 1.9),
+        chevron: icons.get('chevron', '#748294', 2),
+        trash: icons.get('trash', '#f62172', 1.7),
       },
     });
   },
@@ -39,7 +40,7 @@ Page({
     try {
       const books = await api.call('book', 'list');
       const book = books.find((b) => b.bookId === this.bookId);
-      if (!book) { wx.showToast({ title: '账本不存在', icon: 'none' }); return; }
+      if (!book) { this.setData({ loading: false }); wx.showToast({ title: '账本不存在', icon: 'none' }); return; }
       const raw = await api.call('member', 'list', { bookId: this.bookId });
       const members = raw.map((m) => ({
         openid: m.openid, name: m.name + (m.isMe ? '（我）' : ''), initial: m.avatarInitial, color: m.avatarColor,
@@ -50,8 +51,9 @@ Page({
         canManage: book.myRole === 'owner' || book.myRole === 'admin',
         isOwner: book.myRole === 'owner',
         isSplit: book.type === 'split',
+        loading: false,
       });
-    } catch (e) { api.toast(e); }
+    } catch (e) { this.setData({ loading: false }); api.toast(e); }
   },
 
   editBookName() {
@@ -73,18 +75,17 @@ Page({
     }).catch(api.toast);
   },
 
-  goCategories() {
-    wx.showToast({ title: '分类管理开发中', icon: 'none' });
-  },
-
   goSettle() {
     wx.navigateTo({ url: '/pages/settle/settle?bookId=' + this.bookId });
   },
 
-  onInvite() {
-    api.call('member', 'invite', { bookId: this.bookId })
-      .then(() => this.setData({ inviteText: '已生成微信邀请 ✓' }))
-      .catch(api.toast);
+  // 微信分享卡片邀请（由 <button open-type="share"> 触发）
+  onShareAppMessage() {
+    const name = this.data.book ? this.data.book.name : '账本';
+    return {
+      title: `邀请你加入「${name}」一起记账`,
+      path: `/pages/join/join?bookId=${this.bookId}`,
+    };
   },
 
   onTapMember(e) {
@@ -102,9 +103,26 @@ Page({
       return;
     }
     if (!this.data.canManage || m.role === 'owner') return;
-    const next = m.role === 'admin' ? 'rw' : (m.role === 'rw' ? 'ro' : 'admin');
-    api.call('member', 'updateRole', { bookId: this.bookId, openid: m.openid, role: next })
-      .then(() => this.load()).catch(api.toast);
+    // 成员权限 / 移除，用底部动作面板
+    wx.showActionSheet({
+      itemList: ['设为管理员', '设为读写成员', '设为只读成员', '移除成员'],
+      success: (r) => {
+        const roles = ['admin', 'rw', 'ro'];
+        if (r.tapIndex < 3) {
+          api.call('member', 'updateRole', { bookId: this.bookId, openid: m.openid, role: roles[r.tapIndex] })
+            .then(() => this.load()).catch(api.toast);
+        } else {
+          wx.showModal({
+            title: '移除成员', content: `确定将「${m.name}」移出账本？`,
+            success: (c) => {
+              if (!c.confirm) return;
+              api.call('member', 'remove', { bookId: this.bookId, openid: m.openid })
+                .then(() => this.load()).catch(api.toast);
+            },
+          });
+        }
+      },
+    });
   },
 
   onDissolve() {

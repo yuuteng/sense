@@ -1,5 +1,6 @@
 <view class="screen screen--pad">
-  <nav-bar title="统计" sub="{{navSub}}">
+  <loading show="{{loading}}"></loading>
+  <nav-bar center="{{true}}" title="统计" sub="{{navSub}}">
     <view
       slot="right"
       class="appbar__btn {{editing?'active':''}}"
@@ -11,7 +12,12 @@
     </view>
   </nav-bar>
 
-  <view id="cards" bindtouchmove="onListTouchMove" bindtouchend="onHandleTouchEnd">
+  <view wx:if="{{needInit}}" style="text-align:center;padding:120rpx 60rpx">
+    <view style="font-size:32rpx;font-weight:600">还没有账本</view>
+    <view class="muted" style="font-size:28rpx;margin-top:12rpx">创建账本并记账后，这里会显示统计图表。</view>
+  </view>
+
+  <view wx:else id="cards" bindtouchmove="onListTouchMove" bindtouchend="onHandleTouchEnd">
     <view
       wx:for="{{cards}}"
       wx:key="id"
@@ -35,38 +41,53 @@
         </view>
       </view>
 
-      <!-- 概览 / 累计：mini 网格 -->
-      <view wx:if="{{card.kind==='grid'}}" class="overview-grid">
-        <view
-          wx:for="{{card.minis}}"
-          wx:key="k"
-          wx:for-item="m"
-          class="mini {{m.span2?'span2':''}} {{m.accent?'accent':''}}"
-        >
-          <view class="k">{{m.k}}</view>
-          <view class="v num" style="{{m.color?('color:'+m.color):''}}">{{m.v}}</view>
+      <!-- 区间选择 -->
+      <view wx:if="{{card.range==='week'}}" class="range-chips">
+        <text class="rchip {{weekDays===7?'on':''}}" data-d="7" bindtap="setWeekRange">近 7 日</text>
+        <text class="rchip {{weekDays===14?'on':''}}" data-d="14" bindtap="setWeekRange">近 14 日</text>
+        <text class="rchip {{weekDays===30?'on':''}}" data-d="30" bindtap="setWeekRange">近 30 日</text>
+      </view>
+      <view wx:elif="{{card.range==='year'}}" class="range-chips">
+        <text class="rchip {{yearMonths===6?'on':''}}" data-m="6" bindtap="setYearRange">近 6 月</text>
+        <text class="rchip {{yearMonths===12?'on':''}}" data-m="12" bindtap="setYearRange">近 12 月</text>
+      </view>
+
+      <!-- 饼图 -->
+      <view wx:if="{{card.kind==='pie'}}" class="pie-wrap">
+        <image class="donut" src="{{card.svg}}"></image>
+        <view class="pie-legend">
+          <view wx:for="{{card.legends}}" wx:key="k" wx:for-item="lg" class="pl-item">
+            <text wx:if="{{lg.dot}}" class="pl-dot" style="background:{{lg.dot}}"></text>
+            <text class="pl-k">{{lg.k}}</text>
+            <text class="pl-v num {{lg.strong?'strong':''}}">{{lg.v}}</text>
+          </view>
         </view>
       </view>
 
-      <!-- 图表：折线 / 柱状 -->
-      <block wx:elif="{{card.kind==='chart'}}">
-        <image class="chart-svg" src="{{card.img}}" mode="scaleToFill"></image>
+      <!-- 柱状 / 分组柱状 -->
+      <block wx:else>
+        <image class="chart-svg" src="{{card.svg}}" mode="widthFix"></image>
         <view class="legend">
-          <view wx:for="{{card.legends}}" wx:key="text" wx:for-item="lg" class="item {{lg.right?'spacer':''}}">
-            <text wx:if="{{lg.dot}}" class="dot" style="background:{{lg.dotColor}}"></text>{{lg.text}}
+          <view wx:for="{{card.legends}}" wx:key="k" wx:for-item="lg" class="item">
+            <text wx:if="{{lg.dot}}" class="dot" style="background:{{lg.dot}}"></text>{{lg.k}}
           </view>
         </view>
       </block>
     </view>
 
-    <view wx:if="{{editing && cards.length}}" class="ai-disclaimer">编辑模式 · 拖动右侧手柄排序，点左上角 × 移除，布局自动保存</view>
+    <!-- 添加图表 -->
+    <view wx:if="{{canAdd}}" class="add-card" hover-class="pressed" hover-stay-time="80" bindtap="addChart">
+      <image src="{{addIcon}}"></image>
+      <text>添加图表</text>
+    </view>
 
-    <!-- 空态：卡片全部移除后 -->
+    <view wx:if="{{editing && cards.length}}" class="ai-disclaimer">编辑模式 · 拖右侧手柄排序，点左上角 × 移除，自动保存</view>
+
     <view wx:if="{{!cards.length}}" style="text-align:center;padding:112rpx 60rpx">
       <image src="{{barsIcon}}" style="width:88rpx;height:88rpx;margin:0 auto"></image>
       <view style="font-size:32rpx;font-weight:600;margin-top:28rpx">还没有图表卡片</view>
       <view class="muted" style="font-size:28rpx;margin-top:8rpx">你移除了全部卡片，可一键恢复四个默认图表。</view>
-      <view class="btn btn--primary" style="margin-top:36rpx;display:inline-flex" hover-class="pressed" hover-stay-time="80" bindtap="restoreDefault">恢复默认卡片</view>
+      <view class="btn btn--primary" style="margin-top:36rpx;display:inline-flex" hover-class="pressed" hover-stay-time="80" bindtap="restoreDefault">恢复默认图表</view>
     </view>
   </view>
 </view>

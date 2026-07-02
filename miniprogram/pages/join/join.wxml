@@ -1,0 +1,20 @@
+<view class="screen join">
+  <view class="status-spacer" style="height:{{statusBarHeight}}px"></view>
+  <view class="join__box">
+    <image class="join__logo" src="/brand/icon.png"></image>
+
+    <view wx:if="{{status==='joining'}}" class="join__title">正在加入…</view>
+
+    <block wx:elif="{{status==='ok'}}">
+      <view class="join__title">{{msg}}</view>
+      <view class="join__sub">「{{bookName}}」</view>
+      <view class="btn btn--primary btn--lg" style="margin-top:56rpx;min-width:320rpx" hover-class="pressed" hover-stay-time="80" bindtap="goHome">进入首页</view>
+    </block>
+
+    <block wx:else>
+      <view class="join__title">加入失败</view>
+      <view class="join__sub">{{msg}}</view>
+      <view class="btn btn--ghost btn--lg" style="margin-top:56rpx;min-width:320rpx" hover-class="pressed" hover-stay-time="80" bindtap="goHome">返回首页</view>
+    </block>
+  </view>
+</view>

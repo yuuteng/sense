@@ -1,31 +1,33 @@
 const api = require('../../utils/api');
 const icons = require('../../utils/icons');
-const fmt = require('../../utils/format');
-
-const CUR_CODES = ['CNY', 'EUR', 'USD'];
+const cur = require('../../utils/currency');
 
 Page({
   data: {
     ic: {},
-    profile: { nickname: '', avatarInitial: '我', avatarColor: '#2b5cff', avatarFileID: '', bookCount: 0, defaultBookName: '' },
+    profile: { nickname: '', avatarInitial: '我', avatarColor: '#0089c0', avatarFileID: '', bookCount: 0, defaultBookName: '' },
     curCode: 'CNY',
-    curVal: '¥ CNY ⌄',
+    curLabel: cur.label('CNY'),
+    curVisible: false,
     aiLimit: 50,
-    exportVal: 'JSON',
-    importVal: 'JSON',
+    exportVal: '',
+    importVal: '',
+    loading: true,
   },
 
   onLoad() {
     this.setData({
       ic: {
-        currency: icons.get('currency', '#2b5cff', 1.7),
-        list: icons.get('list', '#2b5cff', 1.7),
-        aiBox: icons.get('aiBox', '#2b5cff', 1.7),
-        book: icons.get('book', '#2b5cff', 1.7),
-        download: icons.get('download', '#2b5cff', 1.7),
-        upload: icons.get('upload', '#2b5cff', 1.7),
-        seed: icons.get('privacy', '#2b5cff', 1.7),
-        chevron: icons.get('chevron', '#8b867b', 2),
+        currency: icons.get('currency', '#0089c0', 1.7),
+        list: icons.get('list', '#0089c0', 1.7),
+        aiBox: icons.get('aiBox', '#0089c0', 1.7),
+        book: icons.get('book', '#0089c0', 1.7),
+        download: icons.get('download', '#0089c0', 1.7),
+        upload: icons.get('upload', '#0089c0', 1.7),
+        seed: icons.get('privacy', '#0089c0', 1.7),
+        wipe: icons.get('trash', '#f62172', 1.7),
+        refresh: icons.get('refresh', '#0089c0', 1.8),
+        chevron: icons.get('chevron', '#748294', 2),
       },
     });
   },
@@ -34,6 +36,9 @@ Page({
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
       this.getTabBar().setData({ selected: 3 });
     }
+    // 用缓存的资料先秒显，避免白屏
+    const cached = getApp().globalData && getApp().globalData.profile;
+    if (cached) this.setData({ profile: cached, loading: false });
     this.load();
   },
 
@@ -43,13 +48,17 @@ Page({
         api.call('user', 'getProfile'),
         api.call('settings', 'get'),
       ]);
+      getApp().globalData.profile = profile;
       this.setData({
         profile,
         curCode: s.displayCurrency,
-        curVal: `${fmt.symbolOf(s.displayCurrency)} ${s.displayCurrency} ⌄`,
+        curLabel: cur.label(s.displayCurrency),
         aiLimit: s.aiMessageLimit,
+        loading: false,
       });
-    } catch (e) { /* 未初始化时静默 */ }
+    } catch (e) {
+      this.setData({ loading: false });
+    }
   },
 
   editProfile() {
@@ -64,40 +73,65 @@ Page({
     });
   },
 
-  cycleCurrency() {
-    const i = (CUR_CODES.indexOf(this.data.curCode) + 1) % CUR_CODES.length;
-    const code = CUR_CODES[i];
-    this.setData({ curCode: code, curVal: `${fmt.symbolOf(code)} ${code} ⌄` });
+  openCur() { this.setData({ curVisible: true }); },
+  closeCur() { this.setData({ curVisible: false }); },
+  onCur(e) {
+    const code = e.detail.code;
+    this.setData({ curCode: code, curLabel: cur.label(code), curVisible: false });
     api.call('settings', 'update', { displayCurrency: code }).catch(api.toast);
+  },
+
+  refreshRates() {
+    wx.showLoading({ title: '刷新汇率中…' });
+    api.call('rate', 'refresh').then((r) => {
+      wx.hideLoading();
+      wx.showToast({ title: `已更新 ${r.count} 种币汇率`, icon: 'none' });
+    }).catch((e) => { wx.hideLoading(); api.toast(e); });
   },
 
   goBooks() { wx.navigateTo({ url: '/pages/books/books' }); },
 
-  // 导出：拉数据 → 写临时文件 → 转发/保存，失败则复制到剪贴板
+  // 导出：先选格式
   onExport() {
-    wx.showLoading({ title: '导出中…' });
-    let bookName = '账本';
-    api.call('book', 'getCurrent').then((book) => {
-      if (!book) throw { errMsg: '请先创建账本' };
-      bookName = book.name;
-      return api.call('data', 'export', { bookId: book.bookId });
-    }).then((res) => {
-      wx.hideLoading();
-      const json = JSON.stringify(res.data, null, 2);
-      const path = `${wx.env.USER_DATA_PATH}/sense-${Date.now()}.json`;
-      const fs = wx.getFileSystemManager();
-      fs.writeFile({
-        filePath: path, data: json, encoding: 'utf8',
-        success: () => {
-          wx.shareFileMessage({
-            filePath: path, fileName: `${bookName}.json`,
-            success: () => this.setData({ exportVal: `已导出 ${res.count} 条` }),
-            fail: () => { wx.setClipboardData({ data: json }); wx.showToast({ title: `已导出 ${res.count} 条并复制`, icon: 'none' }); this.setData({ exportVal: `已导出 ${res.count} 条` }); },
+    wx.showActionSheet({
+      itemList: ['Excel (.xlsx)', 'CSV', 'JSON', 'PDF'],
+      success: (r) => {
+        const map = ['excel', 'csv', 'json', 'pdf'];
+        this.doExport(map[r.tapIndex]);
+      },
+    });
+  },
+
+  doExport(format) {
+    wx.showLoading({ title: '生成中…' });
+    api.call('book', 'getCurrent')
+      .then((book) => { if (!book) throw { errMsg: '请先创建账本' }; return api.call('data', 'export', { bookId: book.bookId, format }); })
+      .then((res) => {
+        // 下载到本地临时文件
+        wx.cloud.downloadFile({ fileID: res.fileID }).then((dl) => {
+          wx.hideLoading();
+          this.setData({ exportVal: `已导出 ${res.count} 条` });
+          this.deliverFile(dl.tempFilePath, res.fileType, res.fileName);
+        }).catch(() => { wx.hideLoading(); wx.showToast({ title: '下载失败', icon: 'none' }); });
+      })
+      .catch((e) => { wx.hideLoading(); api.toast(e); });
+  },
+
+  // 交付文件：预览 或 转发/保存到微信
+  deliverFile(filePath, fileType, fileName) {
+    wx.showActionSheet({
+      itemList: ['预览文件', '转发 / 保存到微信'],
+      success: (r) => {
+        if (r.tapIndex === 0) {
+          wx.openDocument({
+            filePath, fileType, showMenu: true,
+            fail: () => wx.shareFileMessage({ filePath, fileName, fail: () => wx.showToast({ title: '该格式不支持预览，请选转发', icon: 'none' }) }),
           });
-        },
-        fail: () => { wx.setClipboardData({ data: json }); wx.showToast({ title: '已复制到剪贴板', icon: 'none' }); },
-      });
-    }).catch((e) => { wx.hideLoading(); api.toast(e); });
+        } else {
+          wx.shareFileMessage({ filePath, fileName, fail: () => wx.showToast({ title: '转发失败，可改用预览后保存', icon: 'none' }) });
+        }
+      },
+    });
   },
 
   // 导入：选 JSON 文件 → 读取 → 后端解析入库
@@ -117,6 +151,23 @@ Page({
             wx.showToast({ title: `导入成功 ${res.success} 条`, icon: 'success' });
           })
           .catch((e) => { wx.hideLoading(); api.toast(e); });
+      },
+    });
+  },
+
+  resetData() {
+    wx.showModal({
+      title: '清空所有数据',
+      content: '将删除全部账本/成员/记录/分类/会话，以及所有用户登录信息，回到全新状态（需重新登录）。此操作不可恢复，确定继续？',
+      confirmColor: '#f62172',
+      success: (res) => {
+        if (!res.confirm) return;
+        wx.showLoading({ title: '清空中…' });
+        api.call('seed', 'reset').then(() => {
+          wx.hideLoading();
+          wx.showToast({ title: '已清空', icon: 'success' });
+          setTimeout(() => wx.reLaunch({ url: '/pages/login/login' }), 600);
+        }).catch((e) => { wx.hideLoading(); api.toast(e); });
       },
     });
   },

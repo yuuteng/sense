@@ -13,9 +13,10 @@ Page({
 
   onLoad(query) {
     this.recordId = query.id;
-    this.setData({ ic: { check: icons.get('check', '#2f6feb', 2.4) } });
-    this.load();
+    this.setData({ ic: { check: icons.get('check', '#0089c0', 2.4) } });
   },
+
+  onShow() { if (this.recordId) this.load(); },
 
   async load() {
     if (!this.recordId) { this.setData({ loading: false }); return; }
@@ -27,6 +28,7 @@ Page({
         category: r.category,
         type: r.typeLabel,
         isForeign: r.isForeign,
+        isSplit: r.isSplit,
         displayAmount: fmt.signed(r.amountConverted, r.type, base),
         originalAmount: fmt.symbolOf(r.currency) + fmt.fmt(r.amount),
         rate: `1 ${r.currency} ≈ ${fmt.money(r.rate, base)}`,
@@ -39,7 +41,7 @@ Page({
         payer: r.payer,
         canEdit: r.canEdit,
       };
-      this.setData({ d, loading: false, iconSrc: icons.get(r.icon || 'dots', '#444444', 1.6) });
+      this.setData({ d, loading: false, iconSrc: icons.get(r.icon || 'dots', '#3e4550', 1.6) });
     } catch (e) {
       this.setData({ loading: false });
       api.toast(e);
@@ -47,7 +49,7 @@ Page({
   },
 
   onEdit() {
-    wx.navigateTo({ url: '/pages/add/add' });
+    wx.navigateTo({ url: '/pages/add/add?id=' + this.recordId });
   },
 
   async onDelete() {

@@ -1,38 +1,40 @@
+const icons = require('../../utils/icons');
+const api = require('../../utils/api');
+const cur = require('../../utils/currency');
+
 Page({
   data: {
     statusBarHeight: 20,
-    bookName: '家庭日常',
-    type: 'share', // share | split
+    bookName: '',
+    type: 'share',
     baseCur: 'CNY',
-    curs: [
-      { code: 'CNY', label: '¥ CNY' },
-      { code: 'EUR', label: '€ EUR' },
-      { code: 'USD', label: '$ USD' },
-    ],
+    curLabel: cur.label('CNY'),
+    curVisible: false,
+    chevron: '',
   },
 
   onLoad() {
     const app = getApp();
-    this.setData({ statusBarHeight: (app && app.globalData && app.globalData.statusBarHeight) || 20 });
+    this.setData({
+      statusBarHeight: (app && app.globalData && app.globalData.statusBarHeight) || 20,
+      chevron: icons.get('chevron', '#748294', 2),
+    });
   },
 
-  onNameInput(e) {
-    this.setData({ bookName: e.detail.value });
-  },
+  onNameInput(e) { this.setData({ bookName: e.detail.value }); },
+  pickType(e) { this.setData({ type: e.currentTarget.dataset.t }); },
 
-  pickType(e) {
-    this.setData({ type: e.currentTarget.dataset.t });
-  },
-
-  pickCur(e) {
-    this.setData({ baseCur: e.currentTarget.dataset.c });
+  openCur() { this.setData({ curVisible: true }); },
+  closeCur() { this.setData({ curVisible: false }); },
+  onCur(e) {
+    const code = e.detail.code;
+    this.setData({ baseCur: code, curLabel: cur.label(code), curVisible: false });
   },
 
   create() {
     const name = (this.data.bookName || '').trim() || '我的账本';
-    const api = require('../../utils/api');
     wx.showLoading({ title: '创建中…' });
-    api.call('book', 'create', { name, type: this.data.type, baseCurrency: this.data.baseCur })
+    api.call('book', 'create', { name, bookType: this.data.type, baseCurrency: this.data.baseCur })
       .then(() => {
         wx.hideLoading();
         wx.showToast({ title: '账本已创建', icon: 'success' });

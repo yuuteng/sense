@@ -16,7 +16,7 @@ Page({
 
   onLoad() {
     this.setData({
-      chevronDown: icons.get('chevronDown', '#6b6b6b', 2.2),
+      chevronDown: icons.get('chevronDown', '#748294', 2.2),
       plusIcon: icons.get('plus', '#ffffff', 2.4),
     });
   },
@@ -71,11 +71,12 @@ Page({
       : `${it.payerName}付 · ${it.categoryTopName}`;
     return {
       id: it.recordId,
-      iconSrc: icons.get(it.icon, it.type === 'income' ? '#17a34a' : '#444444', 1.7),
+      iconSrc: icons.get(it.icon, it.type === 'income' ? '#5c9a0e' : '#0089c0', 1.7),
       title: it.title,
       who,
       whoInitial: it.recorderInitial,
       whoColor: it.recorderColor,
+      whoAvatar: it.recorderAvatar || '',
       amount: fmt.signed(it.amountConverted, it.type, cur),
       in: it.type === 'income',
       fx: it.isForeign ? (fmt.symbolOf(it.currency) + fmt.fmt(it.originalAmount)) : '',

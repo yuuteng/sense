@@ -47,32 +47,42 @@ function requireRole(member, min) {
 // 取 date 当日（或最近一次）1 单位 currency 折算成 base 的汇率
 async function getRate(date, base, currency) {
   if (currency === base) return { rate: 1, isFallback: false };
-  let r = await db.collection('rates').where({ date, base }).get();
-  let doc = r.data[0];
-  let isFallback = false;
-  if (!doc) {
-    const q = await db.collection('rates')
-      .where({ base, date: _.lte(date) })
-      .orderBy('date', 'desc')
-      .limit(1)
-      .get();
-    doc = q.data[0];
-    isFallback = true;
+  // 当日精确
+  const r = await db.collection('rates').where({ date, base }).get();
+  const exact = r.data[0];
+  if (exact && exact.quotes && exact.quotes[currency] != null) {
+    return { rate: exact.quotes[currency], isFallback: false };
   }
-  if (!doc || !doc.quotes || doc.quotes[currency] == null) {
-    throw new AppError('RATE_UNAVAILABLE', '汇率取不到');
-  }
-  return { rate: doc.quotes[currency], isFallback };
+  // 回退：最近一个「含该币种」的汇率快照
+  const q = await db.collection('rates').where({ base }).orderBy('date', 'desc').limit(60).get();
+  const found = (q.data || []).find((d) => d.quotes && d.quotes[currency] != null);
+  if (found) return { rate: found.quotes[currency], isFallback: true };
+  throw new AppError('RATE_UNAVAILABLE', '汇率取不到');
 }
 
 const round2 = (n) => Math.round(n * 100) / 100;
 
-// 取账本成员映射 openid -> {name, initial, color, role}
+// 取账本成员映射 openid -> {name, initial, color, avatarFileID, role}
+// 名字/头像实时取自 users（唯一数据源）：改了个人资料，各处显示自动更新；
+// members.nameOverride 为「我在本账本的自定义名」，优先于 users.nickname。
 async function membersMap(bookId) {
   const r = await db.collection('members').where({ bookId }).get();
+  const openids = r.data.map((m) => m.openid);
+  const users = {};
+  if (openids.length) {
+    const u = await db.collection('users').where({ _id: _.in(openids) }).get();
+    u.data.forEach((x) => { users[x._id] = x; });
+  }
   const map = {};
   r.data.forEach((m) => {
-    map[m.openid] = { name: m.nameCache, initial: m.avatarInitial, color: m.avatarColor, role: m.role };
+    const u = users[m.openid] || {};
+    const name = m.nameOverride || u.nickname || '成员';
+    map[m.openid] = {
+      name, initial: u.avatarInitial || name.slice(0, 1),
+      color: m.avatarColor || u.avatarColor || '#00ccf9',
+      avatarFileID: u.avatarFileID || '',
+      role: m.role,
+    };
   });
   return map;
 }

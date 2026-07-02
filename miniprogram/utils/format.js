@@ -1,5 +1,5 @@
 // 金额与日期格式化（后端返回原始数值，展示在前端格式化）
-const SYMBOL = { CNY: '¥', EUR: '€', USD: '$', JPY: '¥' };
+const { SYMBOL } = require('./currency');
 
 function symbolOf(code) { return SYMBOL[code] || ''; }
 

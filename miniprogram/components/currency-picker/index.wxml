@@ -1,0 +1,19 @@
+<view wx:if="{{render}}" class="cp-mask {{anim ? 'cp-mask--show' : ''}}" bindtap="close">
+  <view class="cp {{anim ? 'cp--up' : ''}}" catchtap="stop">
+    <view class="cp__grab"></view>
+    <view class="cp__title">选择币种</view>
+    <scroll-view scroll-y class="cp__list">
+      <view
+        wx:for="{{list}}"
+        wx:key="code"
+        class="cp__row {{current===item.code ? 'sel' : ''}}"
+        data-code="{{item.code}}"
+        bindtap="pick"
+      >
+        <text class="cp__sym">{{item.symbol}}</text>
+        <text class="cp__name">{{item.name}}</text>
+        <text class="cp__code">{{item.code}}</text>
+      </view>
+    </scroll-view>
+  </view>
+</view>

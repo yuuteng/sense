@@ -8,13 +8,20 @@
       <slot wx:else name="left"></slot>
     </view>
 
-    <view class="appbar__title {{center ? 'appbar__title--center' : ''}}">
+    <view wx:if="{{!center}}" class="appbar__title">
       <block wx:if="{{title}}">{{title}}<text wx:if="{{sub}}" class="sub">{{sub}}</text></block>
       <slot wx:else name="title"></slot>
     </view>
 
-    <view class="appbar__side appbar__side--right {{center ? 'reserve' : ''}}">
+    <view class="appbar__side appbar__side--right">
       <slot name="right"></slot>
+    </view>
+  </view>
+
+  <!-- 居中标题：绝对定位，相对整屏水平居中，不受两侧控件影响 -->
+  <view wx:if="{{center}}" class="appbar__center" style="top: {{statusBarHeight}}px; height: {{navBarHeight}}px">
+    <view class="appbar__center-inner">
+      {{title}}<text wx:if="{{sub}}" class="sub">{{sub}}</text>
     </view>
   </view>
 </view>

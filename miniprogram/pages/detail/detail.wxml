@@ -1,4 +1,5 @@
 <view class="screen" style="padding-bottom:calc(200rpx + env(safe-area-inset-bottom))">
+  <loading show="{{loading}}"></loading>
   <nav-bar back="{{true}}" center="{{true}}" title="记录详情"></nav-bar>
 
   <block wx:if="{{d}}">
@@ -44,13 +45,13 @@
     <view class="field-row">
       <view class="field-row__label">记录人</view>
       <view class="field-row__val">
-        <text class="avatar" style="background:{{d.recorder.color}}">{{d.recorder.initial}}</text>{{d.recorder.name}}
+        <avatar src="{{d.recorder.avatarFileID}}" initial="{{d.recorder.initial}}" color="{{d.recorder.color}}" size="40"></avatar>{{d.recorder.name}}
       </view>
     </view>
-    <view class="field-row">
+    <view wx:if="{{d.isSplit}}" class="field-row">
       <view class="field-row__label">付款人</view>
       <view class="field-row__val">
-        <text class="avatar" style="background:{{d.payer.color}}">{{d.payer.initial}}</text>{{d.payer.name}}
+        <avatar src="{{d.payer.avatarFileID}}" initial="{{d.payer.initial}}" color="{{d.payer.color}}" size="40"></avatar>{{d.payer.name}}
       </view>
     </view>
     <view class="field-row">

@@ -3,6 +3,12 @@ const { cloud, AppError } = require('./lib');
 const handlers = require('./handlers');
 
 exports.main = async (event) => {
+  // 每日定时触发器：更新汇率（无用户上下文）
+  if (event && (event.Type === 'timer' || event.triggerName)) {
+    try { return { success: true, data: await handlers.rate._refresh() }; }
+    catch (e) { console.error('[timer rate]', e); return { success: false, errMsg: String(e) }; }
+  }
+
   const { resource, type, ...params } = event || {};
   try {
     const openid = cloud.getWXContext().OPENID;

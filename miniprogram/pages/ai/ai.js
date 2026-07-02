@@ -23,17 +23,18 @@ Page({
     input: '',
     ic: {},
     navSub: '',
+    loading: true,
   },
 
   onLoad() {
     this.setData({
       ic: {
-        dotsH: icons.get('dotsH', '#111111', 1.9),
-        camera: icons.get('camera', '#6b6b6b', 1.8),
+        dotsH: icons.get('dotsH', '#3e4550', 1.9),
+        camera: icons.get('camera', '#748294', 1.8),
         send: icons.get('send', '#ffffff', 2),
-        checkbox: icons.get('checkbox', '#2f6feb', 2),
-        clock: icons.get('clock', '#2f6feb', 2),
-        checkDone: icons.get('check', '#148f41', 2.4),
+        checkbox: icons.get('checkbox', '#0089c0', 2),
+        clock: icons.get('clock', '#0089c0', 2),
+        checkDone: icons.get('check', '#5c9a0e', 2.4),
       },
     });
   },
@@ -48,13 +49,13 @@ Page({
   async load() {
     try {
       const book = await api.call('book', 'getCurrent');
-      if (!book) return;
+      if (!book) { this.setData({ loading: false }); return; }
       this.bookId = book.bookId;
       this.setData({ navSub: `基于「${book.name}」账本数据` });
       const msgs = await api.call('ai', 'listMessages', { bookId: book.bookId });
-      this.setData({ messages: msgs.map(normalize) });
+      this.setData({ messages: msgs.map(normalize), loading: false });
       this.scrollBottom();
-    } catch (e) { api.toast(e); }
+    } catch (e) { this.setData({ loading: false }); api.toast(e); }
   },
 
   scrollBottom() {

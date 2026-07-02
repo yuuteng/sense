@@ -1,1 +1,20 @@
-/* onboarding 页面样式继承自 app.wxss，无额外覆盖 */
+/* 品牌左上；大标题压顶 + 表单；按钮吸底 */
+.screen { min-height: 100vh; display: flex; flex-direction: column; }
+.onboard__brand { display: flex; align-items: center; gap: 20rpx; padding: 24rpx 40rpx 8rpx; flex-shrink: 0; }
+.onboard__name { font-weight: 600; font-size: 40rpx; }
+.onboard__tag { color: var(--muted); font-size: 26rpx; margin-top: 2rpx; }
+
+.onboard {
+  flex: 1; justify-content: flex-start;
+  padding: 16rpx 40rpx calc(200rpx + env(safe-area-inset-bottom));
+}
+.onboard__head { padding: 32rpx 0 8rpx; }
+.onboard__h1 { font-size: 56rpx; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; }
+.onboard__sub { color: var(--muted); font-size: 28rpx; margin-top: 12rpx; }
+
+.onboard .input-label { margin: 32rpx 0 14rpx; }
+
+.type-choice { gap: 20rpx; }
+.type-card { padding: 24rpx var(--space-4); }
+.type-card .h3 { font-size: var(--text-base); font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
+.type-card__p { font-size: var(--text-sm); color: var(--muted); margin-top: 6rpx; }

@@ -28,7 +28,7 @@ Component({
         // 右侧预留 = 胶囊左边到屏幕右边 + 一点间距
         rightGap = (win.windowWidth - menu.left) + 8;
       } catch (e) { /* 用默认值 */ }
-      this.setData({ statusBarHeight: sbh, navBarHeight, rightGap, backIcon: icons.get('back', '#1c1b18', 2) });
+      this.setData({ statusBarHeight: sbh, navBarHeight, rightGap, backIcon: icons.get('back', '#3e4550', 2) });
     },
   },
   methods: {

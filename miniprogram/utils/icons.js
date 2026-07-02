@@ -14,6 +14,12 @@ const PATHS = {
   house: '<path d="M4 11 12 4l8 7"/><path d="M6 10v9h12v-9"/>',
   edu: '<path d="M3 8l9-4 9 4-9 4-9-4Z"/><path d="M7 10v5c0 1 2.2 2 5 2s5-1 5-2v-5"/>',
   play: '<circle cx="12" cy="12" r="8"/><path d="M9 10v4l4-2-4-2Z" fill="CFILL" stroke="none"/>',
+  car: '<path d="M5 11l1.4-4.2A2 2 0 0 1 8.3 5.5h7.4a2 2 0 0 1 1.9 1.3L19 11"/><path d="M4 11h16a1 1 0 0 1 1 1v4H3v-4a1 1 0 0 1 1-1Z"/><path d="M7 19v-2M17 19v-2" stroke-linecap="round"/>',
+  ticket: '<path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2 2 2 0 0 0 0 4 2 2 0 0 1-2 2H6a2 2 0 0 1-2-2 2 2 0 0 0 0-4Z"/><path d="M14 6v12" stroke-dasharray="2 2"/>',
+  gift: '<rect x="4" y="9" width="16" height="11" rx="1"/><path d="M2.5 9h19M12 9v11"/><path d="M12 9C9.5 9 8 7.8 8.5 6.3 9 5 12 9 12 9Zm0 0c2.5 0 4-1.2 3.5-2.7C15 5 12 9 12 9Z"/>',
+  heart: '<path d="M12 20s-7-4.5-7-9.5A3.5 3.5 0 0 1 12 8a3.5 3.5 0 0 1 7 2.5C19 15.5 12 20 12 20Z"/>',
+  star: '<path d="M12 4l2.3 4.8 5.2.7-3.8 3.7.9 5.2L12 16.9 7.4 18.4l.9-5.2L4.5 9.2l5.2-.7L12 4Z" stroke-linejoin="round"/>',
+  phone: '<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M10.5 18h3" stroke-linecap="round"/>',
   dots: '<circle cx="6" cy="12" r="1.4" fill="CFILL" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="CFILL" stroke="none"/><circle cx="18" cy="12" r="1.4" fill="CFILL" stroke="none"/>',
 
   // —— 导航 / 通用 ——
@@ -48,6 +54,8 @@ const PATHS = {
   checkbox: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
   receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
   privacy: '<path d="M12 3l7 3v6c0 4-3 6.5-7 9-4-2.5-7-5-7-9V6z"/>',
+  share: '<path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M12 3v13M8 7l4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-2 5.3" stroke-linecap="round"/><path d="M20 4v6h-6" stroke-linecap="round" stroke-linejoin="round"/>',
 
   // —— tabBar ——
   tabHome: '<path d="M3 10.5 12 3l9 7.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 9.5V20h5v-6h4v6h5V9.5"/>',
@@ -57,9 +65,9 @@ const PATHS = {
 };
 
 function get(name, color, width) {
-  const inner = (PATHS[name] || '').replace(/CFILL/g, color || '#111111');
+  const inner = (PATHS[name] || '').replace(/CFILL/g, color || '#3e4550');
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="'
-    + (color || '#111111') + '" stroke-width="' + (width || 1.7) + '">' + inner + '</svg>';
+    + (color || '#3e4550') + '" stroke-width="' + (width || 1.7) + '">' + inner + '</svg>';
   return 'data:image/svg+xml,' + encodeURIComponent(svg);
 }
 

@@ -1,5 +1,8 @@
 {
   "usingComponents": {
-    "nav-bar": "/components/nav-bar/index"
+    "nav-bar": "/components/nav-bar/index",
+    "avatar": "/components/avatar/index",
+    "calendar": "/components/calendar/index",
+    "currency-picker": "/components/currency-picker/index"
   }
 }

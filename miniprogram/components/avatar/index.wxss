@@ -1,0 +1,2 @@
+.av { border-radius: 50%; display: block; flex-shrink: 0; }
+.av--initial { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; }

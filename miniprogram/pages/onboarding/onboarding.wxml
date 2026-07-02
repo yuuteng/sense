@@ -1,17 +1,21 @@
 <view class="screen">
   <view class="status-spacer" style="height:{{statusBarHeight}}px"></view>
 
-  <view class="onboard">
-    <view class="onboard__brand">
-      <view class="logo-mark">心</view>
-      <view>
-        <view class="onboard__name">心数 <text class="muted" style="font-weight:400">/ Sense</text></view>
-        <view class="onboard__tag">简洁、协作、多币种的记账</view>
-      </view>
+  <!-- 品牌：左上角 -->
+  <view class="onboard__brand">
+    <image class="brand-mark" src="/brand/icon.png"></image>
+    <view>
+      <view class="onboard__name">心数 <text class="muted" style="font-weight:400">Sense</text></view>
+      <view class="onboard__tag">记得轻松，算得清楚</view>
     </view>
+  </view>
 
-    <view class="h1">先建一个账本<text style="display:block">开始记账</text></view>
-    <view class="lead">给账本起个名字，选择类型和基准币种。之后进入的就是这个默认账本。</view>
+  <!-- 表单：大标题压顶 + 表单 -->
+  <view class="onboard">
+    <view class="onboard__head">
+      <view class="onboard__h1">创建你的账本</view>
+      <view class="onboard__sub">选择类型与统计币种，随后即可开始记账</view>
+    </view>
 
     <view class="input-label">账本名称</view>
     <input class="text-input" placeholder="例如：家庭日常" value="{{bookName}}" bindinput="onNameInput" />
@@ -19,27 +23,23 @@
     <view class="input-label">账本类型</view>
     <view class="type-choice">
       <view class="type-card {{type==='share'?'selected':''}}" data-t="share" bindtap="pickType">
-        <view class="h3">共享可见型 <view class="radio-mark"></view></view>
-        <view class="p" style="font-size:var(--text-sm);color:var(--muted);margin-top:8rpx">多人往同一账本记账，能看到每笔是谁记的、谁付的，系统不计算欠款。适合家庭共同开支。</view>
+        <view class="h3">共享账本 <view class="radio-mark"></view></view>
+        <view class="type-card__p">多人协作记账，账目公开透明</view>
       </view>
       <view class="type-card {{type==='split'?'selected':''}}" data-t="split" bindtap="pickType">
-        <view class="h3">分账结算型 <view class="radio-mark"></view></view>
-        <view class="p" style="font-size:var(--text-sm);color:var(--muted);margin-top:8rpx">记录时可指定谁付款、由谁分摊。P1 仅记录这些信息，自动算清谁欠谁将在后续版本提供。适合 AA、合租、旅行拼账。</view>
+        <view class="h3">分账账本 <view class="radio-mark"></view></view>
+        <view class="type-card__p">记录付款与分摊，适合 AA / 合租 / 旅行</view>
       </view>
     </view>
 
-    <view class="input-label">基准币种</view>
-    <view class="currency-switch" style="margin-top:0">
-      <view
-        wx:for="{{curs}}"
-        wx:key="code"
-        class="currency-switch__btn {{baseCur===item.code?'selected':''}}"
-        data-c="{{item.code}}"
-        bindtap="pickCur"
-      >{{item.label}}</view>
+    <view class="input-label">统计币种</view>
+    <view class="text-input text-input--row" hover-class="pressed" hover-stay-time="80" bindtap="openCur">
+      <text>{{curLabel}}</text>
+      <image class="chevron" src="{{chevron}}"></image>
     </view>
-    <view class="ai-disclaimer left" style="padding-left:0">支持混合录入其他币种，按记账当日汇率固化换算，统一用展示币种查看。</view>
   </view>
+
+  <currency-picker visible="{{curVisible}}" current="{{baseCur}}" bind:select="onCur" bind:close="closeCur"></currency-picker>
 
   <view class="action-bar">
     <view class="btn btn--primary btn--block btn--lg" hover-class="pressed" hover-stay-time="80" bindtap="create">创建账本</view>

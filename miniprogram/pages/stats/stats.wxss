@@ -1,1 +1,35 @@
-/* stats 页面样式继承自 app.wxss，无额外覆盖 */
+/* 统计页专属样式（基础图表卡样式在 app.wxss） */
+
+/* 区间选择 chips */
+.range-chips { display: flex; gap: 12rpx; margin-bottom: var(--space-3); flex-wrap: wrap; }
+.rchip {
+  padding: 8rpx 22rpx; border-radius: var(--radius-pill);
+  font-size: 24rpx; font-weight: 600; color: var(--muted);
+  background: rgba(62,69,80,0.05);
+}
+.rchip.on { background: rgba(0,204,249,0.14); color: var(--accent-ink); }
+
+/* 饼图 */
+.pie-wrap { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-2) 0; }
+.donut { width: 220rpx; height: 220rpx; flex-shrink: 0; }
+.pie-legend { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 18rpx; }
+.pl-item { display: flex; align-items: center; gap: 14rpx; font-size: var(--text-sm); }
+.pl-dot { width: 16rpx; height: 16rpx; border-radius: 50%; flex-shrink: 0; }
+.pl-k { color: var(--muted); }
+.pl-v { margin-left: auto; font-weight: 600; }
+.pl-v.strong { font-size: var(--text-base); color: var(--fg); }
+
+/* 图表 SVG（柱状/分组柱状） */
+.chart-svg { width: 100%; height: auto; display: block; margin-top: var(--space-2); }
+
+/* 添加图表卡 */
+.add-card {
+  margin: 0 var(--space-5) var(--space-4);
+  padding: var(--space-5);
+  border: 2rpx dashed var(--border); border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center; gap: 12rpx;
+  color: var(--accent-ink); font-size: var(--text-sm); font-weight: 600;
+  background: rgba(0,204,249,0.04);
+}
+.add-card image { width: 34rpx; height: 34rpx; }
+.add-card.pressed { transform: scale(0.98); background: rgba(0,204,249,0.08); }

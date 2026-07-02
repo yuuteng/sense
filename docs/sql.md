@@ -71,15 +71,15 @@
 | `_id` | string | ✅ | |
 | `bookId` | string | ✅ | 所属账本 |
 | `openid` | string | ✅ | 成员用户 |
-| `nameCache` | string | | 成员昵称快照（列表展示） |
-| `avatarColor` | string | | 头像底色 |
-| `avatarInitial` | string | | 头像文字 |
+| `nameOverride` | string | | 「我在本账本的自定义名」，优先于 `users.nickname`；不设则用用户昵称 |
+| `avatarColor` | string | | 头像底色（无微信头像时用；不设则回退 `users.avatarColor`） |
 | `role` | string | ✅ | `owner` / `admin` / `rw`（读写） / `ro`（只读） |
 | `joinedAt` | Date | ✅ | 加入时间 |
 | `status` | string | | `active` / `removed` |
 
 **索引**：复合唯一 `bookId + openid`；`openid`（查我加入了哪些账本）。
 **规则**：权限跟随账本；未在此表的用户对该账本完全不可见（查询层用它过滤）。
+> 显示用的昵称/头像**实时取自 `users`**（改资料全站自动更新）；成员表只存关系 + 可选的 `nameOverride`/`avatarColor`。（早期的 `nameCache`/`avatarInitial` 快照字段已废弃移除。）
 
 ---
 
@@ -112,8 +112,8 @@
 | `rate` | number | ✅ | 记账当日汇率：1 单位 `currency` = `rate` 单位 `baseCurrency`（**固化**） |
 | `baseCurrency` | string | ✅ | 换算目标（=账本基准币种） |
 | `amountConverted` | number | ✅ | 固化换算金额 = `amount × rate`（正数） |
-| `categoryId` | string | ✅ | 二级分类 id（或一级） |
-| `categoryPath` | string | ✅ | 分类名快照，如「餐饮 / 咖啡」（历史稳定） |
+| `categoryId` | string | ✅ | **引用**：指向 categories 集合的分类 id（当前所属分类，可变） |
+| `categoryPath` | string | ✅ | **快照**：分类名字符串「餐饮 / 咖啡」，写入时固化，分类改名/停用后历史仍显示原名 |
 | `date` | string | ✅ | 业务日期 `YYYY-MM-DD` |
 | `note` | string | | 备注 |
 | `images` | string[] | | 云存储 fileID 列表 |
@@ -121,7 +121,9 @@
 | `payerOpenid` | string | ✅ | 付款人 |
 | `split` | object | | 分账结算型账本用；见下 |
 | `createdAt` | Date | ✅ | 入账时间 |
-| `updatedAt` | Date | | |
+| `createdBy` | string | ✅ | 创建者 openid（审计；当前 = 记录人） |
+| `updatedAt` | Date | ✅ | 最近修改时间（创建时=createdAt） |
+| `updatedBy` | string | ✅ | 最近修改者 openid（审计） |
 
 **`split` 结构**（仅 `type=split` 账本；P1 仅记录）：
 ```json
@@ -140,10 +142,11 @@
 | `_id` | string | ✅ | 建议 `${date}` 或 `${date}_${base}` |
 | `date` | string | ✅ | `YYYY-MM-DD` |
 | `base` | string | ✅ | 基准币种（报价相对它） |
-| `quotes` | object | ✅ | `{ CNY:1, EUR:7.83, USD:7.24, JPY:0.048 }`（1 外币 = ? 基准币） |
+| `quotes` | object | ✅ | 该日各币种汇率 `{ CNY:1, USD:7.24, EUR:7.84, ... }`（1 外币 = ? 基准币） |
 | `isFallback` | boolean | | 当天取不到、沿用最近一次时标 `true` |
 
 **索引**：`date + base`。
+> `quotes` 保存**当日全量汇率**。种子数据内置 12 种常用币便于演示；每日定时触发器 `rate.refresh`（cloudfunctions/api/config.json cron）与设置页「刷新汇率」会从开放源 `open.er-api.com` 拉取**全部约 160 种**币种写入当天快照。记账按当日 `rate` 固化，历史不随之后汇率变动。
 
 ---
 

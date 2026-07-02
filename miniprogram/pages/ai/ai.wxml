@@ -1,4 +1,5 @@
 <view class="screen" style="padding-bottom:calc(380rpx + env(safe-area-inset-bottom))">
+  <loading show="{{loading}}"></loading>
   <nav-bar title="AI 助手" sub="{{navSub}}">
     <view slot="right" class="appbar__btn" hover-class="active" hover-stay-time="80">
       <image src="{{ic.dotsH}}" style="width:44rpx;height:44rpx"></image>

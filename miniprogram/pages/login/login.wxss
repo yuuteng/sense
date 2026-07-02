@@ -1,14 +1,35 @@
-.login { padding: 0 48rpx calc(60rpx + env(safe-area-inset-bottom)); min-height: 100vh; display: flex; flex-direction: column; }
-.login__brand { display: flex; align-items: center; gap: 20rpx; padding: 40rpx 0 8rpx; }
-.login__card { margin-top: 48rpx; }
+.login {
+  padding: 0 56rpx calc(60rpx + env(safe-area-inset-bottom));
+  min-height: 100vh; display: flex; flex-direction: column;
+}
+
+/* 品牌 */
+.login__hero { display: flex; flex-direction: column; align-items: center; padding-top: 96rpx; }
+.login__logo { width: 260rpx; }
+.login__sub { color: var(--muted); font-size: 28rpx; margin-top: 24rpx; }
+
+/* 头像 + 昵称 */
+.login__card { margin-top: 88rpx; display: flex; flex-direction: column; align-items: center; }
+.avatar-wrap {
+  width: 168rpx; height: 168rpx; border-radius: 50%; overflow: hidden;
+  box-shadow: var(--shadow-soft); background: var(--surface);
+}
 .avatar-pick {
-  width: 176rpx; height: 176rpx; border-radius: 50%; padding: 0; margin: 0 auto;
-  background: var(--surface); box-shadow: var(--shadow-soft); overflow: hidden;
+  width: 168rpx; height: 168rpx; padding: 0; margin: 0; box-sizing: border-box;
+  background: var(--surface); line-height: normal;
   display: flex; align-items: center; justify-content: center;
 }
 .avatar-pick::after { border: none; }
-.avatar-pick__img { width: 100%; height: 100%; }
-.avatar-pick__ph { display: flex; flex-direction: column; align-items: center; gap: 8rpx; color: var(--muted); }
-.avatar-pick__plus { font-size: 56rpx; line-height: 1; color: var(--accent); }
-.avatar-pick__hint { font-size: 24rpx; }
-.login__foot { margin-top: auto; padding-top: 48rpx; }
+.avatar-pick__img { width: 168rpx; height: 168rpx; display: block; }
+.avatar-pick__ph { display: flex; align-items: center; justify-content: center; width: 168rpx; height: 168rpx; }
+.avatar-pick__plus { font-size: 64rpx; line-height: 1; color: var(--accent); }
+.avatar-pick__tip { color: var(--muted); font-size: 26rpx; margin-top: 20rpx; }
+
+.login__nickname {
+  width: 100%; margin-top: 56rpx; height: 104rpx; line-height: 104rpx;
+  background: var(--surface); border: 1rpx solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-soft);
+  padding: 0 32rpx; font-size: 32rpx; color: var(--fg); text-align: center;
+}
+
+.login__foot { margin-top: auto; padding-top: 64rpx; }

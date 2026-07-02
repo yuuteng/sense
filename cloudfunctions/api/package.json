@@ -4,6 +4,7 @@
   "description": "心数 Sense 后端主云函数（按 resource.type 路由）",
   "main": "index.js",
   "dependencies": {
-    "wx-server-sdk": "~2.6.3"
+    "wx-server-sdk": "~2.6.3",
+    "xlsx": "^0.18.5"
   }
 }

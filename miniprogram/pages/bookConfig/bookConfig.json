@@ -1,5 +1,7 @@
 {
   "usingComponents": {
-    "nav-bar": "/components/nav-bar/index"
+    "nav-bar": "/components/nav-bar/index",
+    "avatar": "/components/avatar/index",
+    "loading": "/components/loading/index"
   }
 }

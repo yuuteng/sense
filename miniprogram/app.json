@@ -10,18 +10,19 @@
     "pages/bookConfig/bookConfig",
     "pages/onboarding/onboarding",
     "pages/settle/settle",
-    "pages/login/login"
+    "pages/login/login",
+    "pages/join/join"
   ],
   "window": {
-    "backgroundColor": "#faf6ef",
+    "backgroundColor": "#f6f9fc",
     "backgroundTextStyle": "dark",
     "navigationStyle": "custom",
     "navigationBarTextStyle": "black"
   },
   "tabBar": {
     "custom": true,
-    "color": "#6b6b6b",
-    "selectedColor": "#2f6feb",
+    "color": "#748294",
+    "selectedColor": "#00ccf9",
     "backgroundColor": "#ffffff",
     "list": [
       { "pagePath": "pages/home/home", "text": "首页" },

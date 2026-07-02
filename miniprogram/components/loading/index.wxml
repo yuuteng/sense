@@ -1,0 +1,4 @@
+<view wx:if="{{show}}" class="loading" catchtouchmove="true">
+  <view class="loading__spin"></view>
+  <text wx:if="{{text}}" class="loading__text">{{text}}</text>
+</view>

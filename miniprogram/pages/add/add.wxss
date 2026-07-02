@@ -1,16 +1,40 @@
-/* 收入模式：主色切换为绿色，全局提示当前状态 */
+/* 收入模式：主色切换为绿色 */
 .mode-income {
-  --accent: #17a34a;
-  --accent-hover: #148f41;
-  --accent-active: #127a38;
+  --accent: #5c9a0e;
+  --accent-hover: #4f8a0c;
+  --accent-active: #437609;
 }
 .mode-income .amount-input,
-.mode-income .cur { color: var(--success); }
+.mode-income .cur { color: var(--accent); }
 
-/* 金额输入（系统数字键盘）*/
-.amount-line { display: flex; align-items: baseline; justify-content: center; }
+/* 金额输入（系统数字键盘），整行居中、完整显示 */
+.amount-line { display: flex; align-items: baseline; justify-content: center; padding: 0 40rpx; }
+.cur { flex: none; }
 .amount-input {
-  width: 62%;
-  font-size: 104rpx; font-weight: 600; letter-spacing: -0.03em;
-  text-align: center; line-height: 1.1; color: var(--fg);
+  flex: 1; min-width: 0; margin-left: 8rpx;
+  font-size: 88rpx; font-weight: 600; letter-spacing: -0.02em;
+  text-align: center; line-height: 1.15; color: var(--fg); height: 116rpx;
 }
+
+/* 币种选择 pill */
+.cur-pick {
+  display: inline-flex; align-items: center; gap: 6rpx; margin-top: var(--space-3);
+  padding: 10rpx 24rpx; border-radius: var(--radius-pill);
+  background: rgba(62,69,80,0.06); font-size: var(--text-sm); font-weight: 600; color: var(--fg);
+}
+.cur-pick .chevron { width: 30rpx; height: 30rpx; }
+
+/* 分类「添加」按钮 */
+.cat__ic--add { background: transparent; border: 2rpx dashed var(--border); }
+.chip--add { border-style: dashed; color: var(--muted); }
+
+/* 新增一级分类弹层 */
+.addcat-mask { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 300; background: rgba(62,69,80,0.45); display: flex; align-items: center; justify-content: center; }
+.addcat { width: 640rpx; background: var(--surface); border-radius: var(--radius-lg); padding: 40rpx 32rpx 32rpx; box-shadow: 0 24rpx 60rpx rgba(62,69,80,0.24); }
+.addcat__title { font-size: var(--text-lg); font-weight: 600; text-align: center; margin-bottom: 28rpx; }
+.addcat__label { font-size: var(--text-sm); color: var(--muted); margin: 28rpx 0 16rpx; }
+.addcat__icons { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16rpx; }
+.addcat__ic { height: 88rpx; border-radius: var(--radius-sm); background: rgba(62,69,80,0.06); display: flex; align-items: center; justify-content: center; }
+.addcat__ic image { width: 44rpx; height: 44rpx; }
+.addcat__ic.sel { background: var(--accent); }
+.addcat__foot { display: flex; gap: 20rpx; margin-top: 36rpx; }

@@ -13,10 +13,10 @@ Page({
     this.setData({
       ic: {
         bookWhite: icons.get('book', '#ffffff', 1.7),
-        bookAccent: icons.get('book', '#2b5cff', 1.7),
+        bookAccent: icons.get('book', '#0089c0', 1.7),
         house: icons.get('house', '#a47d06', 1.7),
-        chevron: icons.get('chevron', '#8b867b', 2),
-        plus: icons.get('plus', '#1c1b18', 2.2),
+        chevron: icons.get('chevron', '#748294', 2),
+        plus: icons.get('plus', '#3e4550', 2.2),
       },
     });
   },
@@ -31,7 +31,7 @@ Page({
         roleMine: ROLE_MINE[b.myRole] || b.myRole,
         typeClass: b.type === 'split' ? 'book-type--split' : 'book-type--share',
         iconSrc: b.isCurrent ? this.data.ic.bookWhite : (b.type === 'split' ? this.data.ic.house : this.data.ic.bookAccent),
-        iconBg: b.isCurrent ? 'var(--accent)' : (b.type === 'split' ? 'rgba(234,179,8,0.16)' : 'rgba(43,92,255,0.10)'),
+        iconBg: b.isCurrent ? 'var(--accent)' : (b.type === 'split' ? 'rgba(255,205,47,0.16)' : 'rgba(0,204,249,0.12)'),
       }));
       this.setData({ books: view });
     } catch (e) { api.toast(e); }

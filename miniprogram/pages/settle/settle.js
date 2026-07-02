@@ -17,15 +17,16 @@ Page({
     allSettled: false,
     discOpen: false,
     ic: {},
+    loading: true,
   },
 
   onLoad(query) {
     this.bookId = query.bookId || '';
     this.setData({
       ic: {
-        arrow: icons.get('arrowRight', '#9a9a9a', 2),
-        check: icons.get('check', '#148c40', 2.4),
-        chevron: icons.get('chevron', '#6b6b6b', 2),
+        arrow: icons.get('arrowRight', '#97a7b7', 2),
+        check: icons.get('check', '#5c9a0e', 2.4),
+        chevron: icons.get('chevron', '#748294', 2),
         plus: icons.get('plus', '#ffffff', 2.4),
       },
     });
@@ -39,7 +40,7 @@ Page({
         const b = await api.call('book', 'getCurrent');
         this.bookId = b && b.bookId;
       }
-      if (!this.bookId) return;
+      if (!this.bookId) { this.setData({ loading: false }); return; }
       const [book, s] = await Promise.all([
         api.call('book', 'getCurrent'),
         api.call('settle', 'get', { bookId: this.bookId }),
@@ -47,25 +48,26 @@ Page({
       const bookName = (book && book.name) || '账本';
       const net = s.summary.myNet;
       this.setData({
-        header: `${bookName} · ${s.members.length} 人 · 分账结算型`,
+        header: `${bookName} · ${s.members.length} 人 · 分账账本`,
         myNet: `你应${net >= 0 ? '收' : '付'} ${fmt.signedTotal(net)}`,
         totalExpense: fmt.money(s.summary.totalExpense),
         myPaid: fmt.money(s.summary.myPaid),
         myShare: fmt.money(s.summary.myShare),
         transfers: s.transfers.map((t) => ({
-          transferId: t.transferId, fromInitial: t.fromInitial, fromColor: t.fromColor, fromName: t.from,
-          toInitial: t.toInitial, toColor: t.toColor, toName: t.to, amount: t.amount, amountText: fmt.money(t.amount), settled: false,
+          transferId: t.transferId, fromInitial: t.fromInitial, fromColor: t.fromColor, fromAvatar: t.fromAvatar || '', fromName: t.from,
+          toInitial: t.toInitial, toColor: t.toColor, toAvatar: t.toAvatar || '', toName: t.to, amount: t.amount, amountText: fmt.money(t.amount), settled: false,
         })),
         members: s.members.map((m) => ({
-          name: m.name, initial: m.initial, color: m.color,
+          name: m.name, initial: m.initial, color: m.color, avatarFileID: m.avatarFileID || '',
           paid: fmt.money(m.paid), share: fmt.money(m.share),
           net: (m.net >= 0 ? '+' : '−') + comma(Math.abs(m.net)), pos: m.net >= 0,
         })),
         splits: s.splits.map((sp) => ({ ...sp, amountText: fmt.money(sp.amount) })),
         splitCount: s.splitCount,
+        loading: false,
       });
       this.refresh();
-    } catch (e) { api.toast(e); }
+    } catch (e) { this.setData({ loading: false }); api.toast(e); }
   },
 
   refresh() {

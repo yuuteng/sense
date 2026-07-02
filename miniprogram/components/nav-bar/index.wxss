@@ -1,5 +1,18 @@
+.nav { position: relative; }
 .appbar__side { min-width: 0; display: flex; align-items: center; }
 .appbar__side.reserve { min-width: 72rpx; }
 .appbar__side--right { justify-content: flex-end; }
-.appbar__title--center { flex: 1; text-align: center; }
 .nav-ic { width: 48rpx; height: 48rpx; }
+
+/* 居中标题覆盖层：整屏水平居中 */
+.appbar__center {
+  position: absolute; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.appbar__center-inner {
+  max-width: 56%; text-align: center;
+  font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.appbar__center-inner .sub { display: block; font-size: var(--text-xs); font-weight: 500; color: var(--muted); letter-spacing: 0; }

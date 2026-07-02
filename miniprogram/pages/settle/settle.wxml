@@ -1,4 +1,5 @@
 <view class="screen" style="padding-bottom:calc(200rpx + env(safe-area-inset-bottom))">
+  <loading show="{{loading}}"></loading>
   <nav-bar back="{{true}}" center="{{true}}" title="分账结算" sub="{{header}}"></nav-bar>
 
   <!-- 概览：总支出 + 我的净额 -->
@@ -21,9 +22,9 @@
   <view wx:if="{{transfers.length}}" class="card--flush" style="border-top:1rpx solid var(--border);border-bottom:1rpx solid var(--border)">
     <view wx:for="{{transfers}}" wx:key="transferId" wx:for-item="t" class="transfer {{t.settled?'settled':''}}">
       <view class="transfer__flow">
-        <view class="transfer__who"><text class="avatar" style="background:{{t.fromColor}}">{{t.fromInitial}}</text>{{t.fromName}}</view>
+        <view class="transfer__who"><avatar src="{{t.fromAvatar}}" initial="{{t.fromInitial}}" color="{{t.fromColor}}" size="40"></avatar>{{t.fromName}}</view>
         <image class="transfer__arrow" src="{{ic.arrow}}"></image>
-        <view class="transfer__who"><text class="avatar" style="background:{{t.toColor}}">{{t.toInitial}}</text>{{t.toName}}</view>
+        <view class="transfer__who"><avatar src="{{t.toAvatar}}" initial="{{t.toInitial}}" color="{{t.toColor}}" size="40"></avatar>{{t.toName}}</view>
       </view>
       <text class="transfer__amt num">{{t.amountText}}</text>
       <view class="btn btn--mini {{t.settled?'btn--ghost':'btn--primary'}}" data-i="{{index}}" hover-class="pressed" hover-stay-time="80" bindtap="toggleSettle">{{t.settled?'已结清 · 撤销':'标记结清'}}</view>
@@ -35,7 +36,7 @@
   <view class="section-label">成员维度</view>
   <view class="card--flush" style="border-top:1rpx solid var(--border);border-bottom:1rpx solid var(--border)">
     <view wx:for="{{members}}" wx:key="name" wx:for-item="m" class="mstat">
-      <view class="mstat__name"><text class="avatar" style="background:{{m.color}}">{{m.initial}}</text>{{m.name}}</view>
+      <view class="mstat__name"><avatar src="{{m.avatarFileID}}" initial="{{m.initial}}" color="{{m.color}}" size="40"></avatar><text class="ellip">{{m.name}}</text></view>
       <view class="mstat__nums">
         <view class="cell"><view class="k">垫付</view><view class="v num">{{m.paid}}</view></view>
         <view class="cell"><view class="k">应摊</view><view class="v num">{{m.share}}</view></view>
@@ -60,14 +61,14 @@
       <view class="split-row__meta">
         <text class="pill">{{sp.payerName}}</text> {{sp.detail}}
         <view class="split-avatars">
-          <text wx:for="{{sp.avatars}}" wx:key="initial" wx:for-item="av" class="avatar" style="background:{{av.color}}">{{av.initial}}</text>
+          <avatar wx:for="{{sp.avatars}}" wx:key="initial" wx:for-item="av" src="{{av.avatarFileID}}" initial="{{av.initial}}" color="{{av.color}}" size="44"></avatar>
         </view>
       </view>
     </view>
   </view>
 </view>
 
-<!-- 记一笔（分账结算型账本）-->
+<!-- 记一笔（分账账本）-->
 <view class="fab" style="bottom:calc(60rpx + env(safe-area-inset-bottom))" hover-class="pressed" hover-stay-time="80" bindtap="goAdd">
   <image src="{{ic.plus}}"></image>
 </view>

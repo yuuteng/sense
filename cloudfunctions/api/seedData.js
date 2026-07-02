@@ -15,11 +15,11 @@ module.exports = {
   ],
 
   members: [
-    { _id: 'm-home-yu', bookId: 'book-home', openid: 'openid-yu', nameCache: '小雨', avatarColor: '#2f6feb', avatarInitial: '雨', role: 'owner', joinedAt: '2025-09-01T00:00:00.000Z', status: 'active' },
-    { _id: 'm-home-zhe', bookId: 'book-home', openid: 'openid-zhe', nameCache: '阿哲', avatarColor: '#17a34a', avatarInitial: '哲', role: 'admin', joinedAt: '2025-11-01T00:00:00.000Z', status: 'active' },
-    { _id: 'm-jp-zhe', bookId: 'book-jp', openid: 'openid-zhe', nameCache: '阿哲', avatarColor: '#17a34a', avatarInitial: '哲', role: 'owner', joinedAt: '2026-05-10T00:00:00.000Z', status: 'active' },
-    { _id: 'm-jp-yu', bookId: 'book-jp', openid: 'openid-yu', nameCache: '小雨', avatarColor: '#2f6feb', avatarInitial: '雨', role: 'admin', joinedAt: '2026-05-11T00:00:00.000Z', status: 'active' },
-    { _id: 'm-jp-lin', bookId: 'book-jp', openid: 'openid-lin', nameCache: '小林', avatarColor: '#b06f3c', avatarInitial: '林', role: 'rw', joinedAt: '2026-05-11T00:00:00.000Z', status: 'active' },
+    { _id: 'm-home-yu', bookId: 'book-home', openid: 'openid-yu', avatarColor: '#2f6feb', role: 'owner', joinedAt: '2025-09-01T00:00:00.000Z', status: 'active' },
+    { _id: 'm-home-zhe', bookId: 'book-home', openid: 'openid-zhe', avatarColor: '#17a34a', role: 'admin', joinedAt: '2025-11-01T00:00:00.000Z', status: 'active' },
+    { _id: 'm-jp-zhe', bookId: 'book-jp', openid: 'openid-zhe', avatarColor: '#17a34a', role: 'owner', joinedAt: '2026-05-10T00:00:00.000Z', status: 'active' },
+    { _id: 'm-jp-yu', bookId: 'book-jp', openid: 'openid-yu', avatarColor: '#2f6feb', role: 'admin', joinedAt: '2026-05-11T00:00:00.000Z', status: 'active' },
+    { _id: 'm-jp-lin', bookId: 'book-jp', openid: 'openid-lin', avatarColor: '#b06f3c', role: 'rw', joinedAt: '2026-05-11T00:00:00.000Z', status: 'active' },
   ],
 
   categories: [
@@ -45,7 +45,7 @@ module.exports = {
   records: [
     // 家庭日常
     { _id: 'r-1', bookId: 'book-home', type: 'expense', title: '晚餐 · 外卖', amount: 86.0, currency: 'CNY', rate: 1, baseCurrency: 'CNY', amountConverted: 86.0, categoryId: 'cat-food-takeout', categoryPath: '餐饮 / 外卖', date: '2026-07-01', note: '超市晚餐食材', images: [], recorderOpenid: 'openid-yu', payerOpenid: 'openid-yu', createdAt: '2026-07-01T12:30:00.000Z' },
-    { _id: 'r-2', bookId: 'book-home', type: 'expense', title: '超市采购', amount: 213.5, currency: 'CNY', rate: 1, baseCurrency: 'CNY', amountConverted: 213.5, categoryId: 'cat-shop-daily', categoryPath: '购物 / 日用', date: '2026-07-01', note: '', images: [], recorderOpenid: 'openid-yu', payerOpenid: 'openid-zhe', createdAt: '2026-07-01T18:05:00.000Z' },
+    { _id: 'r-2', bookId: 'book-home', type: 'expense', title: '超市采购', amount: 213.5, currency: 'CNY', rate: 1, baseCurrency: 'CNY', amountConverted: 213.5, categoryId: 'cat-shop-daily', categoryPath: '购物 / 日用', date: '2026-07-01', note: '', images: [], recorderOpenid: 'openid-yu', payerOpenid: 'openid-yu', createdAt: '2026-07-01T18:05:00.000Z' },
     { _id: 'r-3', bookId: 'book-home', type: 'income', title: '工资', amount: 12000.0, currency: 'CNY', rate: 1, baseCurrency: 'CNY', amountConverted: 12000.0, categoryId: 'cat-income-salary', categoryPath: '职业收入 / 工资', date: '2026-06-30', note: '', images: [], recorderOpenid: 'openid-yu', payerOpenid: 'openid-yu', createdAt: '2026-06-30T09:00:00.000Z' },
     { _id: 'r-4', bookId: 'book-home', type: 'expense', title: '星巴克咖啡', amount: 5.4, currency: 'EUR', rate: 7.83, baseCurrency: 'CNY', amountConverted: 42.3, categoryId: 'cat-food-coffee', categoryPath: '餐饮 / 咖啡', date: '2026-06-30', note: '通勤路上的拿铁', images: [], recorderOpenid: 'openid-yu', payerOpenid: 'openid-yu', createdAt: '2026-06-30T08:12:00.000Z' },
     { _id: 'r-5', bookId: 'book-home', type: 'expense', title: '地铁通勤', amount: 6.0, currency: 'CNY', rate: 1, baseCurrency: 'CNY', amountConverted: 6.0, categoryId: 'cat-trans-metro', categoryPath: '交通 / 地铁', date: '2026-06-29', note: '', images: [], recorderOpenid: 'openid-zhe', payerOpenid: 'openid-zhe', createdAt: '2026-06-29T08:40:00.000Z' },
@@ -59,9 +59,9 @@ module.exports = {
   ],
 
   rates: [
-    { _id: '2026-06-29_CNY', date: '2026-06-29', base: 'CNY', quotes: { CNY: 1, EUR: 7.81, USD: 7.23, JPY: 0.0461 }, isFallback: false },
-    { _id: '2026-06-30_CNY', date: '2026-06-30', base: 'CNY', quotes: { CNY: 1, EUR: 7.83, USD: 7.24, JPY: 0.0462 }, isFallback: false },
-    { _id: '2026-07-01_CNY', date: '2026-07-01', base: 'CNY', quotes: { CNY: 1, EUR: 7.84, USD: 7.24, JPY: 0.0463 }, isFallback: false },
+    { _id: '2026-06-29_CNY', date: '2026-06-29', base: 'CNY', quotes: { CNY: 1, USD: 7.23, EUR: 7.81, JPY: 0.0461, KRW: 0.0053, HKD: 0.925, GBP: 9.13, AUD: 4.79, CAD: 5.29, SGD: 5.38, TWD: 0.224, THB: 0.199 }, isFallback: false },
+    { _id: '2026-06-30_CNY', date: '2026-06-30', base: 'CNY', quotes: { CNY: 1, USD: 7.24, EUR: 7.83, JPY: 0.0462, KRW: 0.0053, HKD: 0.926, GBP: 9.15, AUD: 4.80, CAD: 5.30, SGD: 5.40, TWD: 0.225, THB: 0.200 }, isFallback: false },
+    { _id: '2026-07-01_CNY', date: '2026-07-01', base: 'CNY', quotes: { CNY: 1, USD: 7.24, EUR: 7.84, JPY: 0.0463, KRW: 0.0054, HKD: 0.926, GBP: 9.16, AUD: 4.81, CAD: 5.31, SGD: 5.41, TWD: 0.225, THB: 0.201 }, isFallback: false },
   ],
 
   chartLayouts: [
@@ -72,7 +72,7 @@ module.exports = {
     { _id: 'ai-1', bookId: 'book-home', openid: 'openid-yu', role: 'user', text: '上个月我们餐饮花了多少？', createdAt: '2026-07-01T09:00:00.000Z' },
     { _id: 'ai-2', bookId: 'book-home', openid: 'openid-yu', role: 'ai', text: '6 月「家庭日常」账本的餐饮合计支出为 ¥1,284.60，共 32 笔。其中外卖占 ¥612，晚餐 ¥458，咖啡/奶茶 ¥214.60（含 3 笔欧元记录已按当日汇率换算）。', createdAt: '2026-07-01T09:00:03.000Z' },
     { _id: 'ai-3', bookId: 'book-home', openid: 'openid-yu', role: 'user', text: '这周谁花得最多？', createdAt: '2026-07-01T09:01:00.000Z' },
-    { _id: 'ai-4', bookId: 'book-home', openid: 'openid-yu', role: 'ai', text: '本周小雨记账 ¥1,240、阿哲记账 ¥860。按付款人看，阿哲付款 ¥1,510（含一次超市大额采购）。', createdAt: '2026-07-01T09:01:04.000Z' },
+    { _id: 'ai-4', bookId: 'book-home', openid: 'openid-yu', role: 'ai', text: '本周小雨记账 ¥1,240、阿哲记账 ¥860，合计约 ¥2,100。其中「超市采购 ¥213.50」是最大的一笔。', createdAt: '2026-07-01T09:01:04.000Z' },
     { _id: 'ai-5', bookId: 'book-home', openid: 'openid-yu', role: 'card', card: { kind: '收据识别', state: 'pending', rows: [{ k: '商家', v: 'City Supermarkt', edit: true }, { k: '金额', v: '€18.90', extra: '≈ ¥147.99', edit: true }, { k: '建议分类', v: '购物 · 日用', edit: true }, { k: '日期', v: '2026-07-01' }, { k: '记录人 / 付款人', v: '小雨' }] }, createdAt: '2026-07-01T09:02:00.000Z' },
   ],
 };

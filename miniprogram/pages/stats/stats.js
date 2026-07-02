@@ -2,80 +2,98 @@ const api = require('../../utils/api');
 const icons = require('../../utils/icons');
 const fmt = require('../../utils/format');
 
+const GREEN = '#9edf10', BLUE = '#00ccf9', TRACK = '#e4e7ec', AXIS = '#97a7b7';
 function enc(svg) { return 'data:image/svg+xml,' + encodeURIComponent(svg); }
 
-const TREND_IMG = enc(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="130" viewBox="0 0 300 130" preserveAspectRatio="none">' +
-  '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">' +
-  '<stop offset="0" stop-color="#2f6feb" stop-opacity="0.22"/>' +
-  '<stop offset="1" stop-color="#2f6feb" stop-opacity="0"/></linearGradient></defs>' +
-  '<path d="M0 95 L50 70 L100 105 L150 55 L200 80 L250 40 L300 65 L300 130 L0 130 Z" fill="url(#g)"/>' +
-  '<path d="M0 95 L50 70 L100 105 L150 55 L200 80 L250 40 L300 65" fill="none" stroke="#2f6feb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
-  '<circle cx="250" cy="40" r="4" fill="#2f6feb"/></svg>'
-);
-const YEAR_IMG = enc(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="130" viewBox="0 0 300 130" preserveAspectRatio="none">' +
-  '<rect x="10" y="40" width="9" height="80" rx="2" fill="#17a34a"/><rect x="21" y="70" width="9" height="50" rx="2" fill="#e5e5e5"/>' +
-  '<rect x="55" y="35" width="9" height="85" rx="2" fill="#17a34a"/><rect x="66" y="82" width="9" height="38" rx="2" fill="#e5e5e5"/>' +
-  '<rect x="100" y="50" width="9" height="70" rx="2" fill="#17a34a"/><rect x="111" y="60" width="9" height="60" rx="2" fill="#e5e5e5"/>' +
-  '<rect x="145" y="30" width="9" height="90" rx="2" fill="#17a34a"/><rect x="156" y="78" width="9" height="42" rx="2" fill="#e5e5e5"/>' +
-  '<rect x="190" y="45" width="9" height="75" rx="2" fill="#17a34a"/><rect x="201" y="66" width="9" height="54" rx="2" fill="#e5e5e5"/>' +
-  '<rect x="235" y="25" width="9" height="95" rx="2" fill="#2f6feb"/><rect x="246" y="88" width="9" height="32" rx="2" fill="rgba(47,111,235,0.38)"/></svg>'
-);
-
-const DEFAULT_IDS = ['overview', 'trend', 'year', 'total'];
-
-function buildDefs(dash, cur) {
-  const o = dash.overview, t = dash.total;
-  return {
-    overview: {
-      id: 'overview', kind: 'grid', title: '本月收支概览', sub: o.monthLabel,
-      minis: [
-        { k: '收入', v: fmt.money(o.income, cur), color: '#17a34a' },
-        { k: '支出', v: fmt.money(o.expense, cur), color: '' },
-        { k: '结余', v: fmt.signedTotal(o.balance, cur), color: '#2f6feb', span2: true, accent: true },
-      ],
-    },
-    trend: {
-      id: 'trend', kind: 'chart', title: '支出趋势', sub: '近 7 日 · 按日', img: TREND_IMG,
-      legends: [{ text: '近 7 日' }, { text: '示意', right: true }],
-    },
-    year: {
-      id: 'year', kind: 'chart', title: '近一年收支', sub: '收入 vs 支出 · 按月', img: YEAR_IMG,
-      legends: [
-        { dot: true, dotColor: '#17a34a', text: '收入' },
-        { dot: true, dotColor: '#e5e5e5', text: '支出' },
-        { text: '示意', right: true },
-      ],
-    },
-    total: {
-      id: 'total', kind: 'grid', title: '账本累计收支', sub: `自 ${t.since} 建立以来`,
-      minis: [
-        { k: '总收入', v: fmt.money(t.income, cur), color: '#17a34a' },
-        { k: '总支出', v: fmt.money(t.expense, cur), color: '' },
-        { k: '累计结余', v: fmt.signedTotal(t.balance, cur), color: '', span2: true },
-      ],
-    },
-  };
+// 甜甜圈饼图：收入(绿) vs 支出(蓝)
+function donutSvg(income, expense) {
+  const cx = 100, cy = 100, r = 66, sw = 30, C = 2 * Math.PI * r;
+  const total = income + expense;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">`;
+  s += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}" stroke-width="${sw}"/>`;
+  if (total > 0) {
+    const incLen = C * (income / total);
+    s += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${GREEN}" stroke-width="${sw}" stroke-dasharray="${incLen.toFixed(2)} ${(C - incLen).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    const expLen = C - incLen;
+    s += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${BLUE}" stroke-width="${sw}" stroke-dasharray="${expLen.toFixed(2)} ${incLen.toFixed(2)}" stroke-dashoffset="${(-incLen).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+  }
+  s += `</svg>`;
+  return enc(s);
 }
+
+// 柱状图（支出）
+function barsSvg(values, labels) {
+  const W = 320, H = 156, base = H - 24, top = 12, n = values.length || 1;
+  const max = Math.max(1, ...values);
+  const slot = W / n;
+  const bw = Math.max(6, Math.min(28, slot * 0.5));
+  const every = Math.ceil(n / 7);
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  s += `<line x1="0" y1="${base}" x2="${W}" y2="${base}" stroke="${TRACK}" stroke-width="1"/>`;
+  values.forEach((v, i) => {
+    const h = v > 0 ? Math.max(3, (v / max) * (base - top)) : 0;
+    const x = slot * i + (slot - bw) / 2;
+    s += `<rect x="${x.toFixed(1)}" y="${(base - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${BLUE}"/>`;
+    if (i % every === 0) s += `<text x="${(x + bw / 2).toFixed(1)}" y="${H - 5}" font-size="11" text-anchor="middle" fill="${AXIS}">${labels[i]}</text>`;
+  });
+  s += `</svg>`;
+  return enc(s);
+}
+
+// 分组柱状图：每月 收入(绿) + 支出(蓝)
+function pairedSvg(rows) {
+  const W = 320, H = 156, base = H - 24, top = 12, n = rows.length || 1;
+  const max = Math.max(1, ...rows.map((r) => r.income), ...rows.map((r) => r.expense));
+  const slot = W / n;
+  const bw = Math.max(4, Math.min(11, slot * 0.30));
+  const every = Math.ceil(n / 6);
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  s += `<line x1="0" y1="${base}" x2="${W}" y2="${base}" stroke="${TRACK}" stroke-width="1"/>`;
+  rows.forEach((r, i) => {
+    const c = slot * i + slot / 2;
+    const hi = r.income > 0 ? Math.max(3, (r.income / max) * (base - top)) : 0;
+    const he = r.expense > 0 ? Math.max(3, (r.expense / max) * (base - top)) : 0;
+    s += `<rect x="${(c - bw - 1).toFixed(1)}" y="${(base - hi).toFixed(1)}" width="${bw.toFixed(1)}" height="${hi.toFixed(1)}" rx="2" fill="${GREEN}"/>`;
+    s += `<rect x="${(c + 1).toFixed(1)}" y="${(base - he).toFixed(1)}" width="${bw.toFixed(1)}" height="${he.toFixed(1)}" rx="2" fill="${BLUE}"/>`;
+    if (i % every === 0) s += `<text x="${c.toFixed(1)}" y="${H - 5}" font-size="10" text-anchor="middle" fill="${AXIS}">${rows[i].label}</text>`;
+  });
+  s += `</svg>`;
+  return enc(s);
+}
+
+// 预设图表类型
+const PRESETS = {
+  monthPie: { title: '本月收支', desc: '本月收入 / 支出占比' },
+  weekExpense: { title: '支出趋势', desc: '近 N 日每日支出' },
+  yearInOut: { title: '近一年收支', desc: '按月收入 vs 支出' },
+  totalPie: { title: '账本累计收支', desc: '累计收入 / 支出占比' },
+};
+const DEFAULT_IDS = ['monthPie', 'weekExpense', 'yearInOut', 'totalPie'];
 
 Page({
   data: {
     cards: [],
     editing: false,
     draggingId: null,
+    weekDays: 7,
+    yearMonths: 12,
     editIcon: '',
     dragIcon: '',
     barsIcon: '',
+    addIcon: '',
     navSub: '',
+    canAdd: true,
     needInit: false,
+    loading: true,
   },
 
   onLoad() {
+    this.order = DEFAULT_IDS.slice();
     this.setData({
-      editIcon: icons.get('pencil', '#111111', 1.8),
-      dragIcon: icons.get('dragHandle', '#9a9a9a', 1.8),
-      barsIcon: icons.get('bars', '#9a9a9a', 1.4),
+      editIcon: icons.get('pencil', '#3e4550', 1.8),
+      dragIcon: icons.get('dragHandle', '#97a7b7', 1.8),
+      barsIcon: icons.get('bars', '#97a7b7', 1.4),
+      addIcon: icons.get('plus', '#0089c0', 2),
     });
   },
 
@@ -89,43 +107,116 @@ Page({
   async load() {
     try {
       const book = await api.call('book', 'getCurrent');
-      if (!book) { this.setData({ needInit: true }); return; }
+      if (!book) { this.setData({ needInit: true, loading: false }); return; }
       this.bookId = book.bookId;
-      const cur = book.displayCurrency || 'CNY';
-      this.setData({ navSub: `${book.name} · 展示 ${fmt.symbolOf(cur)} ${cur}`, needInit: false });
-      const [dash, layout] = await Promise.all([
-        api.call('stats', 'getDashboard', { bookId: book.bookId }),
+      this.cur = book.displayCurrency || 'CNY';
+      this.setData({ navSub: `${book.name} · 展示 ${fmt.symbolOf(this.cur)} ${this.cur}`, needInit: false });
+      const [charts, layout] = await Promise.all([
+        api.call('stats', 'getCharts', { bookId: book.bookId, weekDays: this.data.weekDays, yearMonths: this.data.yearMonths }),
         api.call('layout', 'get', { bookId: book.bookId }),
       ]);
-      this.defs = buildDefs(dash, cur);
-      const ids = (layout.order || DEFAULT_IDS).filter((id) => this.defs[id]);
-      this.setData({ cards: ids.map((id) => this.defs[id]) });
+      this.chartData = charts;
+      let ids = (layout.order || DEFAULT_IDS).filter((id) => PRESETS[id]);
+      if (!ids.length) ids = DEFAULT_IDS.slice();  // 兼容旧布局（老 id 已废弃）
+      this.order = ids;
+      this.rebuild();
+      this.setData({ loading: false });
+    } catch (e) { this.setData({ loading: false }); api.toast(e); }
+  },
+
+  // 区间变化后仅重取图表数据
+  async reloadCharts() {
+    if (!this.bookId) return;
+    try {
+      this.chartData = await api.call('stats', 'getCharts', { bookId: this.bookId, weekDays: this.data.weekDays, yearMonths: this.data.yearMonths });
+      this.rebuild();
     } catch (e) { api.toast(e); }
   },
 
-  toggleEdit() {
-    const editing = !this.data.editing;
-    this.setData({ editing, editIcon: icons.get('pencil', editing ? '#2f6feb' : '#111111', 1.8) });
-    if (!editing) this.saveOrder();
+  rebuild() {
+    const cards = this.order.filter((id) => PRESETS[id]).map((id) => this.buildCard(id));
+    const canAdd = DEFAULT_IDS.some((id) => !this.order.includes(id));
+    this.setData({ cards, canAdd });
   },
 
+  buildCard(id) {
+    const d = this.chartData || {}; const cur = this.cur;
+    if (id === 'monthPie') {
+      const p = d.monthPie || { income: 0, expense: 0 };
+      return { id, kind: 'pie', title: '本月收支', sub: `${d.monthLabel || ''} · 收入 vs 支出`,
+        svg: donutSvg(p.income, p.expense),
+        legends: [
+          { dot: GREEN, k: '收入', v: fmt.money(p.income, cur) },
+          { dot: BLUE, k: '支出', v: fmt.money(p.expense, cur) },
+          { k: '结余', v: fmt.signedTotal(p.income - p.expense, cur), strong: true },
+        ] };
+    }
+    if (id === 'weekExpense') {
+      const arr = d.weekExpense || [];
+      const sum = arr.reduce((s, x) => s + x.value, 0);
+      return { id, kind: 'bars', range: 'week', title: `近 ${this.data.weekDays} 日支出`, sub: `按日 · 合计 ${fmt.money(sum, cur)}`,
+        svg: barsSvg(arr.map((x) => x.value), arr.map((x) => x.label)),
+        legends: [{ dot: BLUE, k: '每日支出' }] };
+    }
+    if (id === 'yearInOut') {
+      const arr = d.yearInOut || [];
+      return { id, kind: 'paired', range: 'year', title: `近 ${this.data.yearMonths} 个月收支`, sub: '按月 · 收入 vs 支出',
+        svg: pairedSvg(arr),
+        legends: [{ dot: GREEN, k: '收入' }, { dot: BLUE, k: '支出' }] };
+    }
+    // totalPie
+    const p = d.totalPie || { income: 0, expense: 0 };
+    return { id, kind: 'pie', title: '账本累计收支', sub: '自建立以来 · 收入 vs 支出',
+      svg: donutSvg(p.income, p.expense),
+      legends: [
+        { dot: GREEN, k: '总收入', v: fmt.money(p.income, cur) },
+        { dot: BLUE, k: '总支出', v: fmt.money(p.expense, cur) },
+        { k: '累计结余', v: fmt.signedTotal(p.income - p.expense, cur), strong: true },
+      ] };
+  },
+
+  // —— 区间切换 ——
+  setWeekRange(e) { const dd = Number(e.currentTarget.dataset.d); if (dd === this.data.weekDays) return; this.setData({ weekDays: dd }); this.reloadCharts(); },
+  setYearRange(e) { const mm = Number(e.currentTarget.dataset.m); if (mm === this.data.yearMonths) return; this.setData({ yearMonths: mm }); this.reloadCharts(); },
+
+  // —— 编辑 / 增删 ——
+  toggleEdit() {
+    const editing = !this.data.editing;
+    this.setData({ editing, editIcon: icons.get('pencil', editing ? '#00ccf9' : '#3e4550', 1.8) });
+    if (!editing) this.saveOrder();
+  },
   onLongPress() { if (!this.data.editing) this.toggleEdit(); },
+
+  addChart() {
+    const missing = DEFAULT_IDS.filter((id) => !this.order.includes(id));
+    if (!missing.length) { wx.showToast({ title: '已全部添加', icon: 'none' }); return; }
+    wx.showActionSheet({
+      itemList: missing.map((id) => `${PRESETS[id].title}（${PRESETS[id].desc}）`),
+      success: (r) => {
+        this.order = this.order.concat([missing[r.tapIndex]]);
+        this.rebuild();
+        this.saveOrder();
+      },
+    });
+  },
 
   removeCard(e) {
     const id = e.currentTarget.dataset.id;
-    this.setData({ cards: this.data.cards.filter((c) => c.id !== id) });
+    this.order = this.order.filter((c) => c !== id);
+    this.rebuild();
+    this.saveOrder();
+  },
+
+  restoreDefault() {
+    this.order = DEFAULT_IDS.slice();
+    this.setData({ editing: false, editIcon: icons.get('pencil', '#3e4550', 1.8) });
+    this.rebuild();
     this.saveOrder();
   },
 
   saveOrder() {
     if (!this.bookId) return;
-    api.call('layout', 'save', { bookId: this.bookId, order: this.data.cards.map((c) => c.id) }).catch(() => {});
-  },
-
-  restoreDefault() {
-    if (!this.defs) return;
-    this.setData({ cards: DEFAULT_IDS.map((id) => this.defs[id]), editing: false, editIcon: icons.get('pencil', '#111111', 1.8) });
-    this.saveOrder();
+    api.call('layout', 'save', { bookId: this.bookId, order: this.order.slice() }).catch(() => {});
   },
 
   // —— 拖拽排序 ——
@@ -148,10 +239,11 @@ Page({
       const r = this.rects[i];
       if (y < r.top + r.height / 2) { to = i; break; }
     }
-    if (to !== from && to >= 0) {
+    if (to !== from && to >= 0 && from >= 0) {
       const arr = cards.slice();
       const [m] = arr.splice(from, 1);
       arr.splice(to, 0, m);
+      this.order = arr.map((c) => c.id);
       this.setData({ cards: arr });
       this.measure();
     }

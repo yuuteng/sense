@@ -1,33 +1,51 @@
 # 心数 / Sense · 开发变更记录（devlog）
 
-> 本文件记录项目的重大改动，按日期倒序（最新在上）。每次完成重要功能或每天收尾时追加一条。
+> 本文件记录项目的重大改动，按日期倒序（最新在上）。
 > 约定：日期用绝对日期；每条尽量简明，列出「做了什么 + 涉及范围」。细节以 git 提交历史为准。
 
 ---
 
 ## 2026-07-02
 
-**安全加固（准备公开仓库）**
-- 危险脚本（`seed.run` 清库重灌）改由云函数环境变量 **`APP_ENV=dev`** 控制：默认 prod → 禁用，公开仓库也无法被利用；开发时控制台设 `APP_ENV=dev` 即可，一次配置长期有效，无需改代码/管 openid。
-- 云环境 ID 视为可公开（云资源仍需微信鉴权），保留直接写在 `app.js`，日常开发无额外文件负担。
-- 备注：曾短暂用 config.js/secret.js 双文件方案，因日常开发繁琐已回退为上面的 `APP_ENV` 开关。真实密钥（AI key/AppSecret）仍应走云函数环境变量，不入代码。
+**视觉 / 换肤**
+- 最终采用用户 Figma「FPS」色卡整体换肤（先前一版 Alan 暖奶油/蓝方案已被取代）。新增 `docs/design-tokens.md` 为唯一配色事实来源。
+- `app.wxss` `page{}` 重建令牌层：完整 FPS 色卡（grey/blue/primary/creation/secondary/语义色）+ 语义别名。关键：`--bg`#f6f9fc、`--fg`#3e4550、`--accent`#00ccf9（主色填充）、`--accent-ink`#0089c0（蓝色文字/图标，blue-400 对比不足）、`--success`#9edf10（填充）/`--success-strong`#5c9a0e（绿色文字）、`--warn`#ffcd2f、`--danger`#f62172；阴影改 FPS 冷灰。
+- 全量替换预算 rgba/hex（旧蓝→#00ccf9、中性→冷灰、旧绿/黄/红 tint→新语义色）；所有作文字用的 `color: var(--accent)` 改 `--accent-ink`；各 JS `icons.get()` 颜色、custom-tab-bar、nav-bar、avatar 默认色、app.json 主题色、loading/calendar/currency-picker 组件色全部对齐。
+- 首页顶部统计卡重设计为 FPS 深蓝 hero（`#035599→#0089c0` 渐变 + 青色光晕）；记账条目图标底色：支出=蓝、收入=绿。
 
-**登录与关键逻辑修复（11 项）**
-- 新增微信授权登录页 `pages/login`（chooseAvatar 头像 + nickname 昵称，上传云存储），登录态由 `users.registered` 标记；可在设置页改昵称、在账本设置页改「我在该账本的名字」。
-- 首页闸门：未注册 → 登录页；已注册无账本 → 引导创建页（不再进空首页）。
-- 账本管理拆分：新增 `pages/bookConfig`，点某账本进入其**独立**配置页（成员/编辑信息/管理分类/设默认/分账/解散）；修复「解散账本误删第一个账本」的 bug（严格按 bookId）。`books` 页只剩列表。
-- 记账页：金额改用系统数字键盘（`input type=digit` + 净化）；日期用 `picker`；图片去掉默认图、支持选图上传云存储、详情页渲染真实图；记录人固定为当前用户、仅保留付款人单选；收/支切换时整页配色切换（收入转绿）。
-- 修复新建账本名称无法编辑（受控 input 未 setData）。
-- 导航栏适配微信右上角胶囊按钮，避免遮挡（`getMenuButtonBoundingClientRect`）。
-- 实现导入导出：`data.export`（JSON，前端转发/复制）、`data.import`（选 JSON 文件入库）。
-- 后端加自举建集合 + 汇率缺失回退；`/html-to-miniprogram` skill 补充胶囊避让、受控输入、系统键盘等坑。
+**统计页**
+- 删「本月收支概览」（与首页重复）；改为 4 张真实数据图表——本月收支饼、近 N 日支出柱状、近 N 月收入vs支出分组柱、账本累计收支饼。新增后端 `stats.getCharts`（可传 `weekDays`/`yearMonths`，均按展示币种换算）；前端 SVG 现算（donut/bars/paired）。
+- 标题居中（nav-bar center）；新增「添加图表」预设选择（ActionSheet），保留删除/拖拽排序；近 N 日 7/14/30、近 N 月 6/12 区间 chips 可切换重取。`DEFAULT_LAYOUT` 改新 id，旧布局自动回退默认。
 
-**视觉：Alan 风格移植**
-- 令牌层改暖奶油底 + Alan 蓝 + 暖近黑；新增柔和分层阴影与弹性缓动；卡片去硬边加阴影、按钮胶囊化、FAB/主按钮彩色投影。涉及 `app.wxss`、`custom-tab-bar`、`app.json`。
+**汇率 / 展示币种**
+- 展示币种切换真实换算：新增 `latestCnyQuotes`/`convFactor`（以 CNY 快照为枢轴，base→display）。`record.list` 按前端 `currency` 换算每笔与分组合计并回传 `displayCurrency`；`stats._compute`/`getMonthlySummary`/`getDashboard` 传 ctx 取用户展示币种换算（口径换算，不改历史每笔，符合 PRD）。「本月」改为当前自然月（北京时间）。
+- 汇率更新改为每日定时触发器（`config.json` cron 06:30 调 `rate._refresh`），手动「刷新汇率」保留；记账当日汇率固化。`getRate` 回退最近含该币种快照，`record.create/update` 兜底用前端已展示汇率。汇率提示文案改为「约 ¥766.16（1 EUR ≈ ¥7.84）」。
 
-**工程**
-- 删除 quickstart 模板残留图片目录（1.3MB，超 200KB 告警）。
-- 初始化 git、补 README 与 .gitignore、建立本 devlog。
+**记账 / 录入 / 编辑页**
+- 实现编辑记录：detail 传 recordId → add 读 `record.get` 预填（金额/类型/币种/分类/日期/图片/付款人/分摊），保存走 `record.update`；修「编辑进来金额为 0」。
+- 收支切换 onLoad 一次性预加载 expense+income 缓存，切换瞬时；收/支整页配色切换。
+- 分类可用户自定义（一级九宫格/二级 chips 末尾「添加」，持久化到账本，创建后自动选中）；一级新增支持选图标（弹层）；长按停用（软删，历史保留原名）。权限：新增/停用放宽到 rw，重命名/排序仍 owner/admin（PRD 权限矩阵与 4.4 同步）。
+- 金额改系统数字键盘（`type=digit` + 净化）；日期改自定义 `components/calendar`；币种改自定义 `components/currency-picker` 底部弹层（替换原生小字滚轮）。
+- 记账页 loading 反复调整后最终整套移除（曾做全屏遮罩 + `page-meta` 锁滚 + `wx:if` 闸门，因卡住阻塞开发而拆除）；保存反馈用原生 `wx.showLoading({mask:true})`。修金额输入框卡成灰框：去 `always-embed` + 延时 350ms 聚焦。
+
+**AI 预填**
+- 修正预填卡：日期用 `relDate()` 按北京时间相对今天算（修「昨天=6/30」）；记录人取当前用户（membersMap，修「小雨」）；去掉付款人只留记录人；分类匹配到二级；新增收入关键词识别（工资/奖金/红包… → 收入 + 对应分类，修「工资算支出」）。
+- 注：AI 仍是关键词占位；预填卡「改」编辑与「确认真正入账」尚未实现（待真 AI）。
+
+**账本 / onboarding / 成员 / 登录**
+- 修建账本报错「未知接口:book.share」：账本类型字段与路由 `type` 撞名，改用 `bookType`。`book.create` 为新账本注入默认两级分类。
+- onboarding 最终定为「字段撑满上半屏」（品牌左上、按钮吸底；曾试居中卡片式被弃）；账本类型改名「共享账本 / 分账账本」，描述精简；「基准币种」→「统计币种」。
+- 新增微信授权登录页 `pages/login`（头像 + 昵称上传云存储，`users.registered` 标记登录态）；首页闸门（未注册→登录、无账本→引导）。账本管理拆分出 `pages/bookConfig`（独立配置：成员/信息/设默认/分账/解散），修「解散误删第一个账本」；「设为默认」改明确按钮。
+- 身份数据源统一为 `users`：`membersMap`/`member.list`/`record.*`/`settle` join users 取实时昵称+头像，改资料各处自动更新；`member.rename` 写 `nameOverride`。新增 `components/avatar`（照片缺失回退彩色首字母）。昵称限长 20。邀请改微信分享卡片 + `pages/join` 落地页 + 后端 `member.join`（默认读写）。
+- 账本数修复：`user.getProfile` 的 bookCount 改为「我参与且仍存在的账本去重计数」，修虚高（显示 2 本）。
+
+**导入导出**
+- 导出改为「选格式(Excel/CSV/JSON/PDF) → 后端生成真实文件传云存储(fileID) → 前端下载预览/转发」。Excel 用 `xlsx`，CSV 带 BOM，PDF 暂「开发中」。导入选 JSON 文件入库。
+
+**数据模型 / 安全 / 工程**
+- 移除 members 冗余 `nameCache`/`avatarInitial`；records 加审计字段 `createdBy`/`updatedBy`，`updatedAt` 创建即写。`seed.reset` 清空全部 8 集合（含 users，需重登）。默认头像色统一 `#00ccf9`。
+- 安全加固（准备公开仓库）：危险脚本 `seed.run`/`reset`/`rate.refresh` 由云函数环境变量 `APP_ENV=dev` 控制，默认 prod 禁用；云环境 ID 视为可公开保留在 `app.js`；真实密钥走云函数环境变量。
+- 修 `index.js` `event1` 笔误（会导致云函数每次崩溃）；nav-bar 适配右上角胶囊避让、标题绝对整屏居中。删 quickstart 残留图片目录；初始化 git、补 README/.gitignore；建立 `/html-to-miniprogram` skill。
 
 ## 2026-07-01
 
@@ -40,4 +58,3 @@
 **前端页面全量搭建**
 - 按 `design/` 10 个 HTML 原型转出 9 个小程序页面（home/add/detail/stats/ai/books/settings/onboarding/settle）+ 自定义 `nav-bar`、`custom-tab-bar`、SVG 图标库；从 quickstart 模板重构而来。
 - 建立 `/html-to-miniprogram` skill 固化转换流程与陷阱。
-</content>

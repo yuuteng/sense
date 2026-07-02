@@ -1,1 +1,3 @@
-/* bookConfig 页面样式继承自 app.wxss */
+/* 把 <button> 重置成和 .li 一样的行 */
+.li-btn { width: 100%; margin: 0; text-align: left; background: var(--surface); line-height: normal; }
+.li-btn::after { border: none; }

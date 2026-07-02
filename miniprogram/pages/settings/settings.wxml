@@ -1,4 +1,5 @@
 <view class="screen screen--pad">
+  <loading show="{{loading}}"></loading>
   <nav-bar title="我的"></nav-bar>
 
   <!-- 个人头（点击改昵称）-->
@@ -11,15 +12,10 @@
 
   <view class="group__title">偏好</view>
   <view class="group group--flat">
-    <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="cycleCurrency">
+    <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="openCur">
       <view class="li__ic"><image src="{{ic.currency}}"></image></view>
       <view class="li__label">展示币种</view>
-      <view class="li__val">{{curVal}}</view>
-    </view>
-    <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="goBooks">
-      <view class="li__ic"><image src="{{ic.list}}"></image></view>
-      <view class="li__label">分类管理</view>
-      <view class="li__val">家庭日常 <image class="chevron" src="{{ic.chevron}}"></image></view>
+      <view class="li__val">{{curLabel}} <image class="chevron" src="{{ic.chevron}}"></image></view>
     </view>
     <view class="li">
       <view class="li__ic"><image src="{{ic.aiBox}}"></image></view>
@@ -47,18 +43,31 @@
     </view>
   </view>
 
-  <view class="group__title">开发</view>
+  <block wx:if="{{profile.isDev}}">
+  <view class="group__title">开发（dev）</view>
   <view class="group group--flat">
+    <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="refreshRates">
+      <view class="li__ic"><image src="{{ic.refresh}}"></image></view>
+      <view class="li__label">刷新汇率</view>
+      <view class="li__val">从开放源拉取 <image class="chevron" src="{{ic.chevron}}"></image></view>
+    </view>
     <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="initSeed">
       <view class="li__ic"><image src="{{ic.seed}}"></image></view>
       <view class="li__label">初始化测试数据</view>
-      <view class="li__val">仅 dev 模式 <image class="chevron" src="{{ic.chevron}}"></image></view>
+      <view class="li__val">载入演示数据 <image class="chevron" src="{{ic.chevron}}"></image></view>
+    </view>
+    <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="resetData">
+      <view class="li__ic danger"><image src="{{ic.wipe}}"></image></view>
+      <view class="li__label" style="color:var(--danger)">清空所有数据</view>
     </view>
   </view>
+  </block>
 
   <view class="group__title">关于</view>
   <view class="group group--flat">
     <view class="li"><view class="li__label">隐私说明</view><view class="li__val">AI 分析基于你的账本数据</view></view>
     <view class="li"><view class="li__label">版本</view><view class="li__val num">v1.0 · P1</view></view>
   </view>
+
+  <currency-picker visible="{{curVisible}}" current="{{curCode}}" bind:select="onCur" bind:close="closeCur"></currency-picker>
 </view>

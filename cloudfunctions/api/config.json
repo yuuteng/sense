@@ -1,0 +1,9 @@
+{
+  "triggers": [
+    {
+      "name": "dailyRate",
+      "type": "timer",
+      "config": "0 30 6 * * * *"
+    }
+  ]
+}

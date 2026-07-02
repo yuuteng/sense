@@ -1,4 +1,5 @@
 <view class="screen" style="padding-bottom:48rpx">
+  <loading show="{{loading}}"></loading>
   <nav-bar back="{{true}}" center="{{true}}" title="账本设置"></nav-bar>
 
   <block wx:if="{{book}}">
@@ -13,41 +14,35 @@
         <view class="li__label">我的角色</view>
         <view class="li__val">{{book.myRole}}</view>
       </view>
-      <view wx:if="{{!book.isDefault}}" class="li" hover-class="pressed" hover-stay-time="80" bindtap="setDefault">
-        <view class="li__ic"><image src="{{ic.star}}"></image></view>
-        <view class="li__label">设为默认账本</view>
-        <image class="chevron" src="{{ic.chevron}}"></image>
-      </view>
-      <view wx:else class="li">
+      <view class="li">
         <view class="li__label">默认账本</view>
-        <view class="li__val">当前默认</view>
+        <view wx:if="{{book.isDefault}}" class="li__val">当前默认</view>
+        <view wx:else class="btn btn--ghost btn--mini" hover-class="pressed" hover-stay-time="80" catchtap="setDefault">设为默认</view>
       </view>
     </view>
 
     <!-- 成员 -->
-    <view class="section-label">
-      成员 · {{members.length}} 人
-      <text wx:if="{{canManage}}" class="link" bindtap="onInvite">{{inviteText}}</text>
-    </view>
+    <view class="section-label">成员 · {{members.length}} 人</view>
     <view class="group group--flat">
       <view wx:for="{{members}}" wx:key="openid" class="li" data-i="{{index}}" hover-class="pressed" hover-stay-time="80" bindtap="onTapMember">
-        <text class="avatar" style="background:{{item.color}};width:68rpx;height:68rpx;font-size:26rpx">{{item.initial}}</text>
-        <view class="li__label">{{item.name}}{{item.isMe ? '　·　点击改名' : ''}}</view>
-        <text class="role {{item.roleClass}}">{{item.roleBadge}}{{canManage && !item.isMe && item.role!=='owner' ? ' ⌄' : ''}}</text>
+        <avatar src="{{item.avatarFileID}}" initial="{{item.initial}}" color="{{item.color}}" size="68"></avatar>
+        <view class="li__label ellip">{{item.name}}{{item.isMe ? '　·　点击改名' : ''}}</view>
+        <text class="role {{item.roleClass}}">{{item.roleBadge}}</text>
+        <image wx:if="{{canManage && !item.isMe && item.role!=='owner'}}" class="chevron" src="{{ic.chevron}}"></image>
       </view>
+      <button wx:if="{{canManage}}" class="li li-btn" open-type="share" hover-class="pressed" hover-stay-time="80">
+        <view class="li__ic"><image src="{{ic.invite}}"></image></view>
+        <view class="li__label">邀请成员</view>
+        <view class="li__val">分享给微信好友 <image class="chevron" src="{{ic.chevron}}"></image></view>
+      </button>
     </view>
-    <view wx:if="{{canManage}}" class="ai-disclaimer left">点自己可改名；Owner 可任命/取消 Admin、调整成员权限、解散账本，Admin 不能移除 Owner 或其他 Admin。</view>
+    <view wx:if="{{canManage}}" class="ai-disclaimer left">点成员可改权限/移除；点自己可改名；邀请通过微信分享卡片，好友点开即加入。Admin 不能移除 Owner 或其他 Admin。</view>
 
     <!-- 操作 -->
     <view class="group">
       <view wx:if="{{canManage}}" class="li" hover-class="pressed" hover-stay-time="80" bindtap="editBookName">
         <view class="li__ic"><image src="{{ic.pencil}}"></image></view>
         <view class="li__label">编辑账本信息</view>
-        <image class="chevron" src="{{ic.chevron}}"></image>
-      </view>
-      <view wx:if="{{canManage}}" class="li" hover-class="pressed" hover-stay-time="80" bindtap="goCategories">
-        <view class="li__ic"><image src="{{ic.list}}"></image></view>
-        <view class="li__label">管理分类</view>
         <image class="chevron" src="{{ic.chevron}}"></image>
       </view>
       <view wx:if="{{isSplit}}" class="li" hover-class="pressed" hover-stay-time="80" bindtap="goSettle">
