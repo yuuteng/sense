@@ -1,0 +1,16 @@
+/* 收入模式：主色切换为绿色，全局提示当前状态 */
+.mode-income {
+  --accent: #17a34a;
+  --accent-hover: #148f41;
+  --accent-active: #127a38;
+}
+.mode-income .amount-input,
+.mode-income .cur { color: var(--success); }
+
+/* 金额输入（系统数字键盘）*/
+.amount-line { display: flex; align-items: baseline; justify-content: center; }
+.amount-input {
+  width: 62%;
+  font-size: 104rpx; font-weight: 600; letter-spacing: -0.03em;
+  text-align: center; line-height: 1.1; color: var(--fg);
+}

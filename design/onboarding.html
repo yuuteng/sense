@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>心数 · 创建账本</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="stage">
+  <div class="phone">
+    <div class="dynamic-island"></div>
+    <div class="statusbar">
+      <span class="clock num">9:41</span>
+      <span class="status-icons" aria-hidden="true">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+        <svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><path d="M8.5 2.4c2.6 0 5 1 6.8 2.7l-1.5 1.5A7.7 7.7 0 0 0 8.5 6 7.7 7.7 0 0 0 3.2 6.6L1.7 5.1A9.7 9.7 0 0 1 8.5 2.4Z"/><circle cx="8.5" cy="10.4" r="1.5"/></svg>
+        <svg width="26" height="13" viewBox="0 0 26 13" fill="none"><rect x="1" y="1" width="21" height="11" rx="3" stroke="currentColor" stroke-opacity="0.4"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23.5" y="4.5" width="1.8" height="4" rx="0.9" fill="currentColor" fill-opacity="0.4"/></svg>
+      </span>
+    </div>
+
+    <div class="screen">
+      <div class="onboard">
+        <div class="onboard__brand">
+          <span class="logo-mark">心</span>
+          <div><div style="font-weight:600;font-size:18px">心数 <span class="muted" style="font-weight:400">/ Sense</span></div><div class="muted" style="font-size:13px">简洁、协作、多币种的记账</div></div>
+        </div>
+
+        <h1>先建一个账本<br>开始记账</h1>
+        <p class="lead">给账本起个名字，选择类型和基准币种。之后进入的就是这个默认账本。</p>
+
+        <label class="input-label" for="bookName">账本名称</label>
+        <input class="text-input" id="bookName" placeholder="例如：家庭日常" value="家庭日常">
+
+        <label class="input-label">账本类型</label>
+        <div class="type-choice" id="types">
+          <button class="type-card" aria-selected="true" data-t="share">
+            <h3>共享可见型 <span class="radio-mark"></span></h3>
+            <p>多人往同一账本记账，能看到每笔是谁记的、谁付的，系统不计算欠款。适合家庭共同开支。</p>
+          </button>
+          <button class="type-card" aria-selected="false" data-t="split">
+            <h3>分账结算型 <span class="radio-mark"></span></h3>
+            <p>记录时可指定谁付款、由谁分摊。P1 仅记录这些信息，自动算清谁欠谁将在后续版本提供。适合 AA、合租、旅行拼账。</p>
+          </button>
+        </div>
+
+        <label class="input-label">基准币种</label>
+        <div class="currency-switch" id="baseCur" style="margin-top:0">
+          <button data-c="CNY" aria-selected="true">¥ CNY</button>
+          <button data-c="EUR" aria-selected="false">€ EUR</button>
+          <button data-c="USD" aria-selected="false">$ USD</button>
+        </div>
+        <p class="ai-disclaimer" style="text-align:left;padding-left:0">支持混合录入其他币种，按记账当日汇率固化换算，统一用展示币种查看。</p>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <a class="btn btn--primary btn--block btn--lg" href="home.html">创建账本</a>
+    </div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<script>
+  function single(id){
+    var box = document.getElementById(id);
+    box.addEventListener('click', function(e){
+      var b = e.target.closest('button'); if(!b) return;
+      [].forEach.call(this.querySelectorAll('button'), function(x){ x.setAttribute('aria-selected','false'); });
+      b.setAttribute('aria-selected','true');
+    });
+  }
+  single('types'); single('baseCur');
+</script>
+</body>
+</html>

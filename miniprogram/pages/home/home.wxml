@@ -1,0 +1,70 @@
+<view class="screen screen--pad">
+  <nav-bar>
+    <navigator slot="left" class="appbar__book" url="/pages/books/books" hover-class="none">
+      {{bookName}}
+      <image src="{{chevronDown}}" style="width:28rpx;height:28rpx"></image>
+    </navigator>
+    <view slot="right" class="pill">{{displayCurrency}}</view>
+  </nav-bar>
+
+  <!-- 未初始化数据提示 -->
+  <view wx:if="{{needInit}}" style="text-align:center;padding:120rpx 60rpx">
+    <view style="font-size:32rpx;font-weight:600">还没有账本数据</view>
+    <view class="muted" style="font-size:28rpx;margin-top:12rpx">前往「我的 → 初始化测试数据」一键载入演示数据</view>
+    <view class="btn btn--primary" style="display:inline-flex;margin-top:36rpx" hover-class="pressed" hover-stay-time="80" bindtap="goSettings">去初始化</view>
+  </view>
+
+  <!-- 本月概要 -->
+  <view wx:if="{{!needInit}}" class="summary">
+    <view class="summary__glow"></view>
+    <view class="summary__label">{{summary.monthLabel}}</view>
+    <view class="summary__balance num">{{summary.balance}}</view>
+    <view class="summary__row">
+      <view class="summary__cell">
+        <view class="k"><text class="dot dot--in"></text>收入</view>
+        <view class="v num">{{summary.income}}</view>
+      </view>
+      <view class="summary__cell">
+        <view class="k"><text class="dot dot--out"></text>支出</view>
+        <view class="v num">{{summary.expense}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 记账列表（按天分组，倒序） -->
+  <block wx:for="{{groups}}" wx:key="date" wx:for-item="g">
+    <view class="day-head"><text>{{g.date}}</text><text class="num">{{g.total}}</text></view>
+    <view class="card--flush">
+      <view
+        wx:for="{{g.items}}"
+        wx:key="id"
+        wx:for-item="it"
+        class="txn"
+        hover-class="pressed"
+        hover-stay-time="80"
+        data-id="{{it.id}}"
+        bindtap="goDetail"
+      >
+        <view class="txn__icon {{it.in ? 'in' : ''}}"><image src="{{it.iconSrc}}"></image></view>
+        <view class="txn__body">
+          <view class="txn__title">{{it.title}}</view>
+          <view class="txn__meta">
+            <text wx:if="{{it.whoInitial}}" class="avatar" style="background:{{it.whoColor}}">{{it.whoInitial}}</text>
+            <text>{{it.who}}</text>
+            <text wx:if="{{it.fx}}" class="pill pill--fx">{{it.fx}}</text>
+          </view>
+        </view>
+        <view class="txn__amt">
+          <view class="main num {{it.in ? 'amt-in' : 'amt-out'}}">{{it.amount}}</view>
+          <view wx:if="{{it.sub}}" class="sub">{{it.sub}}</view>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view wx:if="{{!needInit && groups.length}}" class="ai-disclaimer" style="padding-top:40rpx">已显示全部记录</view>
+
+  <navigator class="fab" url="/pages/add/add" hover-class="pressed" hover-stay-time="80">
+    <image src="{{plusIcon}}"></image>
+  </navigator>
+</view>

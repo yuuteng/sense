@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>心数 · AI 助手</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="stage">
+  <div class="phone">
+    <div class="dynamic-island"></div>
+    <div class="statusbar">
+      <span class="clock num">9:41</span>
+      <span class="status-icons" aria-hidden="true">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+        <svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><path d="M8.5 2.4c2.6 0 5 1 6.8 2.7l-1.5 1.5A7.7 7.7 0 0 0 8.5 6 7.7 7.7 0 0 0 3.2 6.6L1.7 5.1A9.7 9.7 0 0 1 8.5 2.4Z"/><circle cx="8.5" cy="10.4" r="1.5"/></svg>
+        <svg width="26" height="13" viewBox="0 0 26 13" fill="none"><rect x="1" y="1" width="21" height="11" rx="3" stroke="currentColor" stroke-opacity="0.4"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23.5" y="4.5" width="1.8" height="4" rx="0.9" fill="currentColor" fill-opacity="0.4"/></svg>
+      </span>
+    </div>
+
+    <div class="appbar">
+      <h1 class="appbar__title">AI 助手<small>基于「家庭日常」账本数据</small></h1>
+      <button class="appbar__btn" aria-label="更多">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+      </button>
+    </div>
+
+    <div class="screen" style="padding-bottom:180px" id="scroll">
+      <div class="chat" id="chat">
+        <div class="ai-disclaimer">AI 分析基于你的账本数据进行 · 本账本会话保留最近 50 条</div>
+
+        <!-- 数据问答 -->
+        <div class="msg msg--me">上个月我们餐饮花了多少？</div>
+        <div class="msg msg--ai">6 月「家庭日常」账本的<b>餐饮</b>合计支出为 <b>¥1,284.60</b>，共 32 笔。其中外卖占 ¥612，晚餐 ¥458，咖啡/奶茶 ¥214.60（含 3 笔欧元记录已按当日汇率换算）。</div>
+        <div class="msg msg--me">这周谁花得最多？</div>
+        <div class="msg msg--ai">本周小雨记账 ¥1,240、阿哲记账 ¥860。按付款人看，阿哲付款 ¥1,510（含一次超市大额采购）。</div>
+
+        <!-- 收据识别 → 预填确认卡片 -->
+        <div class="msg msg--me receipt"><div class="receipt-img">🧾 上传的收据图片</div></div>
+        <div class="msg msg--ai">已识别这张收据，为你生成一条<b>预填记录</b>，请核对后确认入账：</div>
+
+        <div class="confirm-card" id="card1">
+          <div class="confirm-card__head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            待确认 · 收据识别
+          </div>
+          <div class="confirm-card__body">
+            <div class="confirm-row"><span class="k">商家</span><span class="v">City Supermarkt<span class="edit">改</span></span></div>
+            <div class="confirm-row"><span class="k">金额</span><span class="v num">€18.90 <span class="muted" style="font-weight:400">≈ ¥147.99</span><span class="edit">改</span></span></div>
+            <div class="confirm-row"><span class="k">建议分类</span><span class="v">购物 · 日用<span class="edit">改</span></span></div>
+            <div class="confirm-row"><span class="k">日期</span><span class="v num">2026-07-01</span></div>
+            <div class="confirm-row"><span class="k">记录人 / 付款人</span><span class="v">小雨</span></div>
+          </div>
+          <div class="confirm-card__foot">
+            <button class="btn btn--ghost" data-act="drop">放弃</button>
+            <button class="btn btn--primary" data-act="confirm">确认入账</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 输入区 -->
+    <div class="composer">
+      <button class="composer__ic" id="uploadBtn" aria-label="上传收据">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.2"/><path d="M8 6l1.5-2h5L16 6"/></svg>
+      </button>
+      <input class="composer__input" id="input" aria-label="给 AI 发消息或记一笔" placeholder="问一句，或说「昨天打车 35」记一笔…">
+      <button class="composer__send" id="send" aria-label="发送">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12l16-8-6 16-3.5-6L4 12Z" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var chat = document.getElementById('chat');
+  var scroll = document.getElementById('scroll');
+  var input = document.getElementById('input');
+  function bottom(){ scroll.scrollTop = scroll.scrollHeight; }
+
+  // 确认卡片入账 / 放弃
+  chat.addEventListener('click', function(e){
+    var b = e.target.closest('.confirm-card__foot button'); if(!b) return;
+    var card = b.closest('.confirm-card');
+    if(b.dataset.act === 'confirm'){
+      card.classList.add('done');
+      card.querySelector('.confirm-card__head').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg> 已入账，可在首页查看';
+      card.querySelector('.confirm-card__foot').innerHTML = '<a class="btn btn--ghost" style="flex:1" href="home.html">去首页看看</a>';
+    } else {
+      card.style.opacity = '.5';
+      card.querySelector('.confirm-card__foot').innerHTML = '<span class="muted" style="padding:9px;font-size:13px">已放弃，未入账</span>';
+    }
+  });
+
+  // 一句话记账 / 问答
+  function addMe(t){ var d=document.createElement('div'); d.className='msg msg--me'; d.textContent=t; chat.appendChild(d); }
+  function addAi(html){ var d=document.createElement('div'); d.className='msg msg--ai'; d.innerHTML=html; chat.appendChild(d); }
+  function addTyping(){ var d=document.createElement('div'); d.className='msg msg--ai'; d.id='typing'; d.setAttribute('aria-label','正在分析'); d.innerHTML='<span class="typing" aria-hidden="true"><i></i><i></i><i></i></span>'; chat.appendChild(d); bottom(); }
+  function removeTyping(){ var t=document.getElementById('typing'); if(t) t.parentNode.removeChild(t); }
+  function addCard(rec){
+    var d = document.createElement('div'); d.className='confirm-card';
+    d.innerHTML = '<div class="confirm-card__head"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v5l3 2"/><circle cx="12" cy="12" r="9"/></svg> 待确认 · 自然语言记账</div>'
+      + '<div class="confirm-card__body">'
+      + '<div class="confirm-row"><span class="k">类型</span><span class="v">支出</span></div>'
+      + '<div class="confirm-row"><span class="k">金额</span><span class="v num">¥'+rec.amt.toFixed(2)+'</span></div>'
+      + '<div class="confirm-row"><span class="k">分类</span><span class="v">'+rec.cat+'<span class="edit">改</span></span></div>'
+      + '<div class="confirm-row"><span class="k">日期</span><span class="v num">'+rec.date+'</span></div>'
+      + '<div class="confirm-row"><span class="k">记录人 / 付款人</span><span class="v">小雨</span></div></div>'
+      + '<div class="confirm-card__foot"><button class="btn btn--ghost" data-act="drop">放弃</button><button class="btn btn--primary" data-act="confirm">确认入账</button></div>';
+    chat.appendChild(d);
+  }
+  function parse(t){
+    var m = t.match(/(\d+(\.\d+)?)/);
+    var amt = m ? parseFloat(m[1]) : 0;
+    var cat = '其他';
+    if(/打车|地铁|公交|车/.test(t)) cat='交通 · 打车';
+    else if(/饭|餐|吃|外卖|咖啡|奶茶/.test(t)) cat='餐饮';
+    else if(/超市|买|购/.test(t)) cat='购物 · 日用';
+    else if(/药|医/.test(t)) cat='医疗';
+    var date = /昨天/.test(t) ? '2026-06-30' : '2026-07-01';
+    return { amt:amt, cat:cat, date:date };
+  }
+  function handle(){
+    var t = input.value.trim(); if(!t) return;
+    addMe(t); input.value='';
+    addTyping();
+    setTimeout(function(){
+      removeTyping();
+      var rec = parse(t);
+      if(rec.amt > 0){
+        addAi('已把这句话解析成一条<b>预填记录</b>，确认后才会入账：');
+        addCard(rec);
+      } else {
+        addAi('我基于「家庭日常」真实数据回答，不编造数字。可以问我某月某分类合计、谁花得最多，或说一句「昨天打车 35」帮你记账。');
+      }
+      bottom();
+    }, 400);
+  }
+  document.getElementById('send').addEventListener('click', handle);
+  input.addEventListener('keydown', function(e){ if(e.key==='Enter') handle(); });
+  document.getElementById('uploadBtn').addEventListener('click', function(){
+    addMe('📷 已上传一张收据'); addTyping();
+    setTimeout(function(){
+      removeTyping();
+      addAi('识别到一张收据，已生成预填记录，请核对后确认：');
+      addCard({ amt:56.00, cat:'餐饮 · 外卖', date:'2026-07-01' });
+      bottom();
+    }, 500);
+  });
+  bottom();
+})();
+</script>
+</body>
+</html>

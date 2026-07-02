@@ -1,0 +1,20 @@
+<view class="nav">
+  <view class="status-spacer" style="height: {{statusBarHeight}}px"></view>
+  <view class="appbar" style="height: {{navBarHeight}}px; padding-right: {{rightGap}}px">
+    <view class="appbar__side {{back ? 'reserve' : ''}}">
+      <view wx:if="{{back}}" class="appbar__btn" hover-class="active" hover-stay-time="80" bindtap="onBack">
+        <image class="nav-ic" src="{{backIcon}}"></image>
+      </view>
+      <slot wx:else name="left"></slot>
+    </view>
+
+    <view class="appbar__title {{center ? 'appbar__title--center' : ''}}">
+      <block wx:if="{{title}}">{{title}}<text wx:if="{{sub}}" class="sub">{{sub}}</text></block>
+      <slot wx:else name="title"></slot>
+    </view>
+
+    <view class="appbar__side appbar__side--right {{center ? 'reserve' : ''}}">
+      <slot name="right"></slot>
+    </view>
+  </view>
+</view>

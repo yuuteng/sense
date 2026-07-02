@@ -1,0 +1,78 @@
+<view class="screen" style="padding-bottom:calc(200rpx + env(safe-area-inset-bottom))">
+  <nav-bar back="{{true}}" center="{{true}}" title="记录详情"></nav-bar>
+
+  <block wx:if="{{d}}">
+  <!-- 主金额（外币记录，展示原始 + 换算）-->
+  <view style="text-align:center;padding:24rpx 40rpx 48rpx">
+    <view class="txn__icon" style="width:112rpx;height:112rpx;margin:0 auto 28rpx">
+      <image src="{{iconSrc}}" style="width:56rpx;height:56rpx"></image>
+    </view>
+    <view class="num" style="font-size:84rpx;font-weight:600;letter-spacing:-0.03em">{{d.displayAmount}}</view>
+    <view class="muted" style="font-size:28rpx;margin-top:8rpx">{{d.title}} · {{d.category}}</view>
+    <view class="book-type book-type--share" style="margin-top:20rpx">
+      <image src="{{ic.check}}" style="width:24rpx;height:24rpx"></image>{{d.type}}
+    </view>
+  </view>
+
+  <!-- 多币种：原始金额 + 换算（仅外币记录）-->
+  <view wx:if="{{d.isForeign}}" class="group group--flat">
+    <view class="field-row">
+      <view class="field-row__label">原始金额</view>
+      <view class="field-row__val num">{{d.originalAmount}}</view>
+    </view>
+    <view class="field-row">
+      <view class="field-row__label">当日汇率</view>
+      <view class="field-row__val num">{{d.rate}}</view>
+    </view>
+    <view class="field-row">
+      <view class="field-row__label">换算金额（已固化）</view>
+      <view class="field-row__val num">{{d.convertedAmount}}</view>
+    </view>
+  </view>
+  <view wx:if="{{d.isForeign}}" class="ai-disclaimer left" style="padding-bottom:24rpx">{{d.fixNote}}</view>
+
+  <!-- 记录信息 -->
+  <view class="group">
+    <view class="field-row">
+      <view class="field-row__label">分类</view>
+      <view class="field-row__val">{{d.category}}</view>
+    </view>
+    <view class="field-row">
+      <view class="field-row__label">日期</view>
+      <view class="field-row__val num">{{d.date}}</view>
+    </view>
+    <view class="field-row">
+      <view class="field-row__label">记录人</view>
+      <view class="field-row__val">
+        <text class="avatar" style="background:{{d.recorder.color}}">{{d.recorder.initial}}</text>{{d.recorder.name}}
+      </view>
+    </view>
+    <view class="field-row">
+      <view class="field-row__label">付款人</view>
+      <view class="field-row__val">
+        <text class="avatar" style="background:{{d.payer.color}}">{{d.payer.initial}}</text>{{d.payer.name}}
+      </view>
+    </view>
+    <view class="field-row">
+      <view class="field-row__label">备注</view>
+      <view class="field-row__val" style="font-weight:400">{{d.note}}</view>
+    </view>
+  </view>
+
+  <!-- 图片附件 -->
+  <block wx:if="{{d.images.length}}">
+    <view class="section-label">图片附件</view>
+    <view class="photo-strip" style="padding-top:0">
+      <view wx:for="{{d.images}}" wx:key="*this" class="photo-thumb" style="width:176rpx;height:176rpx;background:none">
+        <image src="{{item}}" mode="aspectFill" style="width:100%;height:100%;border-radius:var(--radius-sm)"></image>
+      </view>
+    </view>
+  </block>
+  </block>
+</view>
+
+<!-- 权限相关操作（记录人本人 → 可编辑/删除）-->
+<view wx:if="{{d.canEdit}}" class="action-bar action-bar--row">
+  <view class="btn btn--ghost" style="flex:1" hover-class="pressed" hover-stay-time="80" bindtap="onEdit">编辑</view>
+  <view class="btn btn--danger" style="flex:1" hover-class="pressed" hover-stay-time="80" bindtap="onDelete">{{delText}}</view>
+</view>

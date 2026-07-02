@@ -1,0 +1,67 @@
+<view class="screen" style="padding-bottom:calc(380rpx + env(safe-area-inset-bottom))">
+  <nav-bar title="AI 助手" sub="{{navSub}}">
+    <view slot="right" class="appbar__btn" hover-class="active" hover-stay-time="80">
+      <image src="{{ic.dotsH}}" style="width:44rpx;height:44rpx"></image>
+    </view>
+  </nav-bar>
+
+  <view class="chat">
+    <view class="ai-disclaimer">AI 分析基于你的账本数据进行 · 本账本会话保留最近 50 条</view>
+
+    <block wx:for="{{messages}}" wx:key="index" wx:for-item="m">
+      <!-- 用户：收据图片 -->
+      <view wx:if="{{m.role==='me' && m.receipt}}" class="msg msg--me receipt">
+        <view class="receipt-img">🧾 上传的收据图片</view>
+      </view>
+      <!-- 用户：文字 -->
+      <view wx:elif="{{m.role==='me'}}" class="msg msg--me">{{m.text}}</view>
+      <!-- AI：正在输入 -->
+      <view wx:elif="{{m.role==='ai' && m.typing}}" class="msg msg--ai">
+        <view class="typing"><view class="tdot"></view><view class="tdot"></view><view class="tdot"></view></view>
+      </view>
+      <!-- AI：文本（含加粗）-->
+      <rich-text wx:elif="{{m.role==='ai'}}" class="msg msg--ai" nodes="{{m.html}}"></rich-text>
+      <!-- 预填确认卡片 -->
+      <view
+        wx:elif="{{m.role==='card'}}"
+        class="confirm-card {{m.state==='done'?'done':''}}"
+        style="{{m.state==='dropped'?'opacity:0.5':''}}"
+      >
+        <view class="confirm-card__head">
+          <image src="{{m.state==='done'?ic.checkDone:(m.kind==='收据识别'?ic.checkbox:ic.clock)}}"></image>
+          <text wx:if="{{m.state==='done'}}">已入账，可在首页查看</text>
+          <text wx:else>待确认 · {{m.kind}}</text>
+        </view>
+        <view class="confirm-card__body">
+          <view wx:for="{{m.rows}}" wx:key="k" wx:for-item="r" class="confirm-row">
+            <text class="k">{{r.k}}</text>
+            <text class="v {{r.k==='金额'||r.k==='日期'?'num':''}}">{{r.v}}<text wx:if="{{r.extra}}" class="muted" style="font-weight:400"> {{r.extra}}</text><text wx:if="{{r.edit}}" class="edit">改</text></text>
+          </view>
+        </view>
+        <view class="confirm-card__foot">
+          <block wx:if="{{m.state==='pending'}}">
+            <view class="btn btn--ghost" data-i="{{index}}" hover-class="pressed" hover-stay-time="80" bindtap="dropCard">放弃</view>
+            <view class="btn btn--primary" data-i="{{index}}" hover-class="pressed" hover-stay-time="80" bindtap="confirmCard">确认入账</view>
+          </block>
+          <view wx:elif="{{m.state==='done'}}" class="btn btn--ghost" style="flex:1" hover-class="pressed" hover-stay-time="80" bindtap="goHome">去首页看看</view>
+          <text wx:else class="muted" style="padding:18rpx;font-size:26rpx">已放弃，未入账</text>
+        </view>
+      </view>
+    </block>
+  </view>
+</view>
+
+<!-- 输入区（固定，浮于 tabBar 之上）-->
+<view class="composer">
+  <view class="composer__ic" hover-class="pressed" hover-stay-time="80" bindtap="onUpload"><image src="{{ic.camera}}"></image></view>
+  <input
+    class="composer__input"
+    placeholder="问一句，或说「昨天打车 35」记一笔…"
+    value="{{input}}"
+    bindinput="onInput"
+    confirm-type="send"
+    bindconfirm="onSend"
+    cursor-spacing="20"
+  />
+  <view class="composer__send" hover-class="pressed" hover-stay-time="80" bindtap="onSend"><image src="{{ic.send}}"></image></view>
+</view>

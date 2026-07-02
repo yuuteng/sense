@@ -1,0 +1,27 @@
+<view class="screen" style="padding-bottom:48rpx">
+  <nav-bar back="{{true}}" title="账本管理" center="{{true}}">
+    <view slot="right" class="appbar__btn" hover-class="active" hover-stay-time="80" bindtap="goNewBook">
+      <image src="{{ic.plus}}" style="width:48rpx;height:48rpx"></image>
+    </view>
+  </nav-bar>
+
+  <view class="section-label">我的账本 · {{books.length}} 个</view>
+  <view wx:for="{{books}}" wx:key="bookId" class="group group--flat">
+    <view class="li" style="align-items:flex-start;padding-top:32rpx;padding-bottom:32rpx" hover-class="pressed" hover-stay-time="80" data-id="{{item.bookId}}" bindtap="openBook">
+      <view class="li__ic" style="width:76rpx;height:76rpx;background:{{item.iconBg}}"><image src="{{item.iconSrc}}" style="width:40rpx;height:40rpx"></image></view>
+      <view style="flex:1">
+        <view style="font-weight:600;display:flex;align-items:center;gap:16rpx">
+          {{item.name}}
+          <text wx:if="{{item.isCurrent}}" class="pill pill--accent">当前 · 默认</text>
+        </view>
+        <view style="display:flex;align-items:center;gap:16rpx;margin-top:12rpx">
+          <text class="book-type {{item.typeClass}}">{{item.typeLabel}}</text>
+          <text class="role {{item.myRole==='owner'?'role--owner':(item.myRole==='admin'?'role--admin':'role--rw')}}">{{item.roleMine}}</text>
+        </view>
+      </view>
+      <image class="chevron" src="{{ic.chevron}}"></image>
+    </view>
+  </view>
+
+  <view class="ai-disclaimer left">点任意账本进入设置：管理成员、编辑信息、改我的名字、解散账本等。</view>
+</view>

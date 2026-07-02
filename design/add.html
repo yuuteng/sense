@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>心数 · 记一笔</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="stage">
+  <div class="phone">
+    <div class="dynamic-island"></div>
+    <div class="statusbar">
+      <span class="clock num">9:41</span>
+      <span class="status-icons" aria-hidden="true">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+        <svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><path d="M8.5 2.4c2.6 0 5 1 6.8 2.7l-1.5 1.5A7.7 7.7 0 0 0 8.5 6 7.7 7.7 0 0 0 3.2 6.6L1.7 5.1A9.7 9.7 0 0 1 8.5 2.4Z"/><circle cx="8.5" cy="10.4" r="1.5"/></svg>
+        <svg width="26" height="13" viewBox="0 0 26 13" fill="none"><rect x="1" y="1" width="21" height="11" rx="3" stroke="currentColor" stroke-opacity="0.4"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23.5" y="4.5" width="1.8" height="4" rx="0.9" fill="currentColor" fill-opacity="0.4"/></svg>
+      </span>
+    </div>
+
+    <div class="appbar">
+      <a class="appbar__btn" href="home.html" aria-label="取消">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+      <h1 class="appbar__title" style="text-align:center">记一笔<small>家庭日常</small></h1>
+      <span style="width:40px"></span>
+    </div>
+
+    <div class="screen" style="padding-bottom:0">
+      <!-- 收支切换 -->
+      <div style="padding:0 20px">
+        <div class="segmented" id="seg">
+          <button aria-selected="true" data-type="out">支出</button>
+          <button aria-selected="false" data-type="in">收入</button>
+        </div>
+      </div>
+
+      <!-- 金额 + 币种 -->
+      <div class="amount-display">
+        <div><span class="cur" id="cur">€</span><span class="val num" id="amount">0</span></div>
+        <div class="fx-hint" id="fxhint">按今日汇率约 ¥0.00 · 展示币种 CNY</div>
+        <div class="currency-switch" id="cswitch">
+          <button data-cur="CNY" data-sym="¥" data-rate="1" aria-selected="false">¥ CNY</button>
+          <button data-cur="EUR" data-sym="€" data-rate="7.83" aria-selected="true">€ EUR</button>
+        </div>
+      </div>
+
+      <!-- 一级分类九宫格 -->
+      <div class="cat-grid" id="catgrid">
+        <button class="cat" aria-selected="true" data-cat="餐饮">
+          <span class="cat__ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4v7a4 4 0 0 0 8 0V4M8 4v16M17 4c-1.5 1-2 3-2 5s.5 4 2 4v7"/></svg></span>
+          <span>餐饮</span>
+        </button>
+        <button class="cat" aria-selected="false" data-cat="交通">
+          <span class="cat__ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M4 10h16M8 18v2M16 18v2"/></svg></span>
+          <span>交通</span>
+        </button>
+        <button class="cat" aria-selected="false" data-cat="购物">
+          <span class="cat__ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16l-1.3 10.5a2 2 0 0 1-2 1.5H7.3a2 2 0 0 1-2-1.5L4 7Z"/><path d="M8.5 7V5.5a3.5 3.5 0 0 1 7 0V7"/></svg></span>
+          <span>购物</span>
+        </button>
+        <button class="cat" aria-selected="false" data-cat="居家">
+          <span class="cat__ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 11 12 4l8 7"/><path d="M6 10v9h12v-9"/></svg></span>
+          <span>居家</span>
+        </button>
+        <button class="cat" aria-selected="false" data-cat="医疗">
+          <span class="cat__ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="7" width="16" height="13" rx="2"/><path d="M9 7V5a3 3 0 0 1 6 0v2M12 11v5M9.5 13.5h5"/></svg></span>
+          <span>医疗</span>
+        </button>
+        <button class="cat" aria-selected="false" data-cat="教育">
+          <span class="cat__ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8l9-4 9 4-9 4-9-4Z"/><path d="M7 10v5c0 1 2.2 2 5 2s5-1 5-2v-5"/></svg></span>
+          <span>教育</span>
+        </button>
+        <button class="cat" aria-selected="false" data-cat="娱乐">
+          <span class="cat__ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><path d="M9 10v4l4-2-4-2Z" fill="currentColor" stroke="none"/></svg></span>
+          <span>娱乐</span>
+        </button>
+        <button class="cat" aria-selected="false" data-cat="更多">
+          <span class="cat__ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4"/></svg></span>
+          <span>更多</span>
+        </button>
+      </div>
+
+      <!-- 二级分类 -->
+      <div class="subcats" id="subcats">
+        <button class="chip" aria-selected="true">晚餐</button>
+        <button class="chip" aria-selected="false">外卖</button>
+        <button class="chip" aria-selected="false">奶茶</button>
+        <button class="chip" aria-selected="false">零食</button>
+        <button class="chip" aria-selected="false">买菜</button>
+      </div>
+
+      <!-- 记录人 / 付款人（共享可见型） -->
+      <div class="section-label" style="padding-bottom:8px">记录人 / 付款人</div>
+      <div class="member-row">
+        <button class="member-pick" aria-selected="true"><span class="avatar" style="background:var(--accent)">雨</span>小雨（我）</button>
+        <button class="member-pick" aria-selected="false"><span class="avatar" style="background:var(--success)">哲</span>阿哲付款</button>
+      </div>
+
+      <!-- 分摊方式（分账结算型账本；P1 仅记录） -->
+      <div class="section-label" style="padding-bottom:8px">分摊方式 <span class="muted" style="font-weight:400">分账结算型可指定</span></div>
+      <div style="padding:0 20px 12px">
+        <div class="segmented" id="splitmode">
+          <button aria-selected="true" data-mode="even">均摊</button>
+          <button aria-selected="false" data-mode="by">按人指定</button>
+          <button aria-selected="false" data-mode="treat">我请客</button>
+        </div>
+      </div>
+      <div class="member-row" id="splitmembers">
+        <button class="member-pick" aria-selected="true"><span class="avatar" style="background:var(--accent)">雨</span>小雨</button>
+        <button class="member-pick" aria-selected="true"><span class="avatar" style="background:var(--success)">哲</span>阿哲</button>
+        <button class="member-pick" aria-selected="true"><span class="avatar" style="background:#b06f3c">林</span>小林</button>
+      </div>
+      <p class="ai-disclaimer" id="splitHint" style="text-align:left;padding:0 20px 4px">均摊：3 人 · 每人 ¥0.00</p>
+
+      <!-- 备注 / 日期 / 图片 -->
+      <div class="card--flush" style="border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+        <div class="field-row">
+          <span class="field-row__label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg>备注</span>
+          <span class="field-row__val"><input type="text" aria-label="备注" placeholder="添加备注…" value="超市晚餐食材"></span>
+        </div>
+        <div class="field-row">
+          <span class="field-row__label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 9h16M8 3v4M16 3v4"/></svg>日期</span>
+          <span class="field-row__val">今天 · 7 月 1 日 <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6" stroke-linecap="round"/></svg></span>
+        </div>
+      </div>
+      <div class="photo-strip">
+        <div class="photo-thumb"><span class="x">×</span></div>
+        <button class="photo-add" aria-label="添加图片">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 8v8M8 12h8" stroke-linecap="round"/><rect x="3" y="5" width="18" height="15" rx="2"/></svg>
+        </button>
+      </div>
+
+      <!-- 数字键盘 -->
+      <div class="keypad" id="keypad">
+        <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+        <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+        <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+        <button class="util" data-k=".">.</button><button data-k="0">0</button>
+        <button class="util" data-k="del" aria-label="删除">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="margin:auto"><path d="M20 6H9l-5 6 5 6h11a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2Z"/><path d="M12 10l4 4M16 10l-4 4"/></svg>
+        </button>
+      </div>
+      <div style="padding:16px 20px 30px">
+        <button class="btn btn--primary btn--block btn--lg" id="save" aria-live="polite">保存</button>
+      </div>
+    </div>
+
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var amount = "0";
+  var cur = { sym:"€", rate:7.83, code:"EUR" };
+  var elAmount = document.getElementById('amount');
+  var elCur = document.getElementById('cur');
+  var elFx = document.getElementById('fxhint');
+
+  function fmt(n){ return n.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function render(){
+    elAmount.textContent = amount;
+    elCur.textContent = cur.sym;
+    var val = parseFloat(amount) || 0;
+    if(cur.code === 'CNY'){
+      elFx.textContent = '展示币种 CNY';
+    } else {
+      elFx.textContent = '按今日汇率约 ¥' + fmt(val * cur.rate) + ' · 1 ' + cur.code + ' ≈ ¥' + cur.rate;
+    }
+    updateSplit();
+  }
+  // 分摊方式
+  function updateSplit(){
+    var hint = document.getElementById('splitHint'); if(!hint) return;
+    var seg = document.querySelector('#splitmode [aria-selected="true"]');
+    var mode = seg ? seg.dataset.mode : 'even';
+    var val = parseFloat(amount) || 0;
+    var cny = cur.code === 'CNY' ? val : val * cur.rate;
+    var members = document.getElementById('splitmembers');
+    var picks = members.querySelectorAll('.member-pick[aria-selected="true"]');
+    var disabled = (mode === 'treat');
+    members.style.opacity = disabled ? '0.45' : '1';
+    members.style.pointerEvents = disabled ? 'none' : 'auto';
+    if(mode === 'treat'){ hint.textContent = '我请客：本人全额承担 ¥' + fmt(cny) + '，不参与他人分摊'; return; }
+    var n = picks.length || 1;
+    if(mode === 'even'){ hint.textContent = '均摊：' + n + ' 人 · 每人 ¥' + fmt(cny / n); }
+    else { hint.textContent = '按人指定：' + n + ' 人参与，可为每人单独填写金额（P1 仅记录分摊）'; }
+  }
+  // 键盘
+  document.getElementById('keypad').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return;
+    var k = b.dataset.k;
+    if(k === 'del'){ amount = amount.length>1 ? amount.slice(0,-1) : "0"; }
+    else if(k === '.'){ if(amount.indexOf('.')<0) amount += '.'; }
+    else {
+      var atDecCap = amount.indexOf('.') > -1 && amount.split('.')[1].length >= 2;
+      var atIntCap = amount.indexOf('.') < 0 && amount.split('.')[0].length >= 7;
+      if(amount === "0") amount = k;
+      else if(!atDecCap && !atIntCap) amount += k;
+    }
+    render();
+  });
+  // 币种
+  document.getElementById('cswitch').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return;
+    [].forEach.call(this.children, function(x){ x.setAttribute('aria-selected','false'); });
+    b.setAttribute('aria-selected','true');
+    cur = { sym:b.dataset.sym, rate:parseFloat(b.dataset.rate), code:b.dataset.cur };
+    render();
+  });
+  // 收支段
+  document.getElementById('seg').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return;
+    [].forEach.call(this.children, function(x){ x.setAttribute('aria-selected','false'); });
+    b.setAttribute('aria-selected','true');
+  });
+  // 一级分类
+  var subs = { '餐饮':['晚餐','外卖','奶茶','零食','买菜'], '交通':['地铁','打车','公交','加油','停车'],
+    '购物':['日用','服饰','数码','母婴'], '居家':['房租','水电','物业','维修'],
+    '医疗':['药品','门诊','体检'], '教育':['课程','书籍','文具'], '娱乐':['电影','游戏','订阅'], '更多':['其他'] };
+  var subEl = document.getElementById('subcats');
+  document.getElementById('catgrid').addEventListener('click', function(e){
+    var b = e.target.closest('.cat'); if(!b) return;
+    [].forEach.call(this.children, function(x){ x.setAttribute('aria-selected','false'); });
+    b.setAttribute('aria-selected','true');
+    var list = subs[b.dataset.cat] || [];
+    subEl.innerHTML = list.map(function(s,i){ return '<button class="chip" aria-selected="'+(i===0)+'">'+s+'</button>'; }).join('');
+  });
+  subEl.addEventListener('click', function(e){
+    var b = e.target.closest('.chip'); if(!b) return;
+    [].forEach.call(this.children, function(x){ x.setAttribute('aria-selected','false'); });
+    b.setAttribute('aria-selected','true');
+  });
+  // 成员
+  document.querySelector('.member-row').addEventListener('click', function(e){
+    var b = e.target.closest('.member-pick'); if(!b) return;
+    b.setAttribute('aria-selected', b.getAttribute('aria-selected')==='true' ? 'false':'true');
+  });
+  // 分摊方式切换
+  document.getElementById('splitmode').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return;
+    [].forEach.call(this.children, function(x){ x.setAttribute('aria-selected','false'); });
+    b.setAttribute('aria-selected','true');
+    updateSplit();
+  });
+  document.getElementById('splitmembers').addEventListener('click', function(e){
+    var b = e.target.closest('.member-pick'); if(!b) return;
+    b.setAttribute('aria-selected', b.getAttribute('aria-selected')==='true' ? 'false':'true');
+    updateSplit();
+  });
+  // 保存
+  document.getElementById('save').addEventListener('click', function(){
+    if((parseFloat(amount)||0) <= 0){ this.textContent = '请输入金额'; var self=this; setTimeout(function(){ self.textContent='保存'; },1200); return; }
+    this.textContent = '已保存 ✓';
+    var self = this; setTimeout(function(){ location.href = 'home.html'; }, 550);
+  });
+  render();
+})();
+</script>
+</body>
+</html>

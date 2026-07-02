@@ -1,0 +1,32 @@
+<view class="screen login">
+  <view class="status-spacer" style="height:{{statusBarHeight}}px"></view>
+
+  <view class="login__brand">
+    <view class="logo-mark">心</view>
+    <view>
+      <view class="onboard__name">心数 <text class="muted" style="font-weight:400">/ Sense</text></view>
+      <view class="onboard__tag">简洁、协作、多币种的记账</view>
+    </view>
+  </view>
+
+  <view class="h1" style="margin-top:48rpx">欢迎使用心数<text style="display:block">先完善你的头像和昵称</text></view>
+  <view class="lead">用于在账本里标识你，之后可以随时修改。</view>
+
+  <view class="login__card">
+    <button class="avatar-pick" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+      <image wx:if="{{avatarUrl}}" class="avatar-pick__img" src="{{avatarUrl}}"></image>
+      <view wx:else class="avatar-pick__ph">
+        <text class="avatar-pick__plus">＋</text>
+        <text class="avatar-pick__hint">选择头像</text>
+      </view>
+    </button>
+
+    <view class="input-label">昵称</view>
+    <input class="text-input" type="nickname" placeholder="点击获取微信昵称" value="{{nickname}}" bindinput="onNickname" bindblur="onNickname" />
+  </view>
+
+  <view class="login__foot">
+    <view class="btn btn--primary btn--block btn--lg" hover-class="pressed" hover-stay-time="80" bindtap="submit">登录并进入</view>
+    <view class="ai-disclaimer" style="margin-top:16rpx">登录即表示你同意我们基于账本数据提供记账与 AI 分析服务</view>
+  </view>
+</view>

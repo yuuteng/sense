@@ -1,0 +1,5 @@
+.appbar__side { min-width: 0; display: flex; align-items: center; }
+.appbar__side.reserve { min-width: 72rpx; }
+.appbar__side--right { justify-content: flex-end; }
+.appbar__title--center { flex: 1; text-align: center; }
+.nav-ic { width: 48rpx; height: 48rpx; }

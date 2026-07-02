@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>心数 · 统计</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="stage">
+  <div class="phone">
+    <div class="dynamic-island"></div>
+    <div class="statusbar">
+      <span class="clock num">9:41</span>
+      <span class="status-icons" aria-hidden="true">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="5" width="3" height="7" rx="1"/><rect x="9" y="2.5" width="3" height="9.5" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+        <svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><path d="M8.5 2.4c2.6 0 5 1 6.8 2.7l-1.5 1.5A7.7 7.7 0 0 0 8.5 6 7.7 7.7 0 0 0 3.2 6.6L1.7 5.1A9.7 9.7 0 0 1 8.5 2.4Z"/><circle cx="8.5" cy="10.4" r="1.5"/></svg>
+        <svg width="26" height="13" viewBox="0 0 26 13" fill="none"><rect x="1" y="1" width="21" height="11" rx="3" stroke="currentColor" stroke-opacity="0.4"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23.5" y="4.5" width="1.8" height="4" rx="0.9" fill="currentColor" fill-opacity="0.4"/></svg>
+      </span>
+    </div>
+
+    <div class="appbar">
+      <h1 class="appbar__title">统计<small>家庭日常 · 展示 ¥ CNY</small></h1>
+      <button class="appbar__btn" id="editBtn" aria-label="增删与排序">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/></svg>
+      </button>
+    </div>
+
+    <div class="screen screen--pad" id="cards">
+      <!-- 1. 本月收支概览 -->
+      <div class="chart-card" data-id="overview">
+        <div class="chart-card__head">
+          <div><div class="chart-card__title">本月收支概览</div><div class="chart-card__sub">2026 年 7 月</div></div>
+          <span class="drag-handle"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01"/></svg></span>
+        </div>
+        <div class="overview-grid">
+          <div class="mini"><div class="k">收入</div><div class="v num" style="color:var(--success)">¥12,000</div></div>
+          <div class="mini"><div class="k">支出</div><div class="v num">¥3,357</div></div>
+          <div class="mini" style="grid-column:1/3;background:color-mix(in oklab,var(--accent),transparent 92%)"><div class="k">结余</div><div class="v num" style="color:var(--accent)">+¥8,642.20</div></div>
+        </div>
+      </div>
+
+      <!-- 2. 支出趋势（折线） -->
+      <div class="chart-card" data-id="trend">
+        <div class="chart-card__head">
+          <div><div class="chart-card__title">支出趋势</div><div class="chart-card__sub">近 7 日 · 按日</div></div>
+          <span class="drag-handle"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01"/></svg></span>
+        </div>
+        <svg class="chart-svg" viewBox="0 0 300 130" preserveAspectRatio="none">
+          <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+          <path d="M0 95 L50 70 L100 105 L150 55 L200 80 L250 40 L300 65 L300 130 L0 130 Z" fill="url(#g)"/>
+          <path d="M0 95 L50 70 L100 105 L150 55 L200 80 L250 40 L300 65" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="250" cy="40" r="4" fill="var(--accent)"/>
+        </svg>
+        <div class="legend"><span>6/25</span><span style="margin-left:auto">今日 ¥299.50</span></div>
+      </div>
+
+      <!-- 3. 近一年收支（柱状对比） -->
+      <div class="chart-card" data-id="year">
+        <div class="chart-card__head">
+          <div><div class="chart-card__title">近一年收支</div><div class="chart-card__sub">收入 vs 支出 · 按月</div></div>
+          <span class="drag-handle"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01"/></svg></span>
+        </div>
+        <svg class="chart-svg" viewBox="0 0 300 130">
+          <g>
+            <rect x="10" y="40" width="9" height="80" rx="2" fill="var(--success)"/><rect x="21" y="70" width="9" height="50" rx="2" fill="var(--border)"/>
+            <rect x="55" y="35" width="9" height="85" rx="2" fill="var(--success)"/><rect x="66" y="82" width="9" height="38" rx="2" fill="var(--border)"/>
+            <rect x="100" y="50" width="9" height="70" rx="2" fill="var(--success)"/><rect x="111" y="60" width="9" height="60" rx="2" fill="var(--border)"/>
+            <rect x="145" y="30" width="9" height="90" rx="2" fill="var(--success)"/><rect x="156" y="78" width="9" height="42" rx="2" fill="var(--border)"/>
+            <rect x="190" y="45" width="9" height="75" rx="2" fill="var(--success)"/><rect x="201" y="66" width="9" height="54" rx="2" fill="var(--border)"/>
+            <rect x="235" y="25" width="9" height="95" rx="2" fill="var(--accent)"/><rect x="246" y="88" width="9" height="32" rx="2" fill="color-mix(in oklab, var(--accent), transparent 62%)"/>
+          </g>
+        </svg>
+        <div class="legend"><span><span class="dot" style="background:var(--success)"></span>收入</span><span><span class="dot" style="background:var(--border)"></span>支出</span><span style="margin-left:auto">7 月至今</span></div>
+      </div>
+
+      <!-- 4. 账本累计收支 -->
+      <div class="chart-card" data-id="total">
+        <div class="chart-card__head">
+          <div><div class="chart-card__title">账本累计收支</div><div class="chart-card__sub">自 2025-09 建立以来</div></div>
+          <span class="drag-handle"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01"/></svg></span>
+        </div>
+        <div class="overview-grid">
+          <div class="mini"><div class="k">总收入</div><div class="v num" style="color:var(--success)">¥128,400</div></div>
+          <div class="mini"><div class="k">总支出</div><div class="v num">¥96,713</div></div>
+          <div class="mini" style="grid-column:1/3"><div class="k">累计结余</div><div class="v num">+¥31,687.00</div></div>
+        </div>
+      </div>
+
+      <div id="editHint" style="display:none;text-align:center;padding:0 20px 8px" class="ai-disclaimer">编辑模式 · 拖动右侧手柄排序，点左上角 × 移除，布局自动保存</div>
+
+      <!-- 空态：卡片全部移除后 -->
+      <div id="emptyState" style="display:none;text-align:center;padding:56px 30px">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" style="color:color-mix(in oklab,var(--muted),transparent 40%);margin:0 auto" aria-hidden="true"><path d="M5 20v-6M12 20V9M19 20v-3" stroke-linecap="round"/><path d="M3 20h18" stroke-linecap="round"/></svg>
+        <p style="font-size:var(--text-base);font-weight:600;margin-top:14px">还没有图表卡片</p>
+        <p class="muted" style="font-size:var(--text-sm);margin-top:4px">你移除了全部卡片，可一键恢复四个默认图表。</p>
+        <button class="btn btn--primary" id="restoreDefault" style="margin-top:18px">恢复默认卡片</button>
+      </div>
+    </div>
+
+    <nav class="tabbar">
+      <a class="tabbar__item" href="home.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10.5 12 3l9 7.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 9.5V20h5v-6h4v6h5V9.5"/></svg>首页
+      </a>
+      <a class="tabbar__item" href="stats.html" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20v-6M12 20V5M19 20v-9" stroke-linecap="round"/><path d="M3 20h18" stroke-linecap="round"/></svg>统计
+      </a>
+      <a class="tabbar__item" href="ai.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v10H9l-4 3v-3H4z" stroke-linejoin="round"/><path d="M12 8l.7 1.8L14.5 10l-1.8.7L12 12l-.7-1.3L9.5 10l1.8-.2z" fill="currentColor" stroke="none"/></svg>AI 助手
+      </a>
+      <a class="tabbar__item" href="settings.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/></svg>我的
+      </a>
+    </nav>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var wrap = document.getElementById('cards');
+  var editBtn = document.getElementById('editBtn');
+  var hint = document.getElementById('editHint');
+  var KEY = 'sense.stats.layout.家庭日常.小雨';
+  var editing = false, dragEl = null, lp = null;
+
+  function order(){ return [].slice.call(wrap.querySelectorAll('.chart-card')).map(function(c){return c.dataset.id;}); }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(order())); }catch(e){} }
+  function restore(){
+    var saved; try{ saved = JSON.parse(localStorage.getItem(KEY)||'null'); }catch(e){}
+    if(!saved) return;
+    saved.forEach(function(id){ var el = wrap.querySelector('.chart-card[data-id="'+id+'"]'); if(el) wrap.insertBefore(el, hint); });
+    // 被移除的卡片：不在 saved 中的隐藏
+    [].forEach.call(wrap.querySelectorAll('.chart-card'), function(c){ if(saved.indexOf(c.dataset.id)<0) c.style.display='none'; });
+  }
+
+  function setEdit(on){
+    editing = on;
+    [].forEach.call(wrap.querySelectorAll('.chart-card'), function(c){ c.classList.toggle('editing', on); });
+    hint.style.display = on ? 'block' : 'none';
+    editBtn.style.color = on ? 'var(--accent)' : 'var(--fg)';
+  }
+
+  editBtn.addEventListener('click', function(){ setEdit(!editing); if(!editing) save(); });
+
+  // 长按进入编辑
+  wrap.addEventListener('pointerdown', function(e){
+    if(editing) return;
+    var card = e.target.closest('.chart-card'); if(!card) return;
+    lp = setTimeout(function(){ setEdit(true); if(navigator.vibrate) navigator.vibrate(15); }, 450);
+  });
+  ['pointerup','pointermove','pointercancel'].forEach(function(ev){ wrap.addEventListener(ev, function(){ clearTimeout(lp); }); });
+
+  // 点 × 移除卡片
+  wrap.addEventListener('click', function(e){
+    if(!editing) return;
+    var card = e.target.closest('.chart-card'); if(!card) return;
+    var r = card.getBoundingClientRect();
+    if(e.clientX - r.left < 24 && e.clientY - r.top < 24){ card.style.display='none'; save(); updateEmpty(); }
+  });
+
+  // 拖拽排序（手柄）
+  wrap.addEventListener('pointerdown', function(e){
+    if(!editing) return;
+    if(!e.target.closest('.drag-handle')) return;
+    dragEl = e.target.closest('.chart-card'); dragEl.classList.add('dragging');
+    dragEl.setPointerCapture && dragEl.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  wrap.addEventListener('pointermove', function(e){
+    if(!dragEl) return;
+    var cards = [].slice.call(wrap.querySelectorAll('.chart-card:not(.dragging)')).filter(function(c){return c.style.display!=='none';});
+    var after = null;
+    for(var i=0;i<cards.length;i++){ var r = cards[i].getBoundingClientRect(); if(e.clientY < r.top + r.height/2){ after = cards[i]; break; } }
+    if(after) wrap.insertBefore(dragEl, after); else wrap.insertBefore(dragEl, hint);
+  });
+  wrap.addEventListener('pointerup', function(){ if(dragEl){ dragEl.classList.remove('dragging'); dragEl=null; save(); } });
+
+  // 空态：所有卡片被移除时提示并提供恢复
+  var empty = document.getElementById('emptyState');
+  function updateEmpty(){
+    var visible = [].slice.call(wrap.querySelectorAll('.chart-card')).filter(function(c){ return c.style.display !== 'none'; });
+    empty.style.display = visible.length ? 'none' : 'block';
+  }
+  document.getElementById('restoreDefault').addEventListener('click', function(){
+    try{ localStorage.removeItem(KEY); }catch(e){}
+    [].forEach.call(wrap.querySelectorAll('.chart-card'), function(c){ c.style.display=''; });
+    if(editing) setEdit(false);
+    updateEmpty();
+  });
+
+  restore();
+  updateEmpty();
+})();
+</script>
+</body>
+</html>

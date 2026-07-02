@@ -1,0 +1,87 @@
+<view class="screen {{type==='in' ? 'mode-income' : ''}}">
+  <nav-bar back="{{true}}" center="{{true}}" title="记一笔" sub="{{book.name}}"></nav-bar>
+
+  <!-- 收支切换 -->
+  <view style="padding:0 40rpx">
+    <view class="segmented">
+      <view class="segmented__btn {{type==='out'?'selected':''}}" data-k="out" bindtap="switchType">支出</view>
+      <view class="segmented__btn {{type==='in'?'selected':''}}" data-k="in" bindtap="switchType">收入</view>
+    </view>
+  </view>
+
+  <!-- 金额（系统数字键盘）+ 币种 -->
+  <view class="amount-display">
+    <view class="amount-line">
+      <text class="cur">{{curs[curIndex].symbol}}</text>
+      <input class="amount-input" type="digit" value="{{amount}}" placeholder="0" bindinput="onAmountInput" always-embed focus="{{true}}" />
+    </view>
+    <view class="fx-hint">{{fxHint}}</view>
+    <view class="currency-switch">
+      <view wx:for="{{curs}}" wx:key="code" class="currency-switch__btn {{curIndex===index?'selected':''}}" data-i="{{index}}" bindtap="switchCur">{{item.symbol}} {{item.code}}</view>
+    </view>
+  </view>
+
+  <!-- 一级分类九宫格 -->
+  <view class="cat-grid">
+    <view wx:for="{{cats}}" wx:key="key" class="cat {{catIndex===index?'selected':''}}" data-i="{{index}}" bindtap="pickCat">
+      <view class="cat__ic"><image src="{{catIndex===index?item.iconOn:item.iconOff}}"></image></view>
+      <text>{{item.key}}</text>
+    </view>
+  </view>
+
+  <!-- 二级分类 -->
+  <view class="subcats">
+    <view wx:for="{{subs}}" wx:key="categoryId" class="chip {{subIndex===index?'selected':''}}" data-i="{{index}}" bindtap="pickSub">{{item.name}}</view>
+  </view>
+
+  <!-- 付款人（记录人固定为当前用户，无需选择）-->
+  <view class="section-label" style="padding-bottom:16rpx">付款人 <text class="muted" style="font-weight:400">记录人默认为你</text></view>
+  <view class="member-row">
+    <view wx:for="{{members}}" wx:key="openid" class="member-pick {{payerIndex===index?'selected':''}}" data-i="{{index}}" bindtap="pickPayer">
+      <text class="avatar" style="background:{{item.color}}">{{item.initial}}</text>{{item.name}}
+    </view>
+  </view>
+
+  <!-- 分摊方式（仅分账结算型账本；P1 仅记录）-->
+  <block wx:if="{{isSplit}}">
+  <view class="section-label" style="padding-bottom:16rpx">分摊方式 <text class="muted" style="font-weight:400">分账结算型可指定</text></view>
+  <view style="padding:0 40rpx 24rpx">
+    <view class="segmented">
+      <view wx:for="{{splitModes}}" wx:key="k" class="segmented__btn {{splitMode===item.k?'selected':''}}" data-k="{{item.k}}" bindtap="switchSplitMode">{{item.label}}</view>
+    </view>
+  </view>
+  <view class="member-row" style="{{splitMode==='treat'?'opacity:0.45':''}}">
+    <view wx:for="{{splitMembers}}" wx:key="openid" class="member-pick {{item.selected?'selected':''}}" data-i="{{index}}" bindtap="toggleSplitMember">
+      <text class="avatar" style="background:{{item.color}}">{{item.initial}}</text>{{item.name}}
+    </view>
+  </view>
+  <view class="ai-disclaimer left" style="padding-top:0;padding-bottom:8rpx">{{splitHint}}</view>
+  </block>
+
+  <!-- 备注 / 日期 -->
+  <view class="card--flush" style="margin:0 40rpx">
+    <view class="field-row">
+      <view class="field-row__label"><image src="{{ic.note}}"></image>备注</view>
+      <view class="field-row__val"><input placeholder="添加备注…" value="{{note}}" bindinput="onNoteInput" /></view>
+    </view>
+    <picker mode="date" value="{{date}}" bindchange="onDateChange">
+      <view class="field-row">
+        <view class="field-row__label"><image src="{{ic.calendar}}"></image>日期</view>
+        <view class="field-row__val">{{dateLabel}} <image class="chevron" src="{{ic.chevron}}"></image></view>
+      </view>
+    </picker>
+  </view>
+
+  <!-- 图片附件 -->
+  <view class="photo-strip">
+    <view wx:for="{{photos}}" wx:key="*this" class="photo-thumb" style="background:none">
+      <image src="{{item}}" style="width:100%;height:100%;border-radius:var(--radius-sm)" mode="aspectFill"></image>
+      <text class="x" data-i="{{index}}" catchtap="removePhoto">×</text>
+    </view>
+    <view wx:if="{{photos.length < 9}}" class="photo-add" bindtap="choosePhoto"><image src="{{ic.photoAdd}}"></image></view>
+  </view>
+
+  <view style="padding:40rpx 40rpx calc(60rpx + env(safe-area-inset-bottom))">
+    <view class="btn btn--primary btn--block btn--lg" hover-class="pressed" hover-stay-time="80" bindtap="save">保存</view>
+  </view>
+</view>

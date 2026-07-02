@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>心数 / Sense · 原型总览</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="stage" style="align-items:flex-start;padding:48px 32px">
+  <main class="launcher">
+    <header class="launcher__hero">
+      <span class="logo-mark" aria-hidden="true">心</span>
+      <div>
+        <p class="eyebrow" style="margin-bottom:6px">P1 · MVP 原型 · iOS</p>
+        <h1>心数 / Sense</h1>
+        <p>简洁轻量、支持多人协作与多币种、并内置 AI 助手的记账小程序。下面是 P1（MVP）8 个核心界面的高保真原型，点击任意卡片进入。</p>
+        <div class="launcher__meta">
+          <span class="tag">iOS 原型</span>
+          <span class="tag">Neutral Modern</span>
+          <span class="tag">家庭日常 · 共享可见型</span>
+          <span class="tag">展示币种 ¥ CNY</span>
+          <span class="tag">混录 € EUR</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="grid-label">
+      <h2>核心界面</h2>
+      <span>9 屏 · 可点击跳转</span>
+    </div>
+
+    <div class="screen-grid">
+      <a class="screen-card" href="home.html">
+        <div class="screen-card__frame"><span class="screen-card__no">01</span>
+          <svg class="screen-card__thumb" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5" stroke-linecap="round"/><path d="M5 9.5V20h5v-6h4v6h5V9.5"/></svg></div>
+        <div class="screen-card__body"><div class="screen-card__text"><h2>首页</h2><p>记账列表 + 本月概要，悬浮记一笔，底部导航</p></div>
+          <svg class="screen-card__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      </a>
+      <a class="screen-card" href="add.html">
+        <div class="screen-card__frame"><span class="screen-card__no">02</span>
+          <svg class="screen-card__thumb" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h4M15 16h2M8 16h2M12 16h1"/></svg></div>
+        <div class="screen-card__body"><div class="screen-card__text"><h2>记账录入</h2><p>金额键盘 · 多币种换算 · 分类九宫格 · 付款人</p></div>
+          <svg class="screen-card__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      </a>
+      <a class="screen-card" href="detail.html">
+        <div class="screen-card__frame"><span class="screen-card__no">03</span>
+          <svg class="screen-card__thumb" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h4"/></svg></div>
+        <div class="screen-card__body"><div class="screen-card__text"><h2>记录详情</h2><p>原始金额 + 固化换算，记录人 / 付款人，权限操作</p></div>
+          <svg class="screen-card__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      </a>
+      <a class="screen-card" href="stats.html">
+        <div class="screen-card__frame"><span class="screen-card__no">04</span>
+          <svg class="screen-card__thumb" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M5 20v-6M12 20V5M19 20v-9" stroke-linecap="round"/><path d="M3 20h18" stroke-linecap="round"/></svg></div>
+        <div class="screen-card__body"><div class="screen-card__text"><h2>统计</h2><p>四张默认图表卡片，长按编辑拖拽排序，布局本地保存</p></div>
+          <svg class="screen-card__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      </a>
+      <a class="screen-card" href="ai.html">
+        <div class="screen-card__frame"><span class="screen-card__no">05</span>
+          <svg class="screen-card__thumb" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 5h16v10H9l-4 3v-3H4z" stroke-linejoin="round"/><path d="M12 8l.8 2 2 .8-2 .8L12 14l-.8-2.4-2-.8 2-.8z" fill="currentColor" stroke="none"/></svg></div>
+        <div class="screen-card__body"><div class="screen-card__text"><h2>AI 助手</h2><p>数据问答 · 收据识别 · 一句话记账，均需确认后入账</p></div>
+          <svg class="screen-card__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      </a>
+      <a class="screen-card" href="books.html">
+        <div class="screen-card__frame"><span class="screen-card__no">06</span>
+          <svg class="screen-card__thumb" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M9 10h6M9 14h6"/></svg></div>
+        <div class="screen-card__body"><div class="screen-card__text"><h2>账本管理</h2><p>账本列表与切换，成员权限（Owner/Admin/读写/只读）</p></div>
+          <svg class="screen-card__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      </a>
+      <a class="screen-card" href="settings.html">
+        <div class="screen-card__frame"><span class="screen-card__no">07</span>
+          <svg class="screen-card__thumb" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/></svg></div>
+        <div class="screen-card__body"><div class="screen-card__text"><h2>我的 / 设置</h2><p>展示币种 · 分类 · AI 上限 · 导入导出 · 账本入口</p></div>
+          <svg class="screen-card__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      </a>
+      <a class="screen-card" href="onboarding.html">
+        <div class="screen-card__frame"><span class="screen-card__no">08</span>
+          <svg class="screen-card__thumb" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg></div>
+        <div class="screen-card__body"><div class="screen-card__text"><h2>首次引导 / 创建账本</h2><p>命名 · 选类型（共享可见 / 分账结算）· 选基准币种</p></div>
+          <svg class="screen-card__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      </a>
+      <a class="screen-card" href="settle.html">
+        <div class="screen-card__frame"><span class="screen-card__no">09 · P2</span>
+          <svg class="screen-card__thumb" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 7h9M4 12h7M4 17h5"/><path d="M15 14l3 3 4-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="screen-card__body"><div class="screen-card__text"><h2>分账结算 <span class="tag" style="vertical-align:2px">P2</span></h2><p>按付款人 + 分摊自动算「谁欠谁」，最简转账方案，可标记结清</p></div>
+          <svg class="screen-card__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      </a>
+    </div>
+
+    <footer class="launcher__foot">
+      范围以 PRD 第二节 P1 为准 · 分账结算的「自动算清谁欠谁」属 P2，本版仅记录付款人与分摊信息。
+    </footer>
+  </main>
+</div>
+</body>
+</html>

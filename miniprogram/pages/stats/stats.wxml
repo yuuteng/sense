@@ -1,0 +1,72 @@
+<view class="screen screen--pad">
+  <nav-bar title="统计" sub="{{navSub}}">
+    <view
+      slot="right"
+      class="appbar__btn {{editing?'active':''}}"
+      hover-class="active"
+      hover-stay-time="80"
+      bindtap="toggleEdit"
+    >
+      <image src="{{editIcon}}" style="width:44rpx;height:44rpx"></image>
+    </view>
+  </nav-bar>
+
+  <view id="cards" bindtouchmove="onListTouchMove" bindtouchend="onHandleTouchEnd">
+    <view
+      wx:for="{{cards}}"
+      wx:key="id"
+      wx:for-item="card"
+      class="chart-card {{editing?'editing':''}} {{draggingId===card.id?'dragging':''}}"
+    >
+      <view class="chart-card__del" data-id="{{card.id}}" catchtap="removeCard">×</view>
+
+      <view class="chart-card__head" bindlongpress="onLongPress">
+        <view>
+          <view class="chart-card__title">{{card.title}}</view>
+          <view class="chart-card__sub">{{card.sub}}</view>
+        </view>
+        <view
+          class="drag-handle"
+          data-id="{{card.id}}"
+          catchtouchstart="onHandleTouchStart"
+          catchtouchend="onHandleTouchEnd"
+        >
+          <image src="{{dragIcon}}"></image>
+        </view>
+      </view>
+
+      <!-- 概览 / 累计：mini 网格 -->
+      <view wx:if="{{card.kind==='grid'}}" class="overview-grid">
+        <view
+          wx:for="{{card.minis}}"
+          wx:key="k"
+          wx:for-item="m"
+          class="mini {{m.span2?'span2':''}} {{m.accent?'accent':''}}"
+        >
+          <view class="k">{{m.k}}</view>
+          <view class="v num" style="{{m.color?('color:'+m.color):''}}">{{m.v}}</view>
+        </view>
+      </view>
+
+      <!-- 图表：折线 / 柱状 -->
+      <block wx:elif="{{card.kind==='chart'}}">
+        <image class="chart-svg" src="{{card.img}}" mode="scaleToFill"></image>
+        <view class="legend">
+          <view wx:for="{{card.legends}}" wx:key="text" wx:for-item="lg" class="item {{lg.right?'spacer':''}}">
+            <text wx:if="{{lg.dot}}" class="dot" style="background:{{lg.dotColor}}"></text>{{lg.text}}
+          </view>
+        </view>
+      </block>
+    </view>
+
+    <view wx:if="{{editing && cards.length}}" class="ai-disclaimer">编辑模式 · 拖动右侧手柄排序，点左上角 × 移除，布局自动保存</view>
+
+    <!-- 空态：卡片全部移除后 -->
+    <view wx:if="{{!cards.length}}" style="text-align:center;padding:112rpx 60rpx">
+      <image src="{{barsIcon}}" style="width:88rpx;height:88rpx;margin:0 auto"></image>
+      <view style="font-size:32rpx;font-weight:600;margin-top:28rpx">还没有图表卡片</view>
+      <view class="muted" style="font-size:28rpx;margin-top:8rpx">你移除了全部卡片，可一键恢复四个默认图表。</view>
+      <view class="btn btn--primary" style="margin-top:36rpx;display:inline-flex" hover-class="pressed" hover-stay-time="80" bindtap="restoreDefault">恢复默认卡片</view>
+    </view>
+  </view>
+</view>
