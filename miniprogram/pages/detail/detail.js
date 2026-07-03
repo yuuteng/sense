@@ -22,18 +22,18 @@ Page({
     if (!this.recordId) { this.setData({ loading: false }); return; }
     try {
       const r = await api.call('record', 'get', { recordId: this.recordId });
-      const base = r.baseCurrency;
+      const disp = r.displayCurrency || r.currency;
       const d = {
         title: r.title,
         category: r.category,
         type: r.typeLabel,
         isForeign: r.isForeign,
         isSplit: r.isSplit,
-        displayAmount: fmt.signed(r.amountConverted, r.type, base),
+        displayAmount: fmt.signed(r.amountConverted, r.type, disp),
         originalAmount: fmt.symbolOf(r.currency) + fmt.fmt(r.amount),
-        rate: `1 ${r.currency} ≈ ${fmt.money(r.rate, base)}`,
-        convertedAmount: fmt.money(r.amountConverted, base),
-        fixNote: `此笔换算金额在记账当日（${fmt.mmdd(r.date)}）已固定，之后汇率变化不影响历史。汇率仅供记账参考，与银行实际结算可能有差异。`,
+        rate: `1 ${r.currency} ≈ ${fmt.money(r.rate, disp)}`,
+        convertedAmount: fmt.money(r.amountConverted, disp),
+        fixNote: `此笔按记账当日（${fmt.cnMonthDay(r.date)}）的「${r.currency} → ${disp}」汇率换算；换其他展示币种会用当日对应汇率，历史金额不随今日汇率变动。`,
         date: r.date,
         note: r.note || '—',
         images: r.images || [],

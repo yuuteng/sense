@@ -1,55 +1,54 @@
 <view class="screen screen--pad">
   <loading show="{{loading}}"></loading>
-  <nav-bar center="{{true}}" title="统计" sub="{{navSub}}">
-    <view
-      slot="right"
-      class="appbar__btn {{editing?'active':''}}"
-      hover-class="active"
-      hover-stay-time="80"
-      bindtap="toggleEdit"
-    >
-      <image src="{{editIcon}}" style="width:44rpx;height:44rpx"></image>
-    </view>
-  </nav-bar>
+  <view class="sticky-header">
+    <nav-bar>
+      <view slot="left" class="appbar__book" hover-class="appbar__book--press" hover-stay-time="80" bindtap="openSwitcher">
+        <image src="{{bookIcon}}" style="width:30rpx;height:30rpx"></image>
+        {{bookName}}
+        <image src="{{chevronDown}}" style="width:28rpx;height:28rpx"></image>
+      </view>
+      <view slot="right" class="cur-pill" hover-class="cur-pill--press" hover-stay-time="80" bindtap="openCurPicker">
+        展示币种 {{curSym}} {{curCode}}
+        <image src="{{chevronDown}}" style="width:24rpx;height:24rpx"></image>
+      </view>
+    </nav-bar>
+  </view>
 
   <view wx:if="{{needInit}}" style="text-align:center;padding:120rpx 60rpx">
     <view style="font-size:32rpx;font-weight:600">还没有账本</view>
     <view class="muted" style="font-size:28rpx;margin-top:12rpx">创建账本并记账后，这里会显示统计图表。</view>
   </view>
 
-  <view wx:else id="cards" bindtouchmove="onListTouchMove" bindtouchend="onHandleTouchEnd">
+  <view wx:else>
+    <view wx:if="{{cards.length}}" class="section-label">图表<text class="link" bindtap="toggleEdit">{{editing ? '完成' : '编辑'}}</text></view>
+
     <view
       wx:for="{{cards}}"
-      wx:key="id"
+      wx:key="iid"
       wx:for-item="card"
-      class="chart-card {{editing?'editing':''}} {{draggingId===card.id?'dragging':''}}"
+      class="chart-card {{editing?'editing':''}}"
     >
-      <view class="chart-card__del" data-id="{{card.id}}" catchtap="removeCard">×</view>
-
-      <view class="chart-card__head" bindlongpress="onLongPress">
-        <view>
+      <view class="chart-card__head">
+        <view style="min-width:0">
           <view class="chart-card__title">{{card.title}}</view>
           <view class="chart-card__sub">{{card.sub}}</view>
         </view>
-        <view
-          class="drag-handle"
-          data-id="{{card.id}}"
-          catchtouchstart="onHandleTouchStart"
-          catchtouchend="onHandleTouchEnd"
-        >
-          <image src="{{dragIcon}}"></image>
+        <view wx:if="{{editing}}" class="card-tools">
+          <text class="ctool {{index===0?'off':''}}" data-i="{{index}}" catchtap="moveUp">上移</text>
+          <text class="ctool {{index===cards.length-1?'off':''}}" data-i="{{index}}" catchtap="moveDown">下移</text>
+          <text class="ctool danger" data-iid="{{card.iid}}" catchtap="removeCard">删除</text>
         </view>
       </view>
 
       <!-- 区间选择 -->
-      <view wx:if="{{card.range==='week'}}" class="range-chips">
-        <text class="rchip {{weekDays===7?'on':''}}" data-d="7" bindtap="setWeekRange">近 7 日</text>
-        <text class="rchip {{weekDays===14?'on':''}}" data-d="14" bindtap="setWeekRange">近 14 日</text>
-        <text class="rchip {{weekDays===30?'on':''}}" data-d="30" bindtap="setWeekRange">近 30 日</text>
+      <view wx:if="{{card.range==='day'}}" class="range-chips">
+        <text class="rchip {{card.rangeVal===7?'on':''}}" data-iid="{{card.iid}}" data-r="7" bindtap="setRange">近 7 日</text>
+        <text class="rchip {{card.rangeVal===14?'on':''}}" data-iid="{{card.iid}}" data-r="14" bindtap="setRange">近 14 日</text>
+        <text class="rchip {{card.rangeVal===30?'on':''}}" data-iid="{{card.iid}}" data-r="30" bindtap="setRange">近 30 日</text>
       </view>
-      <view wx:elif="{{card.range==='year'}}" class="range-chips">
-        <text class="rchip {{yearMonths===6?'on':''}}" data-m="6" bindtap="setYearRange">近 6 月</text>
-        <text class="rchip {{yearMonths===12?'on':''}}" data-m="12" bindtap="setYearRange">近 12 月</text>
+      <view wx:elif="{{card.range==='month'}}" class="range-chips">
+        <text class="rchip {{card.rangeVal===6?'on':''}}" data-iid="{{card.iid}}" data-r="6" bindtap="setRange">近 6 月</text>
+        <text class="rchip {{card.rangeVal===12?'on':''}}" data-iid="{{card.iid}}" data-r="12" bindtap="setRange">近 12 月</text>
       </view>
 
       <!-- 饼图 -->
@@ -75,19 +74,57 @@
       </block>
     </view>
 
-    <!-- 添加图表 -->
-    <view wx:if="{{canAdd}}" class="add-card" hover-class="pressed" hover-stay-time="80" bindtap="addChart">
+    <!-- 添加图表（始终可用，可重复添加不同区间的同类图表） -->
+    <view class="add-card" hover-class="pressed" hover-stay-time="80" bindtap="openPicker">
       <image src="{{addIcon}}"></image>
       <text>添加图表</text>
     </view>
 
-    <view wx:if="{{editing && cards.length}}" class="ai-disclaimer">编辑模式 · 拖右侧手柄排序，点左上角 × 移除，自动保存</view>
+    <view wx:if="{{editing && cards.length}}" class="ai-disclaimer">编辑模式 · 上移/下移调整顺序，删除移除卡片，改动自动保存</view>
 
-    <view wx:if="{{!cards.length}}" style="text-align:center;padding:112rpx 60rpx">
+    <view wx:if="{{!cards.length}}" style="text-align:center;padding:96rpx 60rpx">
       <image src="{{barsIcon}}" style="width:88rpx;height:88rpx;margin:0 auto"></image>
       <view style="font-size:32rpx;font-weight:600;margin-top:28rpx">还没有图表卡片</view>
-      <view class="muted" style="font-size:28rpx;margin-top:8rpx">你移除了全部卡片，可一键恢复四个默认图表。</view>
+      <view class="muted" style="font-size:28rpx;margin-top:8rpx">点上方「添加图表」加入，或一键恢复默认四个图表。</view>
       <view class="btn btn--primary" style="margin-top:36rpx;display:inline-flex" hover-class="pressed" hover-stay-time="80" bindtap="restoreDefault">恢复默认图表</view>
     </view>
   </view>
+
+  <!-- 添加图表：带示意图的选择面板 -->
+  <view wx:if="{{pickerRender}}" class="cpk-mask {{pickerUp ? 'cpk-mask--show' : ''}}" bindtap="closePicker">
+    <view class="cpk {{pickerUp ? 'cpk--up' : ''}}" catchtap="noop">
+      <view class="cpk__grab"></view>
+      <view class="cpk__title">添加图表</view>
+      <view class="cpk__hint">选一种图表加入统计，同一种可加多个（如不同区间的支出趋势）</view>
+      <view class="cpk__list">
+        <view
+          wx:for="{{pickerTypes}}"
+          wx:key="type"
+          class="cpk__row"
+          hover-class="cpk__row--press"
+          hover-stay-time="80"
+          data-type="{{item.type}}"
+          bindtap="pickType"
+        >
+          <view class="cpk__thumb cpk__thumb--{{item.kind}}"><image src="{{item.preview}}" mode="aspectFit"></image></view>
+          <view class="cpk__info">
+            <view class="cpk__t">{{item.title}}</view>
+            <view class="cpk__d">{{item.desc}}</view>
+          </view>
+          <image class="cpk__plus" src="{{addIcon}}"></image>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <book-switcher
+    visible="{{switcherVisible}}"
+    books="{{books}}"
+    current-id="{{currentBookId}}"
+    bind:select="onSwitcherSelect"
+    bind:close="onSwitcherClose"
+    bind:manage="goManageBooks"
+  ></book-switcher>
+
+  <currency-picker visible="{{curVisible}}" current="{{curCode}}" bind:select="onCurPick" bind:close="closeCurPicker"></currency-picker>
 </view>

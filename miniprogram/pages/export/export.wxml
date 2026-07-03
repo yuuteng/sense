@@ -1,0 +1,63 @@
+<view class="screen screen--pad">
+  <loading show="{{loading}}"></loading>
+  <nav-bar back="{{true}}" center="{{true}}" title="导出数据"></nav-bar>
+
+  <!-- 选择账本 -->
+  <view class="section-label">选择账本</view>
+  <view class="group group--flat">
+    <view wx:for="{{books}}" wx:key="bookId" class="li" data-id="{{item.bookId}}" hover-class="pressed" hover-stay-time="80" bindtap="pickBook">
+      <view class="li__ic"><image src="{{ic.book}}"></image></view>
+      <view class="li__label ellip">{{item.name}}<view class="li__val">{{item.typeLabel}} · {{item.roleLabel}}</view></view>
+      <image wx:if="{{item.bookId === bookId}}" class="check" src="{{ic.check}}"></image>
+    </view>
+    <view wx:if="{{!books.length && !loading}}" class="li"><view class="li__label muted">暂无账本</view></view>
+  </view>
+
+  <!-- 时间范围 -->
+  <view class="section-label">时间范围</view>
+  <view class="chips">
+    <view wx:for="{{ranges}}" wx:key="key" class="chip {{rangeMode === item.key ? 'selected' : ''}}" data-key="{{item.key}}" hover-class="pressed" hover-stay-time="80" bindtap="pickRange">{{item.label}}</view>
+  </view>
+  <view wx:if="{{rangeMode !== 'all'}}" class="group group--flat" style="margin-top:24rpx">
+    <view class="field-row" hover-class="pressed" hover-stay-time="80" data-target="from" bindtap="openCal">
+      <view class="field-row__label"><image src="{{ic.calendar}}"></image>起始日期</view>
+      <view class="field-row__val"><text class="num">{{dateFrom || '选择'}}</text><image class="chevron" src="{{ic.chevron}}"></image></view>
+    </view>
+    <view class="field-row" hover-class="pressed" hover-stay-time="80" data-target="to" bindtap="openCal">
+      <view class="field-row__label"><image src="{{ic.calendar}}"></image>结束日期</view>
+      <view class="field-row__val"><text class="num">{{dateTo || '选择'}}</text><image class="chevron" src="{{ic.chevron}}"></image></view>
+    </view>
+  </view>
+
+  <!-- 导出格式 -->
+  <view class="section-label">导出格式</view>
+  <view class="chips">
+    <view wx:for="{{formats}}" wx:key="key" class="chip {{format === item.key ? 'selected' : ''}} {{item.disabled ? 'chip--off' : ''}}" data-key="{{item.key}}" data-off="{{item.disabled}}" hover-class="pressed" hover-stay-time="80" bindtap="pickFormat">{{item.label}}</view>
+  </view>
+  <view class="ai-disclaimer left">JSON 用于备份 / 迁移；Excel / CSV 便于表格分析；PDF 报表开发中。</view>
+
+  <!-- 下载方式 -->
+  <view class="section-label">下载方式</view>
+  <view class="group group--flat">
+    <view class="li" data-key="local" hover-class="pressed" hover-stay-time="80" bindtap="pickDelivery">
+      <view class="li__ic"><image src="{{ic.download}}"></image></view>
+      <view class="li__label">本地存储<view class="li__val">下载后预览，或转发 / 保存到微信</view></view>
+      <image wx:if="{{delivery === 'local'}}" class="check" src="{{ic.check}}"></image>
+    </view>
+    <view class="li" data-key="email" hover-class="pressed" hover-stay-time="80" bindtap="pickDelivery">
+      <view class="li__ic"><image src="{{ic.mail}}"></image></view>
+      <view class="li__label">邮件发送<view class="li__val">作为附件发送到指定邮箱</view></view>
+      <image wx:if="{{delivery === 'email'}}" class="check" src="{{ic.check}}"></image>
+    </view>
+    <view wx:if="{{delivery === 'email'}}" class="field-row">
+      <view class="field-row__label"><image src="{{ic.mail}}"></image>收件邮箱</view>
+      <view class="field-row__val"><input type="text" placeholder="name@example.com" value="{{email}}" bindinput="onEmail" confirm-type="done"></input></view>
+    </view>
+  </view>
+
+  <view class="action-bar">
+    <view class="btn btn--primary btn--block btn--lg" hover-class="pressed" hover-stay-time="80" bindtap="onSubmit">导出</view>
+  </view>
+
+  <calendar visible="{{calVisible}}" value="{{calValue}}" bind:pick="onCalPick" bind:close="onCalClose"></calendar>
+</view>

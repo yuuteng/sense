@@ -10,7 +10,6 @@ Page({
     curLabel: cur.label('CNY'),
     curVisible: false,
     aiLimit: 50,
-    exportVal: '',
     importVal: '',
     loading: true,
   },
@@ -91,48 +90,8 @@ Page({
 
   goBooks() { wx.navigateTo({ url: '/pages/books/books' }); },
 
-  // 导出：先选格式
-  onExport() {
-    wx.showActionSheet({
-      itemList: ['Excel (.xlsx)', 'CSV', 'JSON', 'PDF'],
-      success: (r) => {
-        const map = ['excel', 'csv', 'json', 'pdf'];
-        this.doExport(map[r.tapIndex]);
-      },
-    });
-  },
-
-  doExport(format) {
-    wx.showLoading({ title: '生成中…' });
-    api.call('book', 'getCurrent')
-      .then((book) => { if (!book) throw { errMsg: '请先创建账本' }; return api.call('data', 'export', { bookId: book.bookId, format }); })
-      .then((res) => {
-        // 下载到本地临时文件
-        wx.cloud.downloadFile({ fileID: res.fileID }).then((dl) => {
-          wx.hideLoading();
-          this.setData({ exportVal: `已导出 ${res.count} 条` });
-          this.deliverFile(dl.tempFilePath, res.fileType, res.fileName);
-        }).catch(() => { wx.hideLoading(); wx.showToast({ title: '下载失败', icon: 'none' }); });
-      })
-      .catch((e) => { wx.hideLoading(); api.toast(e); });
-  },
-
-  // 交付文件：预览 或 转发/保存到微信
-  deliverFile(filePath, fileType, fileName) {
-    wx.showActionSheet({
-      itemList: ['预览文件', '转发 / 保存到微信'],
-      success: (r) => {
-        if (r.tapIndex === 0) {
-          wx.openDocument({
-            filePath, fileType, showMenu: true,
-            fail: () => wx.shareFileMessage({ filePath, fileName, fail: () => wx.showToast({ title: '该格式不支持预览，请选转发', icon: 'none' }) }),
-          });
-        } else {
-          wx.shareFileMessage({ filePath, fileName, fail: () => wx.showToast({ title: '转发失败，可改用预览后保存', icon: 'none' }) });
-        }
-      },
-    });
-  },
+  // 导出：进入独立配置页（选账本 / 时间段 / 格式 / 下载方式）
+  onExport() { wx.navigateTo({ url: '/pages/export/export' }); },
 
   // 导入：选 JSON 文件 → 读取 → 后端解析入库
   onImport() {
@@ -163,8 +122,13 @@ Page({
       success: (res) => {
         if (!res.confirm) return;
         wx.showLoading({ title: '清空中…' });
-        api.call('seed', 'reset').then(() => {
+        api.call('seed', 'reset').then((r) => {
           wx.hideLoading();
+          const left = Object.entries((r && r.result) || {}).filter(([, v]) => v.remaining > 0);
+          if (left.length) {
+            wx.showModal({ title: '部分未清空', showCancel: false, content: '仍有残留：' + left.map(([k, v]) => `${k}(${v.remaining})`).join('、') + '。请再点一次「清空所有数据」。' });
+            return;
+          }
           wx.showToast({ title: '已清空', icon: 'success' });
           setTimeout(() => wx.reLaunch({ url: '/pages/login/login' }), 600);
         }).catch((e) => { wx.hideLoading(); api.toast(e); });

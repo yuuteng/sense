@@ -8,6 +8,7 @@
     "pages/detail/detail",
     "pages/books/books",
     "pages/bookConfig/bookConfig",
+    "pages/export/export",
     "pages/onboarding/onboarding",
     "pages/settle/settle",
     "pages/login/login",

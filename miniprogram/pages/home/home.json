@@ -2,6 +2,8 @@
   "usingComponents": {
     "nav-bar": "/components/nav-bar/index",
     "avatar": "/components/avatar/index",
-    "loading": "/components/loading/index"
+    "loading": "/components/loading/index",
+    "book-switcher": "/components/book-switcher/index",
+    "currency-picker": "/components/currency-picker/index"
   }
 }

@@ -1,1 +1,6 @@
 .fab image { width: 52rpx; height: 52rpx; }
+.appbar__book--press { background: rgba(62, 69, 80, 0.10); }
+
+/* 外币记录：原始金额(黄色胶囊) + 汇率日期，右侧同一行 */
+.txn__fx { display: flex; align-items: center; justify-content: flex-end; gap: 8rpx; margin-top: 6rpx; }
+.txn__fxnote { font-size: 22rpx; color: var(--muted); white-space: nowrap; }

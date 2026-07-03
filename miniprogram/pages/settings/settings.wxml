@@ -29,12 +29,12 @@
     <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="goBooks">
       <view class="li__ic"><image src="{{ic.book}}"></image></view>
       <view class="li__label">账本管理</view>
-      <view class="li__val">2 个 <image class="chevron" src="{{ic.chevron}}"></image></view>
+      <view class="li__val">{{profile.bookCount}} 个 <image class="chevron" src="{{ic.chevron}}"></image></view>
     </view>
     <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="onExport">
       <view class="li__ic"><image src="{{ic.download}}"></image></view>
       <view class="li__label">导出数据</view>
-      <view class="li__val">{{exportVal}}</view>
+      <view class="li__val">账本 / 时间 / 格式 <image class="chevron" src="{{ic.chevron}}"></image></view>
     </view>
     <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="onImport">
       <view class="li__ic"><image src="{{ic.upload}}"></image></view>

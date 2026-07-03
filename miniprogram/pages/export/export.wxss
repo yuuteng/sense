@@ -1,0 +1,21 @@
+/* 导出配置页：复用全局 group / li / chip / field-row / action-bar 令牌与组件类 */
+
+/* 快选 chips 容器（时间范围、导出格式） */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  padding: 0 var(--space-5);
+}
+
+/* 选中项右侧勾选标记 */
+.check {
+  width: 40rpx;
+  height: 40rpx;
+  flex-shrink: 0;
+}
+
+/* 置灰不可选的格式（PDF 开发中） */
+.chip--off {
+  opacity: 0.42;
+}

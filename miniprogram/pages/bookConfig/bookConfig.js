@@ -12,8 +12,8 @@ Page({
     canManage: false,
     isOwner: false,
     isSplit: false,
+    roleLabel: '',
     ic: {},
-    inviteText: '邀请成员',
     dissolveText: '解散账本',
     dissolveConfirm: false,
     loading: true,
@@ -25,7 +25,7 @@ Page({
       bookId: this.bookId,
       ic: {
         pencil: icons.get('pencil', '#0089c0', 1.7),
-        invite: icons.get('share', '#0089c0', 1.7),
+        plus: icons.get('plus', '#0089c0', 2.4),
         star: icons.get('check', '#0089c0', 2),
         arrow: icons.get('arrowRight', '#0089c0', 1.9),
         chevron: icons.get('chevron', '#748294', 2),
@@ -51,6 +51,7 @@ Page({
         canManage: book.myRole === 'owner' || book.myRole === 'admin',
         isOwner: book.myRole === 'owner',
         isSplit: book.type === 'split',
+        roleLabel: ROLE_BADGE[book.myRole] || book.myRole,
         loading: false,
       });
     } catch (e) { this.setData({ loading: false }); api.toast(e); }
@@ -90,18 +91,8 @@ Page({
 
   onTapMember(e) {
     const m = this.data.members[e.currentTarget.dataset.i];
-    if (m.isMe) {
-      // 修改我在本账本的名字
-      wx.showModal({
-        title: '我在本账本的名字', editable: true, content: m.name.replace('（我）', ''),
-        success: (res) => {
-          if (!res.confirm || !res.content.trim()) return;
-          api.call('member', 'rename', { bookId: this.bookId, name: res.content.trim() })
-            .then(() => this.load()).catch(api.toast);
-        },
-      });
-      return;
-    }
+    // 自己：不在此改名（昵称在「我的」里改，且不允许他人代改）
+    if (m.isMe) return;
     if (!this.data.canManage || m.role === 'owner') return;
     // 成员权限 / 移除，用底部动作面板
     wx.showActionSheet({

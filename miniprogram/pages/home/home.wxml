@@ -1,12 +1,18 @@
 <view class="screen screen--pad">
   <loading show="{{loading}}"></loading>
-  <nav-bar>
-    <navigator slot="left" class="appbar__book" url="/pages/books/books" hover-class="none">
-      {{bookName}}
-      <image src="{{chevronDown}}" style="width:28rpx;height:28rpx"></image>
-    </navigator>
-    <text slot="right" class="muted" style="font-size:24rpx">{{displayCurrency}}</text>
-  </nav-bar>
+  <view class="sticky-header">
+    <nav-bar>
+      <view slot="left" class="appbar__book" hover-class="appbar__book--press" hover-stay-time="80" bindtap="openSwitcher">
+        <image src="{{bookIcon}}" style="width:30rpx;height:30rpx"></image>
+        {{bookName}}
+        <image src="{{chevronDown}}" style="width:28rpx;height:28rpx"></image>
+      </view>
+      <view slot="right" class="cur-pill" hover-class="cur-pill--press" hover-stay-time="80" bindtap="openCurPicker">
+        展示币种 {{curSym}} {{curCode}}
+        <image src="{{chevronDown}}" style="width:24rpx;height:24rpx"></image>
+      </view>
+    </nav-bar>
+  </view>
 
   <!-- 未初始化数据提示 -->
   <view wx:if="{{needInit}}" style="text-align:center;padding:120rpx 60rpx">
@@ -52,12 +58,14 @@
           <view class="txn__meta">
             <avatar src="{{it.whoAvatar}}" initial="{{it.whoInitial}}" color="{{it.whoColor}}" size="40"></avatar>
             <text class="ellip">{{it.who}}</text>
-            <text wx:if="{{it.fx}}" class="pill pill--fx">{{it.fx}}</text>
           </view>
         </view>
         <view class="txn__amt">
           <view class="main num {{it.in ? 'amt-in' : 'amt-out'}}">{{it.amount}}</view>
-          <view wx:if="{{it.sub}}" class="sub">{{it.sub}}</view>
+          <view wx:if="{{it.fx}}" class="txn__fx">
+            <text class="pill pill--fx">原{{it.fx}}</text>
+            <text class="txn__fxnote">{{it.sub}}</text>
+          </view>
         </view>
       </view>
     </view>
@@ -68,4 +76,15 @@
   <navigator class="fab" url="/pages/add/add" hover-class="pressed" hover-stay-time="80">
     <image src="{{plusIcon}}"></image>
   </navigator>
+
+  <book-switcher
+    visible="{{switcherVisible}}"
+    books="{{books}}"
+    current-id="{{currentBookId}}"
+    bind:select="onSwitcherSelect"
+    bind:close="onSwitcherClose"
+    bind:manage="goManageBooks"
+  ></book-switcher>
+
+  <currency-picker visible="{{curVisible}}" current="{{curCode}}" bind:select="onCurPick" bind:close="closeCurPicker"></currency-picker>
 </view>

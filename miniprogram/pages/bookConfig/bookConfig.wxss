@@ -1,3 +1,35 @@
-/* 把 <button> 重置成和 .li 一样的行 */
-.li-btn { width: 100%; margin: 0; text-align: left; background: var(--surface); line-height: normal; }
-.li-btn::after { border: none; }
+/* 「设为默认」：白底太不明显，改成浅蓝底 + 边框 + 轻阴影，明确是可点按钮 */
+.set-default {
+  background: rgba(0, 204, 249, 0.12);
+  color: var(--accent-ink);
+  border: 1rpx solid rgba(0, 204, 249, 0.30);
+  box-shadow: 0 4rpx 12rpx rgba(0, 204, 249, 0.18);
+}
+.set-default.pressed { background: rgba(0, 204, 249, 0.22); }
+
+/* 成员分区标题行：让标题与右侧「邀请成员」按钮垂直居中对齐 */
+.section-label--row { align-items: center; }
+
+/* 邀请成员（open-type=share 触发微信分享卡片邀请）。
+   外层 button 只作触发器：重置为无样式、贴合内容、margin-left:auto 顶到最右；
+   视觉胶囊放在内层 view，view 能可靠 inline-flex 收缩到「＋邀请成员」内容宽度，
+   避免原生 button 不吃 display/width 而撑宽、文字居中飘着。 */
+.invite-btn {
+  margin: 0 0 0 auto; padding: 0;
+  background: transparent; line-height: normal;
+  display: inline-block; width: auto;
+}
+.invite-btn::after { border: none; }
+.invite-pill {
+  display: inline-flex; align-items: center; gap: 8rpx;
+  padding: 0 24rpx; height: 56rpx;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 204, 249, 0.12);
+  color: var(--accent-ink);
+  border: 1rpx solid rgba(0, 204, 249, 0.30);
+  box-shadow: 0 4rpx 12rpx rgba(0, 204, 249, 0.18);
+  font-size: var(--text-xs); font-weight: 600;
+  transition: transform var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard);
+}
+.invite-pill image { width: 26rpx; height: 26rpx; flex-shrink: 0; }
+.invite-btn--h .invite-pill { background: rgba(0, 204, 249, 0.22); transform: scale(0.96); }

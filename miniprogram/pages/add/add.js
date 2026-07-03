@@ -51,9 +51,10 @@ Page({
 
   async onLoad(query) {
     this.editId = query.id || '';
+    try { this.draft = query.d ? JSON.parse(decodeURIComponent(query.d)) : null; } catch (e) { this.draft = null; }
     const t = today();
     this.setData({
-      editId: this.editId, navTitle: this.editId ? '编辑记录' : '记一笔',
+      editId: this.editId, navTitle: this.editId ? '编辑记录' : (this.draft ? '确认记账' : '记一笔'),
       date: t, dateLabel: fmt.dayLabel(t),
       ic: {
         note: icons.get('note', '#748294', 1.7),
@@ -62,7 +63,13 @@ Page({
         photoAdd: icons.get('photoAdd', '#748294', 1.7),
         plus: icons.get('plus', '#748294', 2),
       },
-      iconOptions: ['dining', 'coffee', 'bag', 'train', 'car', 'house', 'medical', 'edu', 'play', 'ticket', 'gift', 'heart', 'star', 'phone', 'income', 'book'].map((n) => ({
+      iconOptions: [
+        'dining', 'coffee', 'bag', 'train', 'car', 'house',
+        'medical', 'medicine', 'edu', 'book', 'play', 'ticket',
+        'gift', 'heart', 'star', 'phone', 'camera', 'income',
+        'currency', 'mail', 'calendar', 'clock', 'note', 'receipt',
+        'privacy', 'share', 'refresh', 'bars', 'list', 'dots',
+      ].map((n) => ({
         name: n, off: icons.get(n, '#3e4550', 1.6), on: icons.get(n, '#ffffff', 1.6),
       })),
     });
@@ -70,16 +77,19 @@ Page({
       const book = await api.call('book', 'getCurrent');
       if (!book) { wx.showToast({ title: '请先创建账本', icon: 'none' }); return; }
       const base = book.baseCurrency;
+      // 录入默认币种跟随「展示币种」（设置里选的）；取不到其汇率时回退基准币
+      const display = book.displayCurrency || base;
       const [rate, members, exp, inc] = await Promise.all([
         api.call('rate', 'getDaily', { date: t, base }),
         api.call('member', 'list', { bookId: book.bookId }),
         api.call('category', 'list', { bookId: book.bookId, kind: 'expense' }),
         api.call('category', 'list', { bookId: book.bookId, kind: 'income' }),
       ]);
-      // 所有能取到汇率的常用币种，基准币排最前
+      // 所有能取到汇率的常用币种，默认展示币种排最前（无汇率则基准币在前）
+      const front = rate.quotes[display] != null ? display : base;
       const curs = cur.CURRENCIES.filter((c) => rate.quotes[c.code] != null)
         .map((c) => ({ code: c.code, symbol: c.symbol, rate: rate.quotes[c.code] }))
-        .sort((a, b) => (a.code === base ? -1 : b.code === base ? 1 : 0));
+        .sort((a, b) => (a.code === front ? -1 : b.code === front ? 1 : 0));
       const curLabels = curs.map((c) => cur.label(c.code));
       const meIdx = Math.max(0, members.findIndex((m) => m.isMe));
       const memberPicks = members.map((m) => ({ openid: m.openid, initial: m.avatarInitial, color: m.avatarColor, avatarFileID: m.avatarFileID || '', name: m.isMe ? `${m.name}（我）` : m.name }));
@@ -94,9 +104,10 @@ Page({
       });
       this.applyKind('out');
       if (this.editId) await this.loadForEdit();
+      else if (this.draft) this.prefillFromDraft();
       this.updateComputed();
       // 内容挂载后再聚焦，避免原生 input 在挂载同帧聚焦导致同层渲染卡成灰框
-      if (!this.editId) setTimeout(() => this.setData({ amountFocus: true }), 350);
+      if (!this.editId && !this.draft) setTimeout(() => this.setData({ amountFocus: true }), 350);
     } catch (e) { api.toast(e); }
   },
 
@@ -145,21 +156,54 @@ Page({
     });
   },
 
+  // 用 AI 预填草稿填充（金额/类型/币种/分类/日期/备注），用户可再改后保存入账
+  prefillFromDraft() {
+    const d = this.draft || {};
+    const type = d.type === 'income' ? 'in' : 'out';
+    this.setData({ type });
+    this.applyKind(type);
+    // 草稿未指定币种时默认展示币种（curs[0]）
+    let ci = d.currency ? this.data.curs.findIndex((c) => c.code === d.currency) : 0;
+    if (ci < 0) ci = 0;
+    const cats = this.data.cats;
+    let catIndex = 0, subIndex = 0;
+    if (d.categoryText) {
+      const parts = String(d.categoryText).split('/').map((s) => s.trim());
+      const pi = cats.findIndex((c) => c.key === parts[0]);
+      if (pi >= 0) {
+        catIndex = pi;
+        if (parts[1]) { const si = (cats[pi].subs || []).findIndex((s) => s.name === parts[1]); if (si >= 0) subIndex = si; }
+      }
+    }
+    const date = d.date || this.data.date;
+    this.setData({
+      amount: d.amount ? String(d.amount) : '',
+      curIndex: ci, curLabel: this.data.curLabels[ci] || '',
+      catIndex, subs: cats[catIndex] ? cats[catIndex].subs : [], subIndex,
+      note: d.note || '', date, dateLabel: fmt.dayLabel(date),
+    });
+  },
+
   updateComputed() {
     const c = this.data.curs[this.data.curIndex];
     if (!c) return;
     const val = parseFloat(this.data.amount) || 0;
     const base = this.data.book ? this.data.book.baseCurrency : 'CNY';
+    const display = this.data.book ? (this.data.book.displayCurrency || base) : base;
+    // 展示币种对基准币的汇率（display→base），用于把录入币种折算到展示币种
+    const dispCur = this.data.curs.find((x) => x.code === display);
+    const dispRate = dispCur ? dispCur.rate : 1;
+    // 折算到展示币种：code→display =（code→base）/（display→base）
+    const conv = dispRate ? (val * c.rate) / dispRate : val * c.rate;
     let fxHint;
-    if (c.code === base) fxHint = `展示币种 ${base}`;
-    else fxHint = `约 ${fmt.money(val * c.rate, base)}（1 ${c.code} ≈ ${fmt.money(c.rate, base)}）`;
-    const cny = c.code === base ? val : val * c.rate;
+    if (c.code === display) fxHint = `展示币种 ${display}`;
+    else fxHint = `约 ${fmt.money(conv, display)}（1 ${c.code} ≈ ${fmt.money(c.rate / dispRate, display)}）`;
     const mode = this.data.splitMode;
     let splitHint;
-    if (mode === 'treat') splitHint = `我请客：本人全额承担 ${fmt.money(cny, base)}`;
+    if (mode === 'treat') splitHint = `我请客：本人全额承担 ${fmt.money(conv, display)}`;
     else {
       const n = this.data.splitMembers.filter((m) => m.selected).length || 1;
-      if (mode === 'even') splitHint = `均摊：${n} 人 · 每人 ${fmt.money(cny / n, base)}`;
+      if (mode === 'even') splitHint = `均摊：${n} 人 · 每人 ${fmt.money(conv / n, display)}`;
       else splitHint = `按人指定：${n} 人参与（P1 仅记录分摊）`;
     }
     this.setData({ fxHint, splitHint });

@@ -48,6 +48,7 @@ const PATHS = {
   currency: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5c.5-1.5 4-2 4 0 0 1.5-2 1.5-2 3M12 16h.01"/>',
   download: '<path d="M12 3v12M8 11l4 4 4-4"/><path d="M5 21h14"/>',
   upload: '<path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 21h14"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M4 7l8 6 8-6"/>',
   camera: '<rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.2"/><path d="M8 6l1.5-2h5L16 6"/>',
   send: '<path d="M4 12l16-8-6 16-3.5-6L4 12Z" stroke-linejoin="round"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5l3 2"/>',

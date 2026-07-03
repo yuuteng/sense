@@ -37,10 +37,10 @@ function dayLabel(dateStr) {
   return md;
 }
 
-// 'YYYY-MM-DD' -> 'M/D'
-function mmdd(dateStr) {
+// 'YYYY-MM-DD' -> 'M月D日'
+function cnMonthDay(dateStr) {
   const p = (dateStr || '').split('-');
-  return `${parseInt(p[1], 10)}/${parseInt(p[2], 10)}`;
+  return `${parseInt(p[1], 10)}月${parseInt(p[2], 10)}日`;
 }
 
-module.exports = { SYMBOL, symbolOf, fmt, money, signed, signedTotal, dayLabel, mmdd };
+module.exports = { SYMBOL, symbolOf, fmt, money, signed, signedTotal, dayLabel, cnMonthDay };

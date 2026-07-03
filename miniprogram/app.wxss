@@ -81,6 +81,8 @@ image { display: block; }
 /* ── 自定义导航栏（替代原型的假状态栏 + appbar）──────────────────────────── */
 .nav { position: relative; z-index: 20; background: var(--bg); }
 .status-spacer { width: 100%; }
+/* 顶部 header 常驻：随页面滚动固定在顶部 */
+.sticky-header { position: sticky; top: 0; z-index: 50; background: var(--bg); }
 
 .appbar {
   display: flex; align-items: center; justify-content: space-between;
@@ -98,11 +100,21 @@ image { display: block; }
 .appbar__btn.active { background: rgba(62,69,80,0.08); }
 .appbar__book {
   display: inline-flex; align-items: center; gap: 10rpx;
-  padding: 12rpx 24rpx 12rpx 28rpx;
+  padding: 10rpx 22rpx;
   border-radius: var(--radius-pill);
   background: rgba(62,69,80,0.05);
   font-weight: 600; font-size: var(--text-sm);
 }
+.appbar__book image { flex-shrink: 0; }
+.appbar__book--press { background: rgba(62,69,80,0.10); }
+/* 顶部展示币种切换按钮（右上角小胶囊，黄色）*/
+.cur-pill {
+  display: inline-flex; align-items: center; gap: 6rpx;
+  padding: 8rpx 16rpx; border-radius: var(--radius-pill);
+  background: rgba(255,205,47,0.18);
+  font-size: 24rpx; font-weight: 600; color: #a47d06;
+}
+.cur-pill--press { background: rgba(255,205,47,0.32); }
 
 /* ── 内容区 ───────────────────────────────────────────────────────────── */
 .screen { position: relative; }
@@ -396,7 +408,9 @@ image { display: block; }
 
 .composer {
   position: fixed; left: 0; right: 0;
-  bottom: calc(150rpx + env(safe-area-inset-bottom));
+  /* 紧贴 tabBar 顶部（tabBar 高约 124rpx + 安全区）。略微交叠，tabBar z-index(40) 高于
+     composer(30) 会自然盖住交叠处，既不留缝也不遮住输入框。 */
+  bottom: calc(118rpx + env(safe-area-inset-bottom));
   padding: var(--space-3) var(--space-4);
   background: rgba(255,255,255,0.94);
   backdrop-filter: blur(16px);
