@@ -40,10 +40,11 @@ Page({
       const app = getApp();
       if (app && app.globalData) app.globalData.profile = { nickname, avatarFileID, registered: true };
       wx.hideLoading();
-      // 有账本进首页，无账本去引导创建
+      // 有账本进首页，无账本去引导创建；导航发起后解锁按钮，避免导航失败时卡死无法重试
       const books = await api.call('book', 'list').catch(() => []);
-      if (books && books.length) wx.switchTab({ url: '/pages/home/home' });
-      else wx.reLaunch({ url: '/pages/onboarding/onboarding' });
+      const unlock = () => this.setData({ submitting: false });
+      if (books && books.length) wx.switchTab({ url: '/pages/home/home', complete: unlock });
+      else wx.reLaunch({ url: '/pages/onboarding/onboarding', complete: unlock });
     } catch (e) {
       wx.hideLoading();
       this.setData({ submitting: false });

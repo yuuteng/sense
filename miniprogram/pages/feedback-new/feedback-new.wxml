@@ -1,0 +1,29 @@
+<view class="screen screen--pad">
+  <nav-bar back="{{true}}" center="{{true}}" title="提交反馈"></nav-bar>
+
+  <view style="padding:0 40rpx">
+    <view class="input-label">标题</view>
+    <input class="text-input" placeholder="一句话概括问题或建议" placeholder-class="input-ph" maxlength="50" value="{{title}}" bindinput="onTitle" />
+
+    <view class="input-label">问题描述</view>
+    <textarea class="text-input fb-textarea" placeholder="请描述遇到的问题、操作步骤或你的建议…" placeholder-class="input-ph" maxlength="1000" value="{{content}}" bindinput="onContent"></textarea>
+
+    <view class="input-label">截图（选填，最多 3 张）</view>
+    <view class="photo-strip" style="padding:0">
+      <view wx:for="{{photos}}" wx:key="*this" class="photo-thumb" style="background:none">
+        <image src="{{item}}" style="width:100%;height:100%;border-radius:var(--radius-sm)" mode="aspectFill"></image>
+        <text class="x" data-i="{{index}}" catchtap="removePhoto">×</text>
+      </view>
+      <view wx:if="{{photos.length < 3}}" class="photo-add" bindtap="choosePhoto"><image src="{{ic.photoAdd}}"></image></view>
+    </view>
+
+    <view class="input-label">联系邮箱（选填）</view>
+    <input class="text-input" placeholder="便于我们在小程序之外联系你" placeholder-class="input-ph" maxlength="100" value="{{contactEmail}}" bindinput="onEmail" />
+
+    <view class="ai-disclaimer left" style="padding:24rpx 0 0">提交后可在「意见反馈」列表查看处理进度与客服回复。</view>
+  </view>
+
+  <view style="padding:48rpx 40rpx calc(60rpx + env(safe-area-inset-bottom))">
+    <view class="btn btn--primary btn--block btn--lg" hover-class="pressed" hover-stay-time="80" bindtap="submit">提交</view>
+  </view>
+</view>

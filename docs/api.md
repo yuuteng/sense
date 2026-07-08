@@ -122,7 +122,7 @@ wx.cloud.callFunction({
 | `update` | 🟢 | 编辑记录 | 本人 / admin / owner |
 | `delete` | 🟢 | 删除记录 | 本人 / admin / owner |
 
-**record.list** 入参 `{ bookId, currency, page, pageSize, dateRange? }` → 
+**record.list** 入参 `{ bookId, currency, page, pageSize, dateFrom?, dateTo?, type?, categoryTopId?, withSummary? }` → 
 ```json
 { "success": true, "data": {
   "groups": [
@@ -132,10 +132,13 @@ wx.cloud.callFunction({
         "recorderName": "小雨", "payerName": "小雨", "isForeign": false }
     ] }
   ],
-  "hasMore": false
+  "hasMore": false,
+  "page": 0,
+  "summary": { "income": 0, "expense": 1234.50, "count": 18 }
 } }
 ```
 > `total`/`amount*` 为数值，前端加符号与千分位格式化。`isForeign=true` 时前端显示原始币种 pill 与「按 X 汇率」。
+> 筛选参数供统计钻取（records 页）使用：`dateFrom/dateTo` 日期范围；`type` 限收/支；`categoryTopId` 顶级分类（自动包含其子分类，`"_none"` 表示未分类）；`withSummary=true` 时返回跨全部分页的 `summary`（与图表同口径：按日聚合 × 记录当日汇率）。
 
 **record.get** 入参 `{ recordId }` → 
 ```json
@@ -182,6 +185,24 @@ wx.cloud.callFunction({
 |---|---|---|---|
 | `getMonthlySummary` | 🟢 | 本月收入/支出/结余 | 成员 |
 | `getDashboard` | 🟢 | 统计页四类卡片数据 | 成员 |
+| `getChartData` | 🟢 | 图表原始数据集（饼图 + 近30日逐日 + 建账以来逐月） | 成员 |
+| `getCategoryData` | 🟢 | 某月按顶级分类聚合的收支占比（含子分类细分/笔数/百分比） | 成员 |
+
+**stats.getChartData** 入参 `{ bookId }` → `{ displayCurrency, monthLabel, curMonth, firstMonth, monthPie: {income, expense}, totalPie: {...}, daily: [{date, label, income, expense}] (近30日), monthly: [{ym, label, income, expense}] (建账首月~当月连续，不足补齐近12月) }`
+> `monthly` 覆盖全部历史月份：月度收支卡切任意月、收支趋势卡切区间均由前端切片，无需再请求。`firstMonth` 为月份选择器可选下限。
+
+**stats.getCategoryData** 入参 `{ bookId, month: "2026-07" }` → 
+```json
+{ "success": true, "data": {
+  "displayCurrency": "CNY", "month": "2026-07",
+  "expense": { "total": 3357.80, "cats": [
+    { "categoryId": "cat-food", "name": "餐饮", "icon": "dining", "total": 1201.30, "count": 21, "percent": 35.8,
+      "subs": [ { "name": "外卖", "total": 520.00, "count": 9 } ] }
+  ] },
+  "income": { "total": 12000, "cats": [ "同上结构" ] }
+} }
+```
+> 聚合方式：group by (日期 × 分类 × 类型) 后按记录当日汇率换算再归并到顶级分类，与其他图表口径完全一致；`categoryId` 为 `"_none"` 表示未分类记录。
 
 **stats.getMonthlySummary** 入参 `{ bookId, month: "2026-07", currency }` → `{ income, expense, balance }`（数值）。
 **stats.getDashboard** 入参 `{ bookId, currency }` → 
@@ -215,16 +236,23 @@ wx.cloud.callFunction({
 | type | 分期 | 描述 | 权限 |
 |---|---|---|---|
 | `listMessages` | 🟢 | 该账本会话历史（≤上限） | 成员 |
-| `ask` | 🟢 | 数据问答（基于真实数据） | 成员（含只读） |
-| `parseText` | 🟢 | 自然语言 → 预填记录 | rw 及以上 |
-| `parseReceipt` | 🟢 | 收据图 → 预填记录 | rw 及以上 |
-| `appendMessage` | 🟢 | 追加会话并滚动裁剪 | 成员 |
+| `chat` | 🟢 | 统一入口：意图分流（记账句→预填卡 / 数据问答→基于聚合数据包回答 / 跑题→拒绝） | 成员（记账意图需 rw） |
+| `parseText` | 🟢 | 关键词规则解析（chat 的降级兜底，前端已不直接调用） | rw 及以上 |
+| `parseReceipt` | 🟢 | 收据图 → 预填记录（cloud.extend.AI 多模态） | rw 及以上 |
+| `confirmDraft` | 🟢 | 预填卡「确认入账」：服务端解析分类 + 复用 record.create，回写卡片状态 | rw 及以上 |
+| `setCardState` | 🟢 | 卡片状态回写（放弃等），仅本人消息 | 成员 |
+| `appendMessage` | 🟢 | 追加会话（完整保留、不裁剪），返回 `{ id }` | 成员 |
 
 **ai.listMessages** 入参 `{ bookId }` → 会话数组（结构见 sql.md `aiMessages`）。
-**ai.ask** 入参 `{ bookId, text }` → `{ answer }`。后端读账本真实数据作答，**不编造数字**。
-**ai.parseText** 入参 `{ bookId, text }` → `{ card }`（预填记录，`state:"pending"`）。
-**ai.parseReceipt** 入参 `{ bookId, fileID }` → `{ card }`。
-> **AI 绝不直接入账**：`parse*` 只产出预填，用户确认后前端调用 `record.create` 入账。只读成员可 `ask`，不可 `parse*`/入账。会话超上限由 `appendMessage` 服务端滚动删除最旧。
+**ai.chat** 入参 `{ bookId, text }` → `{ card }` 或 `{ answer }`。实现要点：
+- 数字只来自服务端聚合的**紧凑数据包**（本月/累计/近12月/近30日/本月分类含子类/上月分类/本月成员，全部按展示币种、记录当日汇率口径），模型只能引用不能编造；
+- **域限制**：只处理本账本记账与统计，其他话题（股票/百科/闲聊等）礼貌拒绝；
+- 环境变量 `AI_PROVIDER`（默认 hunyuan-open）/ `AI_TEXT_MODEL`（默认 hunyuan-lite）；AI 未开通或调用失败时自动降级 parseNL 关键词解析。
+- **用量额度**：免费用户累计 `AI_FREE_QUOTA`（默认 50）次真实模型调用（chat / parseReceipt 各计 1，成功才计）；用尽后 chat 降级关键词解析、收据识别提示额度用完；`users.aiPaid=true` 不受限。会话记录不再滚动删除。
+**ai.parseReceipt** 入参 `{ bookId, fileID }` → `{ card }`（`AI_VISION_MODEL` 默认 hunyuan-vision）。
+**ai.confirmDraft** 入参 `{ bookId, draft, msgId? }` → `{ recordId }`。分类按「父 / 子」全路径→末级→一级匹配，匹配不到置空（不自动建分类）。
+**ai.setCardState** 入参 `{ bookId, msgId, state: pending|done|dropped }`。
+> **AI 绝不直接入账**：`chat`/`parseReceipt` 只产出预填；入账必经用户动作——「确认入账」走 `confirmDraft`，「编辑」跳记账页走 `record.create`。只读成员可问答，记账意图会被服务端拒绝并提示。会话超上限由 `appendMessage` 服务端滚动删除最旧。
 
 ---
 
@@ -245,10 +273,12 @@ wx.cloud.callFunction({
 | type | 分期 | 描述 | 权限 |
 |---|---|---|---|
 | `export` | 🟢 | 导出 JSON / Excel(含 CSV) / PDF | 成员 |
-| `import` | 🟢 | 导入 JSON / Excel(含 CSV) | rw 及以上 |
+| `import` | 🟢 | 导入 JSON / Excel(含 CSV)，自动查重（数量对齐） | rw 及以上 |
+| `undoImport` | 🟢 | 撤销一次导入（按批次号删除该批记录） | rw（本人批次）/ admin·owner（任意批次） |
 
 **data.export** 入参 `{ bookId, format: "json"|"excel"|"pdf", range?: {from,to} }` → `{ fileID }`（云存储文件，前端下载/转发）。
-**data.import** 入参 `{ bookId, fileID }` → `{ success: 30, failed: 0, reasons: [] }`。**PDF 不支持导入**，收到即拒绝并说明。
+**data.import** 入参 `{ bookId, format: "json"|"csv"|"excel", content?, contentBase64? }` → `{ success, failed, createdCategories, skippedCount, skipped: [{index, summary}], failures: [{ index, summary, reason }], batchId }`（明细各 ≤100 条；`index` 为数据行号、1 起、不含表头）。查重为**数量对齐**：指纹 = 日期|收支|金额|币种|标题|备注，每个指纹只导入「文件条数 − 库中已有条数」，重复导入幂等。前端以半屏结果面板展示，支持复制失败明细与撤销。
+**data.undoImport** 入参 `{ bookId, batchId }` → `{ removed }`（删除该批次全部记录；rw 仅限自己导入的批次）。**PDF 不支持导入**，收到即拒绝并说明。
 
 ---
 
@@ -279,6 +309,28 @@ wx.cloud.callFunction({
 
 ---
 
+## 11.5 云函数 `feedback`（用户反馈 · 轻量工单，PRD 4.9）
+
+| type | 分期 | 描述 | 权限 |
+|---|---|---|---|
+| `create` | 🟢 | 提交反馈（标题/内容/图片≤3/选填邮箱） | 任意登录用户 |
+| `list` | 🟢 | 我的工单列表；管理员见全部（附提交人昵称） | 本人 / 管理员 |
+| `get` | 🟢 | 工单详情 + 回复线程；查看即清除本侧未读 | 本人 / 管理员 |
+| `reply` | 🟢 | 追加回复；客服首次回复自动「待处理→处理中」 | 本人 / 管理员 |
+| `setStatus` | 🟢 | 修改状态 pending/processing/resolved | 仅管理员 |
+| `unreadCount` | 🟢 | 我这一侧未读工单数（设置页红点） | 任意登录用户 |
+| `listAdmins` | 🟢 | 客服团队名单（owner + admins，附昵称） | 仅 owner |
+| `createAdminInvite` | 🟢 | 生成一次性客服邀请码（24h 有效） | 仅 owner |
+| `acceptAdminInvite` | 🟢 | 凭邀请码成为客服 | 任意登录用户 |
+| `removeAdmin` | 🟢 | 移除某客服 | 仅 owner |
+
+**客服两级**：owner = 云函数环境变量 `FEEDBACK_OWNER`（通常一个 openid，支持逗号分隔多个；唯一权力源，应用内不可增删）；admin = owner 用邀请码邀请的客服（`admins` 集合），仅 owner 可移除，admin 之间不可互删。二者都能看/回全部工单、改状态；仅 owner 能管理团队。
+**feedback.create** 入参 `{ title, content, images?: [fileID], contactEmail? }` → `{ feedbackId }`。
+**feedback.reply** 入参 `{ feedbackId, content }`；回复方向由服务端判定（管理员回他人工单记为 `cs`，否则 `user`），并置对侧未读标记。
+**数据模型**（`feedbacks` 集合）：`openid, title, content, images[], contactEmail, status, replies[{from,content,time}], unreadForUser, unreadForAdmin, createdAt, updatedAt`。
+
+---
+
 ## 12. 接口 ↔ 页面对照
 
 | 页面 | 依赖接口 |
@@ -286,10 +338,12 @@ wx.cloud.callFunction({
 | home | `book.getCurrent`、`stats.getMonthlySummary`、`record.list` |
 | add | `category.list`、`rate.getDaily`、`member.list`、`record.create`/`update` |
 | detail | `record.get`、`record.delete` |
-| stats | `stats.getDashboard`、`layout.get`/`save` |
-| ai | `ai.listMessages`/`ask`/`parseText`/`parseReceipt`、`record.create` |
+| stats | `stats.getChartData`、`stats.getCategoryData`、`layout.get`/`save` |
+| records（钻取明细） | `record.list`（带筛选 + `withSummary`） |
+| ai | `ai.listMessages`/`chat`/`parseReceipt`/`confirmDraft`/`setCardState`/`appendMessage`、`record.create` |
 | books | `book.list`/`update`/`dissolve`/`setDefault`、`member.list`/`invite`/`updateRole`/`remove` |
-| settings | `user.getProfile`、`settings.get`/`update`、`data.export`/`import` |
+| settings | `user.getProfile`、`settings.get`/`update`、`data.export`/`import`、`feedback.unreadCount` |
+| feedback / feedback-new / feedback-detail / feedback-team | `feedback.list`/`create`/`get`/`reply`/`setStatus`/`listAdmins`/`createAdminInvite`/`acceptAdminInvite`/`removeAdmin` |
 | onboarding | `book.create` |
 | settle（P2） | `settle.get`/`markTransfer` |
 

@@ -12,7 +12,7 @@
   </view>
 
   <view class="chat">
-    <view class="ai-disclaimer">AI 分析基于你的账本数据进行 · 本账本会话保留最近 50 条</view>
+    <view class="ai-disclaimer">AI 分析基于你的账本数据进行 · 会话完整保留 · 免费额度 50 次 AI 调用</view>
 
     <block wx:for="{{messages}}" wx:key="index" wx:for-item="m">
       <!-- 用户：收据图片 -->
@@ -45,12 +45,13 @@
             <text class="v {{r.k==='金额'||r.k==='日期'?'num':''}}">{{r.v}}<text wx:if="{{r.extra}}" class="muted" style="font-weight:400"> {{r.extra}}</text><text wx:if="{{r.edit}}" class="edit">改</text></text>
           </view>
         </view>
-        <view class="confirm-card__foot">
+        <view wx:if="{{m.state!=='done'}}" class="confirm-card__foot">
           <block wx:if="{{m.state==='pending'}}">
             <view class="btn btn--ghost" data-i="{{index}}" hover-class="pressed" hover-stay-time="80" bindtap="dropCard">放弃</view>
-            <view class="btn btn--primary" data-i="{{index}}" hover-class="pressed" hover-stay-time="80" bindtap="editDraft">编辑并记账</view>
+            <view class="btn btn--ghost" data-i="{{index}}" hover-class="pressed" hover-stay-time="80" bindtap="editDraft">编辑</view>
+            <view class="btn btn--primary" data-i="{{index}}" hover-class="pressed" hover-stay-time="80" bindtap="confirmCard">确认入账</view>
           </block>
-          <text wx:else class="muted" style="padding:18rpx;font-size:26rpx">已放弃，未入账</text>
+          <text wx:elif="{{m.state==='dropped'}}" class="muted" style="padding:18rpx;font-size:26rpx">已放弃，未入账</text>
         </view>
       </view>
     </block>
@@ -62,7 +63,7 @@
   <view class="composer__ic" hover-class="pressed" hover-stay-time="80" bindtap="onUpload"><image src="{{ic.camera}}"></image></view>
   <input
     class="composer__input"
-    placeholder="问一句，或说「昨天打车 35」记一笔…"
+    placeholder="{{placeholder}}"
     value="{{input}}"
     bindinput="onInput"
     confirm-type="send"

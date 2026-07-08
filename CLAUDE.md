@@ -16,6 +16,7 @@
 ## 二、技术栈与架构
 
 - **前端**：微信原生小程序（WXML / WXSS / JS / JSON 四件套），非 uni-app / Taro 等框架。
+  - **图表**：ECharts（`miniprogram/ec-canvas/` 定制包，canvas 2d 同层渲染，仅含所需模块）；统计页所有图表统一走 ECharts，不再手写 SVG 图表。
 - **后端**：微信云开发
   - **云函数**（`cloudfunctions/`）：Node.js + `wx-server-sdk`，承载业务逻辑与鉴权。
   - **云数据库**：JSON 文档型数据库（`cloud.database()`）。

@@ -3,6 +3,7 @@ const {
   membersMap, categoriesMap, topCategory, IS_DEV, CUR_SYMBOL,
 } = require('./lib');
 const SEED = require('./seedData');
+const dataio = require('./dataio');
 const https = require('https');
 
 function httpGetJson(url) {
@@ -24,12 +25,15 @@ async function getUser(openid) {
 async function ensureUser(openid) {
   let u = await getUser(openid);
   if (!u) {
-    u = { _id: openid, openid, nickname: '我', avatarColor: '#00ccf9', avatarInitial: '我', avatarFileID: '', registered: false, defaultBookId: '', settings: { displayCurrency: 'CNY', aiMessageLimit: 50 }, createdAt: db.serverDate() };
-    await db.collection('users').doc(openid).set({ data: u }).catch(() => {});
+    // data 里不能带 _id（set 会整单失败），且失败必须抛出——静默吞错会导致用户文档
+    // 永远建不起来，登录后被 getProfile 判为未注册而死循环弹回登录页
+    u = { openid, nickname: '我', avatarColor: '#00ccf9', avatarInitial: '我', avatarFileID: '', registered: false, defaultBookId: '', settings: { displayCurrency: 'CNY', aiMessageLimit: 50 }, createdAt: db.serverDate() };
+    await db.collection('users').doc(openid).set({ data: u });
+    u._id = openid;
   }
   return u;
 }
-const COLLECTIONS = ['users', 'books', 'members', 'categories', 'records', 'rates', 'chartLayouts', 'aiMessages'];
+const COLLECTIONS = ['users', 'books', 'members', 'categories', 'records', 'rates', 'chartLayouts', 'aiMessages', 'feedbacks', 'admins'];
 async function ensureCollections() {
   for (const c of COLLECTIONS) { await db.createCollection(c).catch(() => {}); }
 }
@@ -158,6 +162,34 @@ function recToDisplay(rec, display, quotes) {
   const qd = cnyPerUnit(quotes, display);
   return round2(qd ? cny / qd : cny);
 }
+// 某日「基准币 → 展示币」换算系数（该日汇率、CNY 枢轴）。
+// recToDisplay ≡ amountConverted × dayFactor(记录日期)，故日聚合 × 系数与逐笔换算口径完全一致。
+function dayFactor(rateIndex, date, base, display) {
+  if (!display || display === base) return 1;
+  const q = quotesAt(rateIndex, date);
+  const qb = cnyPerUnit(q, base);
+  const qd = cnyPerUnit(q, display);
+  return (qb && qd) ? qb / qd : 1;
+}
+// 服务端聚合：按（日期 × 收/支）汇总基准币金额，只回日汇总。
+// 回传量 ∝ 有记账的天数（一年 ≤ 730 行），与记录条数无关；分批翻页防天数极多。
+async function aggregateDaily(bookId) {
+  const $ = _.aggregate;
+  const out = [];
+  const step = 1000;
+  for (let skip = 0; skip < 100000; skip += step) {
+    const r = await db.collection('records').aggregate()
+      .match({ bookId })
+      .group({ _id: { date: '$date', type: '$type' }, total: $.sum('$amountConverted') })
+      .sort({ '_id.date': 1 })
+      .skip(skip).limit(step)
+      .end();
+    const rows = r.list || [];
+    rows.forEach((x) => out.push({ date: x._id.date, type: x._id.type, total: x.total }));
+    if (rows.length < step) break;
+  }
+  return out;
+}
 
 // ============================== book ==============================
 const book = {
@@ -209,7 +241,8 @@ const book = {
       bookId, openid: ctx.openid, avatarColor: user.avatarColor,
       role: 'owner', joinedAt: db.serverDate(), status: 'active',
     } });
-    if (!user.defaultBookId) await db.collection('users').doc(ctx.openid).update({ data: { defaultBookId: bookId } });
+    // 新建账本立即设为当前默认，用户建完回首页即看到新账本
+    await db.collection('users').doc(ctx.openid).update({ data: { defaultBookId: bookId } });
     await seedDefaultCategories(bookId); // 注入默认分类
     return { bookId };
   },
@@ -337,13 +370,70 @@ const category = {
 const record = {
   async list(p, ctx) {
     await requireMember(p.bookId, ctx.openid);
-    const [records, mMap, cMap, bk, rateIndex] = await Promise.all([
-      fetchBookRecords(p.bookId), membersMap(p.bookId), categoriesMap(p.bookId),
-      db.collection('books').doc(p.bookId).get().catch(() => null),
-      loadRateIndex(),
-    ]);
+    // 按「天」分页：每页 pageSize 个记账日（整天取，保证每日分组与合计完整），page 从 0 起
+    const pageSize = Math.min(60, Math.max(5, Number(p.pageSize) || 20));
+    const page = Math.max(0, Number(p.page) || 0);
+    const bk = await db.collection('books').doc(p.bookId).get().catch(() => null);
     const base = (bk && bk.data && bk.data.baseCurrency) || 'CNY';
     const display = p.currency || base;      // 前端传来的展示币种
+    // 可选筛选（统计钻取用）：日期范围 / 收支类型 / 顶级分类（自动包含其全部子分类）
+    const cMap = await categoriesMap(p.bookId);
+    const match = { bookId: p.bookId };
+    if (p.dateFrom && p.dateTo) match.date = _.gte(p.dateFrom).and(_.lte(p.dateTo));
+    else if (p.dateFrom) match.date = _.gte(p.dateFrom);
+    else if (p.dateTo) match.date = _.lte(p.dateTo);
+    if (p.type === 'income' || p.type === 'expense') match.type = p.type;
+    if (p.categoryTopId) {
+      if (p.categoryTopId === '_none') {
+        match.categoryId = null; // 「未分类」聚合桶：categoryId 为空的记录
+      } else {
+        const catIds = [p.categoryTopId];
+        Object.values(cMap).forEach((c) => { if (c.parentId === p.categoryTopId) catIds.push(c._id); });
+        match.categoryId = catIds.length > 1 ? _.in(catIds) : p.categoryTopId;
+      }
+    }
+    // 1) 聚合出本页的日期集合（走 bookId_date 索引）
+    const dg = await db.collection('records').aggregate()
+      .match(match)
+      .group({ _id: '$date' })
+      .sort({ _id: -1 })
+      .skip(page * pageSize)
+      .limit(pageSize + 1)   // 多取 1 个探测是否还有下一页
+      .end();
+    const dateRows = dg.list || [];
+    const hasMore = dateRows.length > pageSize;
+    const dates = dateRows.slice(0, pageSize).map((x) => x._id);
+    if (!dates.length) {
+      return { groups: [], hasMore: false, page, displayCurrency: display, summary: p.withSummary ? { income: 0, expense: 0, count: 0 } : undefined };
+    }
+    // 2) 取这些日期的记录与元数据（沿用筛选条件，日期改为本页集合）
+    const [rr, mMap, rateIndex] = await Promise.all([
+      db.collection('records').where({ ...match, date: _.in(dates) })
+        .orderBy('date', 'desc').orderBy('createdAt', 'desc').limit(1000).get(),
+      membersMap(p.bookId), loadRateIndex(),
+    ]);
+    const records = rr.data;
+    // 筛选合计（钻取页摘要用）：与图表同口径（按日聚合 × 当日汇率），跨全部页
+    let summary;
+    if (p.withSummary) {
+      const $ = _.aggregate;
+      const srows = [];
+      for (let skip = 0; skip < 100000; skip += 1000) {
+        const r = await db.collection('records').aggregate().match(match)
+          .group({ _id: { date: '$date', type: '$type' }, total: $.sum('$amountConverted'), count: $.sum(1) })
+          .skip(skip).limit(1000).end();
+        const list = r.list || [];
+        list.forEach((x) => srows.push({ date: x._id.date, type: x._id.type, total: x.total, count: x.count }));
+        if (list.length < 1000) break;
+      }
+      let ti = 0, te = 0, cnt = 0;
+      srows.forEach((x) => {
+        const v = x.total * dayFactor(rateIndex, x.date, base, display);
+        if (x.type === 'income') ti += v; else te += v;
+        cnt += x.count;
+      });
+      summary = { income: round2(ti), expense: round2(te), count: cnt };
+    }
     const groupsMap = {};
     const order = [];
     records.forEach((rec) => {
@@ -364,7 +454,7 @@ const record = {
         categoryTopName: top.name, icon: top.icon,
       });
     });
-    return { groups: order.map((d) => groupsMap[d]), hasMore: false, displayCurrency: display };
+    return { groups: order.map((d) => groupsMap[d]), hasMore, page, displayCurrency: display, summary };
   },
 
   async get(p, ctx) {
@@ -520,20 +610,33 @@ function lastNMonths(n) {
   }
   return arr;
 }
+// 从 firstYm（最早记账月）到当月的连续月序列；不足 12 个月补齐为近 12 月（保证区间 chips 可用）
+function monthsSince(firstYm) {
+  const cur = relDate(0).slice(0, 7);
+  if (!firstYm || firstYm > cur) return lastNMonths(12);
+  let [y, m] = firstYm.split('-').map(Number);
+  const [cy, cm] = cur.split('-').map(Number);
+  const arr = [];
+  while (y < cy || (y === cy && m <= cm)) {
+    arr.push({ ym: `${y}-${String(m).padStart(2, '0')}`, label: `${m}月` });
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return arr.length < 12 ? lastNMonths(12) : arr;
+}
 const stats = {
   async _compute(bookId, ctx) {
-    const [records, b, u, rateIndex] = await Promise.all([
-      fetchBookRecords(bookId), db.collection('books').doc(bookId).get(),
+    const [daily, b, u, rateIndex] = await Promise.all([
+      aggregateDaily(bookId), db.collection('books').doc(bookId).get(),
       ctx ? getUser(ctx.openid) : Promise.resolve(null), loadRateIndex(),
     ]);
     const base = b.data.baseCurrency;
     const display = (u && u.settings && u.settings.displayCurrency) || base;
     const curMonth = relDate(0).slice(0, 7); // 本月（北京时间）
     let mIncome = 0, mExpense = 0, tIncome = 0, tExpense = 0;
-    records.forEach((r) => {
-      const v = recToDisplay(r, display, quotesAt(rateIndex, r.date)); // 按记录当日汇率
-      if (r.type === 'income') { tIncome += v; if (monthOf(r.date) === curMonth) mIncome += v; }
-      else { tExpense += v; if (monthOf(r.date) === curMonth) mExpense += v; }
+    daily.forEach((row) => {
+      const v = row.total * dayFactor(rateIndex, row.date, base, display); // 按该日汇率
+      if (row.type === 'income') { tIncome += v; if (monthOf(row.date) === curMonth) mIncome += v; }
+      else { tExpense += v; if (monthOf(row.date) === curMonth) mExpense += v; }
     });
     const [y, m] = curMonth.split('-');
     return {
@@ -551,40 +654,96 @@ const stats = {
     await requireMember(p.bookId, ctx.openid);
     return stats._compute(p.bookId, ctx);
   },
-  // 图表原始数据集（均换算到展示币种）：本月/累计饼 + 近30日逐日 + 近12月逐月。
-  // 前端按图表区间自行切片，增删/改区间无需再请求后端。
+  // 图表原始数据集（均换算到展示币种）：本月/累计饼 + 近30日逐日 + 建账以来全部逐月。
+  // 前端按图表区间/所选月份自行切片，增删卡片、改区间、切月份均无需再请求后端。
   async getChartData(p, ctx) {
     await requireMember(p.bookId, ctx.openid);
-    const [records, b, u, rateIndex] = await Promise.all([
-      fetchBookRecords(p.bookId), db.collection('books').doc(p.bookId).get(), getUser(ctx.openid), loadRateIndex(),
+    const [daily, b, u, rateIndex] = await Promise.all([
+      aggregateDaily(p.bookId), db.collection('books').doc(p.bookId).get(), getUser(ctx.openid), loadRateIndex(),
     ]);
     const base = b.data.baseCurrency;
     const display = (u && u.settings && u.settings.displayCurrency) || base;
     const curMonth = relDate(0).slice(0, 7);
     const days = []; for (let i = 29; i >= 0; i--) days.push(relDate(-i)); // 近 30 日
     const dMap = {}; days.forEach((d) => { dMap[d] = { date: d, income: 0, expense: 0 }; });
-    const months = lastNMonths(12); // 近 12 月
+    // 全部历史月份（daily 按日期升序，取最早记账月）
+    const months = monthsSince(daily.length ? monthOf(daily[0].date) : null);
     const mMap = {}; months.forEach((x) => { mMap[x.ym] = { income: 0, expense: 0 }; });
     let mIncome = 0, mExpense = 0, tIncome = 0, tExpense = 0;
-    records.forEach((r) => {
-      const v = recToDisplay(r, display, quotesAt(rateIndex, r.date)); const ym = monthOf(r.date);
-      if (r.type === 'income') {
+    daily.forEach((row) => {
+      const v = row.total * dayFactor(rateIndex, row.date, base, display); const ym = monthOf(row.date);
+      if (row.type === 'income') {
         tIncome += v; if (ym === curMonth) mIncome += v;
-        if (mMap[ym]) mMap[ym].income += v; if (dMap[r.date]) dMap[r.date].income += v;
+        if (mMap[ym]) mMap[ym].income += v; if (dMap[row.date]) dMap[row.date].income += v;
       } else {
         tExpense += v; if (ym === curMonth) mExpense += v;
-        if (mMap[ym]) mMap[ym].expense += v; if (dMap[r.date]) dMap[r.date].expense += v;
+        if (mMap[ym]) mMap[ym].expense += v; if (dMap[row.date]) dMap[row.date].expense += v;
       }
     });
     const [, mm] = curMonth.split('-');
     return {
       displayCurrency: display,
       monthLabel: `${parseInt(mm, 10)} 月`,
+      curMonth,
+      firstMonth: months[0].ym, // 月份选择器可选下限
       monthPie: { income: round2(mIncome), expense: round2(mExpense) },
       totalPie: { income: round2(tIncome), expense: round2(tExpense) },
       daily: days.map((d) => ({ date: d, label: d.slice(5).replace('-', '/'), income: round2(dMap[d].income), expense: round2(dMap[d].expense) })),
       monthly: months.map((x) => ({ ym: x.ym, label: x.label, income: round2(mMap[x.ym].income), expense: round2(mMap[x.ym].expense) })),
     };
+  },
+
+  // 某月按「顶级分类」聚合的收支占比（含子分类细分与笔数）。
+  // 口径与其他图表一致：group by (日期×分类×类型) 后按记录当日汇率换算到展示币种再归并，
+  // 子分类计入其顶级；已停用/已删分类的历史记录仍按原分类聚合。
+  async getCategoryData(p, ctx) {
+    await requireMember(p.bookId, ctx.openid);
+    const month = /^\d{4}-\d{2}$/.test(p.month || '') ? p.month : relDate(0).slice(0, 7);
+    const [b, u, cMap, rateIndex] = await Promise.all([
+      db.collection('books').doc(p.bookId).get(), getUser(ctx.openid), categoriesMap(p.bookId), loadRateIndex(),
+    ]);
+    const base = b.data.baseCurrency;
+    const display = (u && u.settings && u.settings.displayCurrency) || base;
+    const $ = _.aggregate;
+    const rows = [];
+    const step = 1000;
+    for (let skip = 0; skip < 100000; skip += step) {
+      const r = await db.collection('records').aggregate()
+        .match({ bookId: p.bookId, date: _.gte(`${month}-01`).and(_.lte(`${month}-31`)) })
+        .group({ _id: { date: '$date', categoryId: '$categoryId', type: '$type' }, total: $.sum('$amountConverted'), count: $.sum(1) })
+        .skip(skip).limit(step)
+        .end();
+      const list = r.list || [];
+      list.forEach((x) => rows.push({ date: x._id.date, categoryId: x._id.categoryId, type: x._id.type, total: x.total, count: x.count }));
+      if (list.length < step) break;
+    }
+    const buckets = { expense: {}, income: {} };
+    const totals = { expense: 0, income: 0 };
+    rows.forEach((r0) => {
+      const kind = r0.type === 'income' ? 'income' : 'expense';
+      const v = r0.total * dayFactor(rateIndex, r0.date, base, display);
+      const c = cMap[r0.categoryId];
+      const top = c ? (c.parentId ? cMap[c.parentId] || c : c) : null;
+      const topId = top ? top._id : '_none';
+      const map = buckets[kind];
+      if (!map[topId]) map[topId] = { categoryId: topId, name: top ? top.name : '未分类', icon: (top && top.icon) || 'dots', total: 0, count: 0, subs: {} };
+      const bk = map[topId];
+      bk.total += v; bk.count += r0.count;
+      totals[kind] += v;
+      const subName = c ? c.name : '未分类'; // 顶级直记时 sub 即顶级名
+      if (!bk.subs[subName]) bk.subs[subName] = { name: subName, total: 0, count: 0 };
+      bk.subs[subName].total += v; bk.subs[subName].count += r0.count;
+    });
+    const pack = (kind) => ({
+      total: round2(totals[kind]),
+      cats: Object.values(buckets[kind]).map((c) => ({
+        categoryId: c.categoryId, name: c.name, icon: c.icon,
+        total: round2(c.total), count: c.count,
+        percent: totals[kind] > 0 ? Math.round((c.total / totals[kind]) * 1000) / 10 : 0,
+        subs: Object.values(c.subs).map((s) => ({ name: s.name, total: round2(s.total), count: s.count })).sort((a, b2) => b2.total - a.total),
+      })).sort((a, b2) => b2.total - a.total),
+    });
+    return { displayCurrency: display, month, expense: pack('expense'), income: pack('income') };
   },
 };
 
@@ -656,27 +815,237 @@ function parseNL(text) {
   const date = relDate(/前天/.test(t) ? -2 : /昨天/.test(t) ? -1 : /明天/.test(t) ? 1 : 0);
   return { amt, cat, date, type };
 }
+
+// 预填确认卡（自然语言 / 收据共用的卡片结构）
+function draftCard(kind, draft, myName) {
+  const sym = CUR_SYMBOL[draft.currency] || '';
+  return { kind, state: 'pending', draft, rows: [
+    { k: '类型', v: draft.type === 'income' ? '收入' : '支出' },
+    { k: '金额', v: (sym || draft.currency + ' ') + Number(draft.amount).toFixed(2) },
+    { k: '分类', v: draft.categoryText || '其他' },
+    { k: '日期', v: draft.date },
+    { k: '记录人', v: myName },
+  ] };
+}
+// 「父 / 子」文字 → 分类 id（收/支各自集合内）：全路径 → 末级名 → 一级名；
+// 找不到返回 null（AI 预填不自动建分类，入账后显示文字快照）
+function resolveCategoryByText(cMap, kind, text) {
+  const parts = String(text || '').split('/').map((s) => s.trim()).filter(Boolean);
+  if (!parts.length) return null;
+  const cats = Object.values(cMap).filter((c) => ((c.kind === 'income' ? 'income' : 'expense') === kind) && c.disabled !== true);
+  const topName = parts[0], leafName = parts[parts.length - 1];
+  if (parts.length > 1) {
+    const hit = cats.find((c) => c.parentId && c.name === leafName && cMap[c.parentId] && cMap[c.parentId].name === topName);
+    if (hit) return hit._id;
+  }
+  const leaf = cats.find((c) => c.name === leafName) || cats.find((c) => c.name === topName);
+  return leaf ? leaf._id : null;
+}
+// 账本分类表（给模型选分类用）：「餐饮(早餐/午餐/晚餐)；交通(打车/地铁)…」
+function categoryTreeText(cMap, kind) {
+  const cats = Object.values(cMap).filter((c) => ((c.kind === 'income' ? 'income' : 'expense') === kind) && c.disabled !== true);
+  const tops = cats.filter((c) => !c.parentId).sort((a, b) => (a.order || 0) - (b.order || 0));
+  return tops.map((t) => {
+    const subs = cats.filter((c) => c.parentId === t._id).map((c) => c.name);
+    return subs.length ? `${t.name}(${subs.join('/')})` : t.name;
+  }).join('；');
+}
+function prevYm(ym) { const [y, m] = ym.split('-').map(Number); return new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7); }
+
+// AI 用量额度：免费用户共 AI_FREE_QUOTA（默认 50）次真实模型调用（问答/解析/收据识别），
+// 会话记录本身全部保留。aiPaid 用户不受限（付费体系后续接入）。
+const AI_FREE_QUOTA = Number(process.env.AI_FREE_QUOTA || 50);
+async function aiQuota(openid) {
+  const u = await getUser(openid);
+  const used = (u && u.aiUsage) || 0;
+  const paid = !!(u && u.aiPaid);
+  return { used, paid, left: paid ? Infinity : Math.max(0, AI_FREE_QUOTA - used) };
+}
+function aiCountUse(openid) {
+  return db.collection('users').doc(openid).update({ data: { aiUsage: _.inc(1) } }).catch(() => {});
+}
+
+// AI 数据包：只给聚合、不给逐笔——模型只能引用这些数字（防编造），token 也压到最小。
+// 口径与统计页完全一致：日聚合 × 记录当日汇率系数，换算到用户展示币种。
+async function buildAiPack(bookId, ctx) {
+  const [daily, b, u, rateIndex, mMap] = await Promise.all([
+    aggregateDaily(bookId), db.collection('books').doc(bookId).get(),
+    getUser(ctx.openid), loadRateIndex(), membersMap(bookId),
+  ]);
+  const base = b.data.baseCurrency;
+  const display = (u && u.settings && u.settings.displayCurrency) || base;
+  const curYm = relDate(0).slice(0, 7);
+  // 逐月 + 累计
+  const mAgg = {}; let tIn = 0, tEx = 0;
+  daily.forEach((row) => {
+    const v = row.total * dayFactor(rateIndex, row.date, base, display);
+    const ym = monthOf(row.date);
+    if (!mAgg[ym]) mAgg[ym] = { in: 0, ex: 0 };
+    if (row.type === 'income') { mAgg[ym].in += v; tIn += v; } else { mAgg[ym].ex += v; tEx += v; }
+  });
+  const yms = Object.keys(mAgg).sort();
+  // 近 30 日（只列有记账的日子）
+  const from30 = relDate(-29);
+  const dAgg = {};
+  daily.forEach((row) => {
+    if (row.date < from30) return;
+    const v = row.total * dayFactor(rateIndex, row.date, base, display);
+    if (!dAgg[row.date]) dAgg[row.date] = { in: 0, ex: 0 };
+    if (row.type === 'income') dAgg[row.date].in += v; else dAgg[row.date].ex += v;
+  });
+  // 本月 + 上月分类聚合（口径复用统计页 getCategoryData）
+  const [curCat, prevCat] = await Promise.all([
+    stats.getCategoryData({ bookId, month: curYm }, ctx),
+    stats.getCategoryData({ bookId, month: prevYm(curYm) }, ctx),
+  ]);
+  const catPack = (kd, withSubs) => (kd.cats || []).slice(0, 10).map((c) => {
+    const o = { 分类: c.name, 金额: c.total, 笔数: c.count };
+    if (withSubs && c.subs && c.subs.length > 1) o.子类 = c.subs.slice(0, 6).map((s) => ({ 名: s.name, 金额: s.total }));
+    return o;
+  });
+  // 本月按成员（付款人）聚合：按 成员×类型×日期 分组后逐日换算，与其他口径一致
+  const $ = _.aggregate;
+  const memRows = [];
+  for (let skip = 0; skip < 100000; skip += 1000) {
+    const r = await db.collection('records').aggregate()
+      .match({ bookId, date: _.gte(`${curYm}-01`).and(_.lte(`${curYm}-31`)) })
+      .group({ _id: { p: '$payerOpenid', type: '$type', date: '$date' }, total: $.sum('$amountConverted') })
+      .skip(skip).limit(1000).end();
+    const list = r.list || [];
+    list.forEach((x) => memRows.push(x));
+    if (list.length < 1000) break;
+  }
+  const byMember = {};
+  memRows.forEach((x) => {
+    const v = x.total * dayFactor(rateIndex, x._id.date, base, display);
+    const name = (mMap[x._id.p] && mMap[x._id.p].name) || '成员';
+    if (!byMember[name]) byMember[name] = { in: 0, ex: 0 };
+    if (x._id.type === 'income') byMember[name].in += v; else byMember[name].ex += v;
+  });
+  const members = Object.keys(byMember)
+    .map((n) => ({ 成员: n, 支出: round2(byMember[n].ex), 收入: round2(byMember[n].in) }))
+    .sort((a, b2) => b2.支出 - a.支出);
+  const r2 = (o) => ({ 收: round2(o.in), 支: round2(o.ex) });
+  return {
+    base, display,
+    pack: {
+      今天: relDate(0),
+      金额币种: display,
+      本月: { 月: curYm, ...r2(mAgg[curYm] || { in: 0, ex: 0 }) },
+      累计: { 收: round2(tIn), 支: round2(tEx), 记账起始月: yms[0] || curYm },
+      近12月: yms.slice(-12).map((ym) => ({ 月: ym, ...r2(mAgg[ym]) })),
+      近30日: Object.keys(dAgg).sort().map((d) => ({ 日: d, ...r2(dAgg[d]) })),
+      本月支出分类: catPack(curCat.expense, true),
+      本月收入分类: catPack(curCat.income, false),
+      上月支出分类: catPack(prevCat.expense, false),
+      本月成员: members,
+    },
+  };
+}
+
 const ai = {
   async listMessages(p, ctx) {
     await requireMember(p.bookId, ctx.openid);
     const r = await db.collection('aiMessages').where({ bookId: p.bookId, openid: ctx.openid }).orderBy('createdAt', 'asc').limit(200).get();
     return r.data;
   },
-  async ask(p, ctx) {
-    await requireMember(p.bookId, ctx.openid);
-    return { answer: '我基于本账本真实数据回答，不编造数字。可以问我某月某分类合计、谁花得最多，或说一句「昨天打车 35」帮你记账。' };
-  },
-  async parseText(p, ctx) {
-    const me = await requireMember(p.bookId, ctx.openid); requireRole(me, 'rw');
-    const rec = parseNL(p.text);
-    if (rec.amt <= 0) return { card: null, answer: '没识别到金额，换种说法试试～' };
+  // 统一入口：意图分流（记账句 → 预填卡 / 数据问答 → 基于数据包回答 / 跑题 → 拒绝）。
+  // 数字只能来自 buildAiPack 的聚合结果——模型负责挑选与组织语言，不负责算术来源，杜绝编造。
+  async chat(p, ctx) {
+    const me = await requireMember(p.bookId, ctx.openid);
+    const text = String(p.text || '').trim().slice(0, 300);
+    if (!text) throw new AppError('INVALID_PARAM', '请输入内容');
+    const canWrite = me.role !== 'ro';
     const mMap = await membersMap(p.bookId);
     const myName = (mMap[ctx.openid] && mMap[ctx.openid].name) || '我';
-    const draft = { type: rec.type, amount: rec.amt, currency: 'CNY', date: rec.date, categoryText: rec.cat, note: p.text || '' };
-    return { card: { kind: '自然语言记账', state: 'pending', draft, rows: [
-      { k: '类型', v: rec.type === 'income' ? '收入' : '支出' }, { k: '金额', v: '¥' + rec.amt.toFixed(2) },
-      { k: '分类', v: rec.cat }, { k: '日期', v: rec.date }, { k: '记录人', v: myName },
-    ] } };
+    if (!cloud.extend || !cloud.extend.AI) {
+      return ai._ruleFallback(p.bookId, text, canWrite, myName, '（AI 能力未开通，已按关键词解析。开通云开发 AI 后可直接提问账本数据。）');
+    }
+    // 免费额度用尽：记账句仍走关键词解析兜底，问答给出明确提示
+    const quota = await aiQuota(ctx.openid);
+    if (quota.left <= 0) {
+      return ai._ruleFallback(p.bookId, text, canWrite, myName, `（免费 AI 额度 ${AI_FREE_QUOTA} 次已用完，基础记账解析仍可用）`);
+    }
+    let packInfo, cMap;
+    try {
+      [packInfo, cMap] = await Promise.all([buildAiPack(p.bookId, ctx), categoriesMap(p.bookId)]);
+    } catch (e) {
+      console.error('[ai.chat pack]', e);
+      return ai._ruleFallback(p.bookId, text, canWrite, myName, '');
+    }
+    const sym = CUR_SYMBOL[packInfo.display] || packInfo.display;
+    const prompt = [
+      '你是记账小程序「心数」里某一个账本的 AI 助手。你只处理两类请求：A) 把用户描述的一笔收支解析成记账草稿；B) 回答关于这个账本的收支统计问题。',
+      '除此之外的任何话题（股票行情、生活百科、闲聊、翻译、写代码、其他软件等）一律归为 C，礼貌拒绝。',
+      `今天是 ${packInfo.pack.今天}（北京时间）。账本基准币种 ${packInfo.base}，统计金额币种 ${packInfo.display}。`,
+      '',
+      '【账本数据】以下 JSON 是唯一可引用的数字来源，可做加减合并，绝不允许编造或估算其中没有的数字：',
+      JSON.stringify(packInfo.pack),
+      '',
+      '【账本分类表】记账草稿的分类优先从这里选：',
+      `支出：${categoryTreeText(cMap, 'expense')}`,
+      `收入：${categoryTreeText(cMap, 'income')}`,
+      '',
+      '判断用户输入属于 A/B/C，严格只输出一个 JSON 对象，不要 Markdown、不要解释：',
+      `A 记账句 → {"intent":"record","draft":{"type":"expense或income","amount":数字,"currency":"三字母币码，用户没提外币就用 ${packInfo.base}","date":"YYYY-MM-DD，按今天解析 昨天/前天/上周X 等，默认今天","categoryText":"从分类表选，二级写成 父 / 子，都不合适用 其他","note":"3~8 字概括，如 打车"}}`,
+      `B 数据问题 → {"intent":"qa","answer":"中文口语化回答，金额保留两位小数并带 ${sym} 符号；【账本数据】覆盖不到的维度直接说明暂不支持，并举例能问什么（本月/某月支出、分类花费、成员支出、收支趋势）；绝不编造数字"}`,
+      'C 其他话题 → {"intent":"reject","answer":"一句话说明你只服务这个账本的记账与统计，并给一个可以问的例子"}',
+      '',
+      `用户输入：${text}`,
+    ].join('\n');
+    let out = '';
+    try {
+      const provider = process.env.AI_PROVIDER || 'hunyuan-open';
+      const modelName = process.env.AI_TEXT_MODEL || 'hunyuan-lite';
+      const model = cloud.extend.AI.createModel(provider);
+      const r = await model.generateText({ model: modelName, messages: [{ role: 'user', content: prompt }] });
+      out = (r && (r.text || r.content || r.output)) || '';
+      aiCountUse(ctx.openid); // 只有真实模型调用成功才消耗额度
+    } catch (e) {
+      console.error('[ai.chat]', e);
+      return ai._ruleFallback(p.bookId, text, canWrite, myName, '（AI 服务暂时不可用，已按关键词解析）');
+    }
+    let obj = null;
+    try { const mt = out.match(/\{[\s\S]*\}/); obj = mt ? JSON.parse(mt[0]) : null; } catch (e) { obj = null; }
+    if (!obj || !obj.intent) return ai._ruleFallback(p.bookId, text, canWrite, myName, '');
+    if (obj.intent === 'record') {
+      if (!canWrite) return { answer: '你在这个账本是只读成员，不能记账；账本的收支统计随时可以问我。' };
+      const d0 = obj.draft || {};
+      const amount = round2(Number(d0.amount));
+      if (!(amount > 0)) return { answer: '没识别到有效金额，换种说法试试，比如「昨天打车 35」。' };
+      const today = relDate(0);
+      let date = /^\d{4}-\d{2}-\d{2}$/.test(d0.date || '') ? d0.date : today;
+      if (date > relDate(1)) date = today; // 防幻觉出离谱的未来日期（明天以内保留）
+      const draft = {
+        type: d0.type === 'income' ? 'income' : 'expense',
+        amount,
+        currency: /^[A-Za-z]{3}$/.test(d0.currency || '') ? String(d0.currency).toUpperCase() : packInfo.base,
+        date,
+        categoryText: String(d0.categoryText || '').replace(/\s*\/\s*/g, ' / ').slice(0, 30) || (d0.type === 'income' ? '其他收入' : '其他'),
+        note: String(d0.note || text).slice(0, 140),
+      };
+      return { card: draftCard('自然语言记账', draft, myName) };
+    }
+    const answer = String(obj.answer || '').slice(0, 1000);
+    return { answer: answer || '这个我答不了。可以问我本月支出、某个分类花了多少、谁花得最多，或说「昨天打车 35」帮你记一笔。' };
+  },
+  // 关键词规则兜底（AI 未开通 / 调用失败时）：能解析出金额就给预填卡，否则给引导语
+  async _ruleFallback(bookId, text, canWrite, myName, notice) {
+    const rec = parseNL(text);
+    if (rec.amt > 0 && canWrite) {
+      const b = await db.collection('books').doc(bookId).get().catch(() => null);
+      const base = (b && b.data && b.data.baseCurrency) || 'CNY';
+      const draft = { type: rec.type, amount: rec.amt, currency: base, date: rec.date, categoryText: rec.cat, note: text };
+      return { card: draftCard('自然语言记账', draft, myName) };
+    }
+    return { answer: (notice ? notice + ' ' : '') + '没识别到可记账的金额。也可以问我账本的收支统计，比如「本月支出多少」。' };
+  },
+  // 兼容旧入口：走规则兜底（前端已改用 chat）
+  async parseText(p, ctx) {
+    const me = await requireMember(p.bookId, ctx.openid); requireRole(me, 'rw');
+    const mMap = await membersMap(p.bookId);
+    const myName = (mMap[ctx.openid] && mMap[ctx.openid].name) || '我';
+    return ai._ruleFallback(p.bookId, p.text, true, myName, '');
   },
   // 收据识别：上传的图片 → 云开发 AI 多模态大模型识别 → 生成「预填记录」（用户确认后才入账，AI 绝不直接写库）
   async parseReceipt(p, ctx) {
@@ -689,6 +1058,10 @@ const ai = {
     // 依赖云开发 AI 能力（cloud.extend.AI）。未开通 / SDK 过旧时给出明确指引，绝不编造数字。
     if (!cloud.extend || !cloud.extend.AI) {
       throw new AppError('AI_NOT_READY', '收据识别需先在云开发控制台开通「AI 能力」，并将云函数 api 的 wx-server-sdk 升级到支持 cloud.extend.AI 的版本后重新部署');
+    }
+    const quota = await aiQuota(ctx.openid);
+    if (quota.left <= 0) {
+      return { card: null, answer: `免费 AI 额度（${AI_FREE_QUOTA} 次）已用完，暂时无法识别收据。` };
     }
 
     const b = await db.collection('books').doc(p.bookId).get();
@@ -719,6 +1092,7 @@ const ai = {
         ] }],
       });
       text = (r && (r.text || r.content || r.output)) || '';
+      aiCountUse(ctx.openid); // 真实模型调用成功才消耗额度
     } catch (e) {
       console.error('[parseReceipt AI]', e);
       throw new AppError('AI_FAILED', '收据识别服务调用失败：' + (e.message || String(e)));
@@ -752,13 +1126,43 @@ const ai = {
     if (merchant) rows.splice(1, 0, { k: '商家', v: merchant });
     return { card: { kind: '收据识别', state: 'pending', draft, rows } };
   },
+  // 会话记录全部保留（不做滚动删除）；用量限制走「免费 50 次 AI 调用」额度（见 aiQuota）
   async appendMessage(p, ctx) {
-    const user = await requireMember(p.bookId, ctx.openid) && await getUser(ctx.openid);
-    const limit = (user && user.settings && user.settings.aiMessageLimit) || 50;
-    await db.collection('aiMessages').add({ data: { ...p.message, bookId: p.bookId, openid: ctx.openid, createdAt: db.serverDate() } });
-    const all = await db.collection('aiMessages').where({ bookId: p.bookId, openid: ctx.openid }).orderBy('createdAt', 'asc').limit(500).get();
-    const extra = all.data.length - limit;
-    for (let i = 0; i < extra; i++) await db.collection('aiMessages').doc(all.data[i]._id).remove().catch(() => {});
+    await requireMember(p.bookId, ctx.openid);
+    const add = await db.collection('aiMessages').add({ data: { ...p.message, bookId: p.bookId, openid: ctx.openid, createdAt: db.serverDate() } });
+    return { ok: true, id: add._id };
+  },
+  // 「确认入账」：预填卡直接入账（服务端解析分类 + 复用 record.create 的汇率固化/鉴权），
+  // 并把该条会话消息的卡片状态置为已入账。用户点了确认才走到这里——AI 仍然绝不自动写库。
+  async confirmDraft(p, ctx) {
+    const me = await requireMember(p.bookId, ctx.openid); requireRole(me, 'rw');
+    const d = p.draft || {};
+    const amount = round2(Number(d.amount));
+    if (!(amount > 0)) throw new AppError('INVALID_PARAM', '预填金额无效');
+    const b = await db.collection('books').doc(p.bookId).get();
+    const base = b.data.baseCurrency;
+    const type = d.type === 'income' ? 'income' : 'expense';
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(d.date || '') ? d.date : relDate(0);
+    const currency = /^[A-Za-z]{3}$/.test(d.currency || '') ? String(d.currency).toUpperCase() : base;
+    const cMap = await categoriesMap(p.bookId);
+    const categoryId = resolveCategoryByText(cMap, type, d.categoryText);
+    const r = await record.create({ bookId: p.bookId, payload: {
+      type, amount, currency, date, categoryId,
+      title: '', note: d.note || '', images: [],
+    } }, ctx);
+    if (p.msgId) {
+      await db.collection('aiMessages').where({ _id: p.msgId, bookId: p.bookId, openid: ctx.openid })
+        .update({ data: { 'card.state': 'done' } }).catch(() => {});
+    }
+    return { recordId: r.recordId };
+  },
+  // 卡片状态持久化（放弃等），只能改自己的消息
+  async setCardState(p, ctx) {
+    await requireMember(p.bookId, ctx.openid);
+    if (!p.msgId) throw new AppError('INVALID_PARAM', '缺少消息 id');
+    const state = ['pending', 'done', 'dropped'].indexOf(p.state) > -1 ? p.state : 'pending';
+    await db.collection('aiMessages').where({ _id: p.msgId, bookId: p.bookId, openid: ctx.openid })
+      .update({ data: { 'card.state': state } });
     return { ok: true };
   },
 };
@@ -824,28 +1228,8 @@ const user = {
 };
 
 // ============================== data（导入导出）==============================
-function exportRows(records, mMap) {
-  return records.map((r) => ({
-    日期: r.date,
-    类型: r.type === 'income' ? '收入' : '支出',
-    标题: r.title || '',
-    分类: r.categoryPath || '',
-    原始金额: r.amount,
-    币种: r.currency,
-    换算金额: r.amountConverted,
-    备注: r.note || '',
-    记录人: (mMap[r.recorderOpenid] || {}).name || '',
-    付款人: (mMap[r.payerOpenid] || {}).name || '',
-  }));
-}
-function toCsv(rows) {
-  if (!rows.length) return '';
-  const headers = Object.keys(rows[0]);
-  const esc = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const lines = [headers.join(',')];
-  rows.forEach((r) => lines.push(headers.map((h) => esc(r[h])).join(',')));
-  return lines.join('\r\n');
-}
+// 行构造/CSV/解析/键名映射等纯逻辑在 ./dataio.js（可本地单测）
+const { exportRows, toCsv } = dataio;
 
 // 导出用：按可选时间段 [dateFrom, dateTo] 拉取账本全部记录。
 // 分页累加，突破单次 get 的 1000 上限，避免大账本静默截断。
@@ -915,7 +1299,9 @@ const data = {
       XLSX.utils.book_append_sheet(wb, ws, '记账明细');
       fileContent = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }); ext = 'xlsx';
     } else if (fmt === 'pdf') {
-      throw new AppError('PDF_NOT_READY', 'PDF 报表（含中文字体）开发中，建议先用 Excel/CSV 导出');
+      const rangeText = (p.dateFrom || p.dateTo) ? `${p.dateFrom || '起始'} ~ ${p.dateTo || '至今'}` : '全部时间';
+      fileContent = await dataio.buildPdf({ bookName: b.data.name, baseCurrency: b.data.baseCurrency, rangeText, exportedAt: stamp }, rows);
+      ext = 'pdf';
     } else {
       throw new AppError('INVALID_PARAM', '不支持的导出格式');
     }
@@ -946,40 +1332,148 @@ const data = {
     return { ok: true, count: res.count, fileName: res.fileName, to };
   },
 
-  // 导入：解析导出格式的 records，写入当前账本（记录人=导入者）
+  // 导入：JSON / CSV / Excel。解析 + 键名映射归一化在 dataio（外部软件表头自动适配）；
+  // 这里做：分类匹配（全路径→末级名→空）、汇率补齐、批量入库。记录人=导入者。
   async import(p, ctx) {
     const me = await requireMember(p.bookId, ctx.openid); requireRole(me, 'rw');
-    let obj = p.content;
-    if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch (e) { throw new AppError('INVALID_PARAM', 'JSON 解析失败'); } }
-    const rows = (obj && obj.records) || (Array.isArray(obj) ? obj : []);
-    if (!rows.length) return { success: 0, failed: 0, reasons: ['未找到可导入的记录'] };
+    const fmt = String(p.format || 'json').toLowerCase();
+    let parsed;
+    try { parsed = dataio.parseImportContent(fmt, p.content, p.contentBase64); }
+    catch (e) { throw new AppError('INVALID_PARAM', `文件解析失败：${e.message}`); }
+    const { rows, errors } = parsed;
+    if (!rows.length && !errors.length) {
+      return { success: 0, failed: 0, createdCategories: 0, failures: [{ index: 0, summary: '', reason: '未找到可导入的记录' }] };
+    }
     const b = await db.collection('books').doc(p.bookId).get();
     const base = b.data.baseCurrency;
     const cMap = await categoriesMap(p.bookId);
-    // 名称→分类 id（用 categoryPath 末级名匹配，匹配不到则归“其他”）
-    const byName = {};
-    Object.values(cMap).forEach((c) => { byName[c.name] = c._id; });
-    let success = 0, failed = 0; const reasons = [];
-    for (const row of rows) {
+    // 分类匹配（收/支各自集合内）：「父 / 子」全路径 → 末级名并入已有结构 → 自动创建
+    // （p.autoCreateCategories === false 时关闭自动创建，未匹配则置空、保留文字快照）
+    const topByName = { expense: {}, income: {} };  // 一级名 → id
+    const subByPath = { expense: {}, income: {} };  // 「父 / 子」 → 二级 id
+    const leafByName = { expense: {}, income: {} }; // 任意名 → id（末级名兜底）
+    Object.values(cMap).forEach((c) => {
+      const k = c.kind === 'income' ? 'income' : 'expense';
+      leafByName[k][c.name] = c._id;
+      if (!c.parentId) topByName[k][c.name] = c._id;
+      else if (cMap[c.parentId]) subByPath[k][`${cMap[c.parentId].name} / ${c.name}`] = c._id;
+    });
+    const autoCreate = p.autoCreateCategories !== false;
+    let createdCategories = 0;
+    const mkCat = async (kind, name, parentId) => {
+      const add = await db.collection('categories').add({ data: {
+        bookId: p.bookId, kind, parentId: parentId || null, name, icon: parentId ? null : 'dots', order: 99, disabled: false,
+      } });
+      createdCategories++;
+      return add._id;
+    };
+    // 取（或创建）path 对应分类 id。path 已由 dataio 归一为「父」或「父 / 子」
+    const ensureCategory = async (kind, path) => {
+      const parts = path.split('/').map((s) => s.trim()).filter(Boolean);
+      if (!parts.length) return null;
+      if (parts.length === 1) {
+        const hit = topByName[kind][parts[0]] || leafByName[kind][parts[0]];
+        if (hit) return hit;
+        if (!autoCreate) return null;
+        const id = await mkCat(kind, parts[0], null);
+        topByName[kind][parts[0]] = id; leafByName[kind][parts[0]] = id;
+        return id;
+      }
+      const top = parts[0], sub = parts[parts.length - 1];
+      const full = `${top} / ${sub}`;
+      if (subByPath[kind][full]) return subByPath[kind][full];
+      if (leafByName[kind][sub]) return leafByName[kind][sub]; // 末级同名并入已有结构，避免重复建树
+      if (!autoCreate) return null;
+      let topId = topByName[kind][top];
+      if (!topId) { topId = await mkCat(kind, top, null); topByName[kind][top] = topId; if (!leafByName[kind][top]) leafByName[kind][top] = topId; }
+      const subId = await mkCat(kind, sub, topId);
+      subByPath[kind][full] = subId; leafByName[kind][sub] = subId;
+      return subId;
+    };
+    let success = 0;
+    // 失败明细：{ index: 数据行号(1 起，不含表头), summary: 日期·标题摘要, reason: 可执行的原因 }
+    const failures = errors.map((e) => ({ index: e.index, summary: e.summary || '', reason: e.reason }));
+    // —— 查重（数量对齐）——
+    // 指纹 = 日期|收支|金额|币种|标题|备注。每个指纹只导入「文件条数 − 库中已有条数」：
+    // 同一文件重复导入幂等；与手动录入重复的行被跳过；文件内合法的重复记录（库里没有）不误伤。
+    const fpOf = (r) => [r.date, r.type, round2(r.amount), r.currency, String(r.title || '').trim(), String(r.note || '').trim()].join('|');
+    const dupBudget = {};
+    // 分页拉全量（复用导出的取数函数），避免大账本超 1000 条时漏查旧记录
+    (await collectExportRecords(p.bookId)).forEach((r) => { const k = fpOf(r); dupBudget[k] = (dupBudget[k] || 0) + 1; });
+    const skipped = [];
+    // 本次导入的批次号：写入每条记录，供「撤销本次导入」定位
+    const batchId = 'imp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    const docs = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
       try {
-        const amount = Number(row.amount);
-        if (!amount || amount <= 0) throw new Error('金额无效');
         const currency = row.currency || base;
-        let rate = row.rate;
-        if (rate == null) { rate = (await getRate(row.date || new Date().toISOString().slice(0, 10), base, currency)).rate; }
-        const leaf = (row.categoryPath || '').split('/').pop().trim();
-        const categoryId = byName[leaf] || null;
-        await db.collection('records').add({ data: {
-          bookId: p.bookId, type: row.type === 'income' ? 'income' : 'expense',
-          title: row.title || leaf || '导入记录', amount, currency, rate, baseCurrency: base,
-          amountConverted: row.amountConverted != null ? row.amountConverted : round2(amount * rate),
-          categoryId, categoryPath: row.categoryPath || leaf || '其他', date: row.date || new Date().toISOString().slice(0, 10),
-          note: row.note || '', images: [], recorderOpenid: ctx.openid, payerOpenid: ctx.openid, split: null, createdAt: db.serverDate(),
-        } });
-        success++;
-      } catch (e) { failed++; reasons.push(`第 ${success + failed} 条：${e.message}`); }
+        let rate;
+        if (currency === base) rate = 1;
+        else if (row.rate > 0) rate = row.rate;
+        else if (row.amountConverted > 0) rate = round6(row.amountConverted / row.amount); // 由换算金额反推当日汇率
+        else rate = (await getRate(row.date, base, currency)).rate;
+        const path = row.categoryPath || '';
+        const leaf = path.split('/').pop().trim();
+        const doc = {
+          bookId: p.bookId, type: row.type,
+          title: row.title || leaf || (row.type === 'income' ? '导入收入' : '导入支出'),
+          amount: row.amount, currency, rate, baseCurrency: base,
+          amountConverted: row.amountConverted != null ? row.amountConverted : round2(row.amount * rate),
+          categoryId: null,
+          categoryPath: path || leaf || '其他', date: row.date,
+          note: row.note || '', images: [], recorderOpenid: ctx.openid, payerOpenid: ctx.openid, split: null,
+          importBatchId: batchId,
+          createdAt: db.serverDate(), createdBy: ctx.openid, updatedAt: db.serverDate(), updatedBy: ctx.openid,
+        };
+        const k = fpOf(doc);
+        if (dupBudget[k] > 0) {
+          dupBudget[k]--;
+          skipped.push({ index: row._idx || 0, summary: [row.date, row.title || row.note].filter(Boolean).join(' · ').slice(0, 40) });
+          continue;
+        }
+        // 分类匹配/自动创建放在查重之后，跳过的行不会误建分类
+        doc.categoryId = path ? await ensureCategory(row.type, path) : null;
+        docs.push(doc);
+      } catch (e) {
+        failures.push({
+          index: row._idx || 0,
+          summary: [row.date, row.title || row.note].filter(Boolean).join(' · ').slice(0, 40),
+          reason: e.message || '处理失败',
+        });
+      }
     }
-    return { success, failed, reasons: reasons.slice(0, 5) };
+    // 批量入库（100 条/批）
+    for (let i = 0; i < docs.length; i += 100) {
+      const batch = docs.slice(i, i + 100);
+      try { await db.collection('records').add({ data: batch }); success += batch.length; }
+      catch (e) { failures.push({ index: 0, summary: `${batch.length} 条记录`, reason: `批量写入失败：${e.message || e}` }); }
+    }
+    const failed = rows.length + errors.length - success - skipped.length;
+    failures.sort((a, b) => a.index - b.index);
+    return {
+      success, failed, createdCategories,
+      skippedCount: skipped.length, skipped: skipped.slice(0, 100),
+      failures: failures.slice(0, 100),
+      batchId: success > 0 ? batchId : '',
+    };
+  },
+
+  // 撤销一次导入：删除该批次写入的全部记录。
+  // 权限：rw 成员只能撤销自己导入的批次；admin/owner 可撤销任意批次（与记录删除权限一致）
+  async undoImport(p, ctx) {
+    const me = await requireMember(p.bookId, ctx.openid); requireRole(me, 'rw');
+    if (!p.batchId) throw new AppError('INVALID_PARAM', '缺少导入批次号');
+    const where = { bookId: p.bookId, importBatchId: p.batchId };
+    if (me.role !== 'admin' && me.role !== 'owner') where.createdBy = ctx.openid;
+    let removed = 0;
+    for (let guard = 0; guard < 100; guard++) {
+      const res = await db.collection('records').where(where).remove().catch(() => null);
+      const n = res && res.stats ? res.stats.removed : 0;
+      if (!n) break;
+      removed += n;
+    }
+    return { removed };
   },
 };
 
@@ -1041,37 +1535,245 @@ const settle = {
   },
 };
 
-// ============================== seed（初始化测试数据）==============================
-const DATE_KEYS = ['createdAt', 'joinedAt', 'updatedAt'];
-function reviveDates(obj) {
-  DATE_KEYS.forEach((k) => { if (typeof obj[k] === 'string') obj[k] = new Date(obj[k]); });
-  return obj;
+// ============================== feedback（用户反馈 · 轻量工单，PRD 4.9）==============================
+// 客服两级：owner = 云函数环境变量 FEEDBACK_OWNER（唯一权力源，只能在云开发控制台修改，
+// 应用内任何操作都动不了它）；admin = owner 用邀请码邀请的客服（admins 集合），仅 owner 可移除，
+// admin 之间不可互删。工单双侧未读标记：unreadForUser（客服有新回复）/ unreadForAdmin（用户有新工单或追问）。
+const FEEDBACK_STATUS = { pending: '待处理', processing: '处理中', resolved: '已解决' };
+function feedbackOwnerIds() {
+  // 通常只填一个 openid；支持逗号分隔多个（共同 owner）
+  return (process.env.FEEDBACK_OWNER || '').split(',').map((s) => s.trim()).filter(Boolean);
+}
+function isFeedbackOwner(openid) { return feedbackOwnerIds().includes(openid); }
+async function isFeedbackAdmin(openid) {
+  if (isFeedbackOwner(openid)) return true;
+  const r = await db.collection('admins').where({ kind: 'admin', openid }).count().catch(() => ({ total: 0 }));
+  return (r.total || 0) > 0;
+}
+// 6 位邀请码（去掉 0/O/1/I 等易混淆字符）
+function genInviteCode() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let s = '';
+  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+const feedback = {
+  async create(p, ctx) {
+    const title = (p.title || '').trim();
+    const content = (p.content || '').trim();
+    if (!title || !content) throw new AppError('INVALID_PARAM', '标题和内容不能为空');
+    const email = (p.contactEmail || '').trim();
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new AppError('INVALID_PARAM', '联系邮箱格式不正确');
+    const images = (Array.isArray(p.images) ? p.images : []).slice(0, 3);
+    await db.createCollection('feedbacks').catch(() => {});
+    const add = await db.collection('feedbacks').add({ data: {
+      openid: ctx.openid, title: title.slice(0, 50), content: content.slice(0, 1000),
+      images, contactEmail: email.slice(0, 100),
+      status: 'pending', replies: [],
+      unreadForUser: false, unreadForAdmin: true,
+      createdAt: db.serverDate(), updatedAt: db.serverDate(),
+    } });
+    return { feedbackId: add._id };
+  },
+
+  // 普通用户见自己的工单；管理员见全部（附提交人昵称）
+  async list(_p, ctx) {
+    const admin = await isFeedbackAdmin(ctx.openid);
+    const where = admin ? { _id: _.exists(true) } : { openid: ctx.openid };
+    const r = await db.collection('feedbacks').where(where).orderBy('updatedAt', 'desc').limit(100).get().catch(() => ({ data: [] }));
+    const items = r.data || [];
+    const names = {};
+    if (admin && items.length) {
+      const ids = [...new Set(items.map((f) => f.openid))];
+      const u = await db.collection('users').where({ _id: _.in(ids) }).get().catch(() => ({ data: [] }));
+      (u.data || []).forEach((x) => { names[x._id] = x.nickname || '用户'; });
+    }
+    return {
+      isAdmin: admin,
+      isOwner: isFeedbackOwner(ctx.openid),
+      items: items.map((f) => ({
+        feedbackId: f._id, title: f.title,
+        status: f.status, statusLabel: FEEDBACK_STATUS[f.status] || f.status,
+        replyCount: (f.replies || []).length,
+        unread: admin ? !!f.unreadForAdmin : !!f.unreadForUser,
+        fromName: admin ? (names[f.openid] || '用户') : '',
+        mine: f.openid === ctx.openid, // 客服视角用于「用户工单 / 我的反馈」分区
+        updatedAt: f.updatedAt,
+      })),
+    };
+  },
+
+  // 查看详情：仅本人或管理员；查看即清除自己这一侧的未读标记
+  async get(p, ctx) {
+    const r = await db.collection('feedbacks').doc(p.feedbackId).get().catch(() => null);
+    if (!r || !r.data) throw new AppError('NOT_FOUND', '反馈不存在');
+    const f = r.data;
+    const admin = await isFeedbackAdmin(ctx.openid);
+    const mine = f.openid === ctx.openid;
+    if (!admin && !mine) throw new AppError('NO_PERMISSION', '无权查看该反馈');
+    const clear = {};
+    if (mine && f.unreadForUser) clear.unreadForUser = false;
+    if (admin && f.unreadForAdmin) clear.unreadForAdmin = false;
+    if (Object.keys(clear).length) await db.collection('feedbacks').doc(p.feedbackId).update({ data: clear }).catch(() => {});
+    let fromName = '';
+    if (admin) { const u = await getUser(f.openid); fromName = (u && u.nickname) || '用户'; }
+    return {
+      feedbackId: p.feedbackId, title: f.title, content: f.content, images: f.images || [],
+      contactEmail: f.contactEmail || '', status: f.status, statusLabel: FEEDBACK_STATUS[f.status] || f.status,
+      replies: f.replies || [], createdAt: f.createdAt,
+      isAdmin: admin, isMine: mine, fromName,
+    };
+  },
+
+  // 追加回复：本人或管理员；客服首次回复自动把「待处理」转「处理中」
+  async reply(p, ctx) {
+    const content = (p.content || '').trim();
+    if (!content) throw new AppError('INVALID_PARAM', '回复内容不能为空');
+    const r = await db.collection('feedbacks').doc(p.feedbackId).get().catch(() => null);
+    if (!r || !r.data) throw new AppError('NOT_FOUND', '反馈不存在');
+    const f = r.data;
+    const admin = await isFeedbackAdmin(ctx.openid);
+    const mine = f.openid === ctx.openid;
+    if (!admin && !mine) throw new AppError('NO_PERMISSION', '无权回复该反馈');
+    const from = admin && !mine ? 'cs' : 'user';
+    const data = {
+      replies: _.push([{ from, content: content.slice(0, 1000), time: new Date().toISOString() }]),
+      updatedAt: db.serverDate(),
+    };
+    if (from === 'cs') {
+      data.unreadForUser = true;
+      if (f.status === 'pending') data.status = 'processing';
+    } else {
+      data.unreadForAdmin = true;
+    }
+    await db.collection('feedbacks').doc(p.feedbackId).update({ data });
+    return { ok: true };
+  },
+
+  // 修改状态：仅管理员
+  async setStatus(p, ctx) {
+    if (!(await isFeedbackAdmin(ctx.openid))) throw new AppError('NO_PERMISSION', '仅客服可修改状态');
+    if (!FEEDBACK_STATUS[p.status]) throw new AppError('INVALID_PARAM', '未知状态');
+    await db.collection('feedbacks').doc(p.feedbackId).update({ data: {
+      status: p.status, updatedAt: db.serverDate(), unreadForUser: true,
+    } });
+    return { ok: true, statusLabel: FEEDBACK_STATUS[p.status] };
+  },
+
+  // 设置页入口红点：我这一侧的未读工单数
+  async unreadCount(_p, ctx) {
+    const admin = await isFeedbackAdmin(ctx.openid);
+    const where = admin ? { unreadForAdmin: true } : { openid: ctx.openid, unreadForUser: true };
+    const c = await db.collection('feedbacks').where(where).count().catch(() => ({ total: 0 }));
+    return { count: c.total || 0 };
+  },
+
+  // —— 客服团队管理（owner 专属）——
+  async listAdmins(_p, ctx) {
+    if (!isFeedbackOwner(ctx.openid)) throw new AppError('NO_PERMISSION', '仅 owner 可管理客服团队');
+    const r = await db.collection('admins').where({ kind: 'admin' }).orderBy('addedAt', 'asc').get().catch(() => ({ data: [] }));
+    const admins = r.data || [];
+    const ownerIds = feedbackOwnerIds();
+    const ids = [...new Set([...ownerIds, ...admins.map((a) => a.openid)])];
+    const names = {};
+    if (ids.length) {
+      const u = await db.collection('users').where({ _id: _.in(ids) }).get().catch(() => ({ data: [] }));
+      (u.data || []).forEach((x) => { names[x._id] = x.nickname || '用户'; });
+    }
+    return {
+      owners: ownerIds.map((o) => ({ openid: o, name: names[o] || '（未登录过）', isMe: o === ctx.openid })),
+      admins: admins.map((a) => ({ openid: a.openid, name: names[a.openid] || '用户', addedAt: a.addedAt })),
+    };
+  },
+
+  // 生成一次性邀请码（24 小时有效），owner 通过微信等渠道发给新客服
+  async createAdminInvite(_p, ctx) {
+    if (!isFeedbackOwner(ctx.openid)) throw new AppError('NO_PERMISSION', '仅 owner 可邀请客服');
+    await db.createCollection('admins').catch(() => {});
+    const code = genInviteCode();
+    await db.collection('admins').add({ data: {
+      kind: 'invite', code, createdBy: ctx.openid, createdAt: db.serverDate(),
+      expiresAt: Date.now() + 24 * 3600 * 1000, usedBy: '',
+    } });
+    return { code, expireHours: 24 };
+  },
+
+  // 凭邀请码成为客服（一次性、限时）
+  async acceptAdminInvite(p, ctx) {
+    const code = (p.code || '').trim().toUpperCase();
+    if (!code) throw new AppError('INVALID_PARAM', '请输入邀请码');
+    if (await isFeedbackAdmin(ctx.openid)) return { ok: true, already: true };
+    const r = await db.collection('admins').where({ kind: 'invite', code }).get().catch(() => ({ data: [] }));
+    const inv = (r.data || [])[0];
+    if (!inv) throw new AppError('NOT_FOUND', '邀请码不存在');
+    if (inv.usedBy) throw new AppError('INVALID_PARAM', '邀请码已被使用');
+    if (inv.expiresAt && Date.now() > inv.expiresAt) throw new AppError('INVALID_PARAM', '邀请码已过期');
+    await db.collection('admins').add({ data: {
+      kind: 'admin', openid: ctx.openid, addedBy: inv.createdBy, addedAt: db.serverDate(),
+    } });
+    await db.collection('admins').doc(inv._id).update({ data: { usedBy: ctx.openid, usedAt: db.serverDate() } }).catch(() => {});
+    return { ok: true };
+  },
+
+  // 移除客服：仅 owner；owner 本身在环境变量里，应用内不可能被移除
+  async removeAdmin(p, ctx) {
+    if (!isFeedbackOwner(ctx.openid)) throw new AppError('NO_PERMISSION', '仅 owner 可移除客服');
+    if (isFeedbackOwner(p.openid)) throw new AppError('NO_PERMISSION', 'owner 不可被移除');
+    await db.collection('admins').where({ kind: 'admin', openid: p.openid }).remove();
+    return { ok: true };
+  },
+};
+
+// ============================== seed（演示数据 · 与用户真实数据隔离）==============================
+// 演示文档全部带 seed:true / `seed-` 前缀 id：载入不触碰调用者的用户资料与真实账本，可整体清除。
+const SEED_COLLECTIONS = ['records', 'categories', 'members', 'aiMessages', 'books', 'users'];
+async function clearSeedData() {
+  const result = {};
+  for (const c of SEED_COLLECTIONS) {
+    await db.createCollection(c).catch(() => {});
+    let removed = 0;
+    for (let guard = 0; guard < 200; guard++) { // 单次 remove 有批量上限，循环删空
+      const r = await db.collection(c).where({ seed: true }).remove().catch(() => null);
+      const n = r && r.stats ? r.stats.removed : 0;
+      if (!n) break;
+      removed += n;
+    }
+    result[c] = removed;
+  }
+  return result;
 }
 const seed = {
+  // 载入演示数据：先清掉旧演示数据再插入。不改用户资料、不碰真实账本。
   async run(_p, ctx) {
     if (!IS_DEV) {
       throw new AppError('NO_PERMISSION', '当前非 dev 模式，禁止初始化。请在云开发控制台把云函数 api 的环境变量 APP_ENV 设为 dev 后重试。');
     }
-    const me = ctx.openid;
-    const collections = ['users', 'books', 'members', 'categories', 'records', 'rates', 'chartLayouts', 'aiMessages'];
-    // 确保集合存在
-    for (const c of collections) { await db.createCollection(c).catch(() => {}); }
-    // 清空（循环删空，避免残留）
-    for (const c of collections) { await clearCollection(c); }
-    // 逐集合插入（openid-yu → 当前用户）
+    await clearSeedData();
+    const data = SEED.build(ctx.openid);
     const counts = {};
-    for (const c of collections) {
-      const list = SEED[c] || [];
-      counts[c] = 0;
-      for (const raw of list) {
-        const doc = reviveDates(JSON.parse(JSON.stringify(raw).split('openid-yu').join(me)));
-        const id = doc._id; delete doc._id;
-        if (id) await db.collection(c).doc(id).set({ data: doc }).catch((e) => { console.error(c, e); });
-        else await db.collection(c).add({ data: doc }).catch((e) => { console.error(c, e); });
-        counts[c]++;
+    for (const c of Object.keys(data)) {
+      const list = data[c] || [];
+      counts[c] = list.length;
+      const withId = list.filter((d) => d._id);
+      const noId = list.filter((d) => !d._id);
+      for (let i = 0; i < withId.length; i += 20) {
+        await Promise.all(withId.slice(i, i + 20).map((doc) => {
+          const id = doc._id; const d2 = { ...doc }; delete d2._id;
+          return db.collection(c).doc(id).set({ data: d2 }).catch((e) => { console.error(c, id, e); });
+        }));
+      }
+      for (let i = 0; i < noId.length; i += 100) {
+        await db.collection(c).add({ data: noId.slice(i, i + 100) }).catch((e) => { console.error(c, e); });
       }
     }
-    return { ok: true, me, counts };
+    return { ok: true, counts };
+  },
+
+  // 清除演示数据（只删 seed 标记的文档，用户真实数据不受影响）
+  async clear(_p, ctx) {
+    if (!IS_DEV) throw new AppError('NO_PERMISSION', '非 dev 模式禁止操作');
+    const result = await clearSeedData();
+    return { ok: true, result };
   },
 
   // 清空全部数据（含用户，需重新登录），回到干净测试状态（dev）
@@ -1088,4 +1790,4 @@ const seed = {
   },
 };
 
-module.exports = { book, member, category, record, rate, stats, layout, ai, settings, user, data, settle, seed };
+module.exports = { book, member, category, record, rate, stats, layout, ai, settings, user, data, settle, feedback, seed };

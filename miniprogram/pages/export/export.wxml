@@ -2,20 +2,20 @@
   <loading show="{{loading}}"></loading>
   <nav-bar back="{{true}}" center="{{true}}" title="导出数据"></nav-bar>
 
-  <!-- 选择账本 -->
+  <!-- 选择账本：折叠行只显示当前选中，点开弹层挑选（与首页切换账本同一交互） -->
   <view class="section-label">选择账本</view>
   <view class="group group--flat">
-    <view wx:for="{{books}}" wx:key="bookId" class="li" data-id="{{item.bookId}}" hover-class="pressed" hover-stay-time="80" bindtap="pickBook">
-      <view class="li__ic"><image src="{{ic.book}}"></image></view>
-      <view class="li__label ellip">{{item.name}}<view class="li__val">{{item.typeLabel}} · {{item.roleLabel}}</view></view>
-      <image wx:if="{{item.bookId === bookId}}" class="check" src="{{ic.check}}"></image>
+    <view wx:if="{{selBook}}" class="li" hover-class="pressed" hover-stay-time="80" bindtap="openBookSheet">
+      <view class="li__ic" style="background:{{selBook.iconBg}}"><image src="{{selBook.iconSrc}}"></image></view>
+      <view class="li__label ellip">{{selBook.name}}<view class="li__val">{{selBook.typeLabel}} · {{selBook.roleLabel}}</view></view>
+      <image class="chevron" src="{{ic.chevronDown}}"></image>
     </view>
-    <view wx:if="{{!books.length && !loading}}" class="li"><view class="li__label muted">暂无账本</view></view>
+    <view wx:if="{{!selBook && !loading}}" class="li"><view class="li__label muted">暂无账本</view></view>
   </view>
 
   <!-- 时间范围 -->
   <view class="section-label">时间范围</view>
-  <view class="chips">
+  <view class="chips chips--row">
     <view wx:for="{{ranges}}" wx:key="key" class="chip {{rangeMode === item.key ? 'selected' : ''}}" data-key="{{item.key}}" hover-class="pressed" hover-stay-time="80" bindtap="pickRange">{{item.label}}</view>
   </view>
   <view wx:if="{{rangeMode !== 'all'}}" class="group group--flat" style="margin-top:24rpx">
@@ -31,10 +31,10 @@
 
   <!-- 导出格式 -->
   <view class="section-label">导出格式</view>
-  <view class="chips">
-    <view wx:for="{{formats}}" wx:key="key" class="chip {{format === item.key ? 'selected' : ''}} {{item.disabled ? 'chip--off' : ''}}" data-key="{{item.key}}" data-off="{{item.disabled}}" hover-class="pressed" hover-stay-time="80" bindtap="pickFormat">{{item.label}}</view>
+  <view class="chips chips--row">
+    <view wx:for="{{formats}}" wx:key="key" class="chip {{format === item.key ? 'selected' : ''}}" data-key="{{item.key}}" hover-class="pressed" hover-stay-time="80" bindtap="pickFormat">{{item.label}}</view>
   </view>
-  <view class="ai-disclaimer left">JSON 用于备份 / 迁移；Excel / CSV 便于表格分析；PDF 报表开发中。</view>
+  <view class="ai-disclaimer left">JSON 用于备份 / 迁移；Excel（.xlsx）/ CSV 便于表格分析；PDF 为带汇总的对账报表。</view>
 
   <!-- 下载方式 -->
   <view class="section-label">下载方式</view>
@@ -60,4 +60,14 @@
   </view>
 
   <calendar visible="{{calVisible}}" value="{{calValue}}" bind:pick="onCalPick" bind:close="onCalClose"></calendar>
+
+  <book-switcher
+    visible="{{bookSheetVisible}}"
+    books="{{books}}"
+    current-id="{{bookId}}"
+    title="选择账本"
+    show-manage="{{false}}"
+    bind:select="onBookPick"
+    bind:close="closeBookSheet"
+  ></book-switcher>
 </view>

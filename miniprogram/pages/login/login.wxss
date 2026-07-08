@@ -10,19 +10,21 @@
 
 /* 头像 + 昵称 */
 .login__card { margin-top: 88rpx; display: flex; flex-direction: column; align-items: center; }
+/* 视觉层全部用普通 view/image 渲染；原生 button 只做一层透明点击覆盖层（opacity:0），
+   不参与视觉——彻底免疫 button 的默认宽度/内边距/行高在真机上造成的偏移 */
 .avatar-wrap {
+  position: relative;
   width: 168rpx; height: 168rpx; border-radius: 50%; overflow: hidden;
   box-shadow: var(--shadow-soft); background: var(--surface);
 }
-.avatar-pick {
-  width: 168rpx; height: 168rpx; padding: 0; margin: 0; box-sizing: border-box;
-  background: var(--surface); line-height: normal;
-  display: flex; align-items: center; justify-content: center;
+.avatar-img { display: block; width: 100%; height: 100%; }
+.avatar-ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.avatar-plus { font-size: 64rpx; line-height: 1; color: var(--accent); }
+.avatar-btn {
+  position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  padding: 0; margin: 0; border: none; background: transparent; opacity: 0;
 }
-.avatar-pick::after { border: none; }
-.avatar-pick__img { width: 168rpx; height: 168rpx; display: block; }
-.avatar-pick__ph { display: flex; align-items: center; justify-content: center; width: 168rpx; height: 168rpx; }
-.avatar-pick__plus { font-size: 64rpx; line-height: 1; color: var(--accent); }
+.avatar-btn::after { border: none; }
 .avatar-pick__tip { color: var(--muted); font-size: 26rpx; margin-top: 20rpx; }
 
 .login__nickname {

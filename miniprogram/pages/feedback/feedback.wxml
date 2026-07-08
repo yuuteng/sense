@@ -1,0 +1,67 @@
+<view class="screen screen--pad">
+  <loading show="{{loading}}"></loading>
+  <nav-bar back="{{true}}" center="{{true}}" title="{{isAdmin ? '反馈工单（客服）' : '意见反馈'}}">
+    <view slot="right" class="appbar__btn" hover-class="active" hover-stay-time="80" bindtap="goNew">
+      <image src="{{ic.plus}}" style="width:48rpx;height:48rpx"></image>
+    </view>
+  </nav-bar>
+
+  <!-- 空态 -->
+  <view wx:if="{{!loading && !items.length}}" class="fb-empty">
+    <view class="fb-empty__ic"><image src="{{ic.mail}}"></image></view>
+    <view class="fb-empty__t">还没有反馈</view>
+    <view class="fb-empty__p">使用中遇到问题或有建议，都可以告诉我们</view>
+    <view class="btn btn--primary btn--lg" style="margin-top:48rpx;padding:0 64rpx" hover-class="pressed" hover-stay-time="80" bindtap="goNew">提交反馈</view>
+  </view>
+
+  <!-- owner：客服团队管理入口（独立分区，与工单列表拉开标准间距） -->
+  <block wx:if="{{isOwner}}">
+    <view class="section-label">客服管理</view>
+    <view class="group group--flat">
+      <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="goTeam">
+        <view class="li__ic"><image src="{{ic.mail}}"></image></view>
+        <view class="li__label">客服团队管理</view>
+        <view class="li__val">邀请 / 移除 <image class="chevron" src="{{ic.chevron}}"></image></view>
+      </view>
+    </view>
+  </block>
+
+  <!-- 客服视角：用户工单（他人提交的处理队列） -->
+  <block wx:if="{{isAdmin && queueItems.length}}">
+    <view class="section-label">用户工单 · {{queueItems.length}} 条</view>
+    <view class="group group--flat">
+      <view wx:for="{{queueItems}}" wx:key="feedbackId" class="li" style="align-items:flex-start;padding-top:28rpx;padding-bottom:28rpx" hover-class="pressed" hover-stay-time="80" data-id="{{item.feedbackId}}" bindtap="goDetail">
+        <view style="flex:1;min-width:0">
+          <view style="display:flex;align-items:center;gap:14rpx">
+            <view wx:if="{{item.unread}}" class="reddot"></view>
+            <text class="ellip" style="font-weight:600">{{item.title}}</text>
+          </view>
+          <view class="fb-item__meta">{{item.fromName}} · {{item.timeLabel}}<text wx:if="{{item.replyCount}}"> · {{item.replyCount}} 条回复</text></view>
+        </view>
+        <text class="fb-status {{item.statusClass}}">{{item.statusLabel}}</text>
+        <image class="chevron" src="{{ic.chevron}}"></image>
+      </view>
+    </view>
+  </block>
+
+  <!-- 我的反馈（自己作为用户提交的；客服/owner 也有普通用户身份） -->
+  <block wx:if="{{mineItems.length}}">
+    <view class="section-label">我的反馈 · {{mineItems.length}} 条</view>
+    <view class="group group--flat">
+      <view wx:for="{{mineItems}}" wx:key="feedbackId" class="li" style="align-items:flex-start;padding-top:28rpx;padding-bottom:28rpx" hover-class="pressed" hover-stay-time="80" data-id="{{item.feedbackId}}" bindtap="goDetail">
+        <view style="flex:1;min-width:0">
+          <view style="display:flex;align-items:center;gap:14rpx">
+            <view wx:if="{{item.unread}}" class="reddot"></view>
+            <text class="ellip" style="font-weight:600">{{item.title}}</text>
+          </view>
+          <view class="fb-item__meta">{{item.timeLabel}}<text wx:if="{{item.replyCount}}"> · {{item.replyCount}} 条回复</text></view>
+        </view>
+        <text class="fb-status {{item.statusClass}}">{{item.statusLabel}}</text>
+        <image class="chevron" src="{{ic.chevron}}"></image>
+      </view>
+    </view>
+  </block>
+
+  <!-- 非客服：邀请码入口 -->
+  <view wx:if="{{!loading && !isAdmin}}" class="fb-invite-link" hover-class="pressed" hover-stay-time="80" bindtap="enterInviteCode">收到客服邀请码？点此输入</view>
+</view>

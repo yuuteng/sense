@@ -8,14 +8,19 @@
   padding: 0 var(--space-5);
 }
 
+/* 单行等宽 chips：压缩内边距与字号，保证 4~5 项一行放下、整页免滚动 */
+.chips--row { flex-wrap: nowrap; gap: 12rpx; }
+.chips--row .chip {
+  flex: 1;
+  justify-content: center;
+  padding: 12rpx 4rpx;
+  font-size: 24rpx;
+  min-height: 64rpx;
+}
+
 /* 选中项右侧勾选标记 */
 .check {
   width: 40rpx;
   height: 40rpx;
   flex-shrink: 0;
-}
-
-/* 置灰不可选的格式（PDF 开发中） */
-.chip--off {
-  opacity: 0.42;
 }

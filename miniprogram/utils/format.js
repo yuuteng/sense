@@ -43,4 +43,14 @@ function cnMonthDay(dateStr) {
   return `${parseInt(p[1], 10)}月${parseInt(p[2], 10)}日`;
 }
 
-module.exports = { SYMBOL, symbolOf, fmt, money, signed, signedTotal, dayLabel, cnMonthDay };
+// ISO 字符串/Date -> 'M月D日 HH:mm'（跨年份时带年份）
+function dateTime(v) {
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return '';
+  const md = `${d.getMonth() + 1}月${d.getDate()}日`;
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const y = d.getFullYear() === new Date().getFullYear() ? '' : `${d.getFullYear()}年`;
+  return `${y}${md} ${hm}`;
+}
+
+module.exports = { SYMBOL, symbolOf, fmt, money, signed, signedTotal, dayLabel, cnMonthDay, dateTime };

@@ -7,7 +7,10 @@
   box-shadow: 0 -8rpx 28rpx rgba(151, 167, 183, 0.16);
   display: grid; grid-template-columns: repeat(4, 1fr);
   z-index: 40;
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
 }
+/* 弹层打开时下滑隐藏（节奏与弹层滑入一致） */
+.tabbar--hidden { transform: translateY(110%); pointer-events: none; }
 .tabbar__item {
   display: flex; flex-direction: column; align-items: center; gap: 6rpx;
   padding-top: 12rpx;

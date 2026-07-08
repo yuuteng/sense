@@ -120,6 +120,7 @@
 | `recorderOpenid` | string | ✅ | 记录人 |
 | `payerOpenid` | string | ✅ | 付款人 |
 | `split` | object | | 分账结算型账本用；见下 |
+| `importBatchId` | string | | 仅导入产生的记录有：导入批次号，供「撤销本次导入」按批删除 |
 | `createdAt` | Date | ✅ | 入账时间 |
 | `createdBy` | string | ✅ | 创建者 openid（审计；当前 = 记录人） |
 | `updatedAt` | Date | ✅ | 最近修改时间（创建时=createdAt） |
@@ -186,6 +187,44 @@
 
 **索引**：`bookId + openid + createdAt`。
 **规则**：超过 `users.settings.aiMessageLimit`（默认 50）由服务端滚动删除最旧。
+
+---
+
+### 9. feedbacks — 用户反馈工单（PRD 4.9）
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `_id` | string | ✅ | |
+| `openid` | string | ✅ | 提交人 |
+| `title` | string | ✅ | ≤50 字 |
+| `content` | string | ✅ | ≤1000 字 |
+| `images` | string[] | | 云存储 fileID，≤3 张 |
+| `contactEmail` | string | | 选填联系邮箱 |
+| `status` | string | ✅ | `pending` 待处理 / `processing` 处理中 / `resolved` 已解决 |
+| `replies` | object[] | ✅ | `[{ from: "user" 或 "cs", content, time(ISO) }]` 回复线程 |
+| `unreadForUser` | boolean | ✅ | 客服有新回复/改状态，用户查看详情后清除 |
+| `unreadForAdmin` | boolean | ✅ | 有新工单或用户追问，管理员查看后清除 |
+| `createdAt` / `updatedAt` | Date | ✅ | `updatedAt` 用于列表排序 |
+
+**索引**：`openid + updatedAt`。
+**规则**：客服（owner/admin，见 admins 集合）可读写全部工单；其余用户只能读写自己的（云函数端强制）。
+
+---
+
+### 10. admins — 反馈客服团队与邀请码
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `_id` | string | ✅ | |
+| `kind` | string | ✅ | `admin` 客服 / `invite` 邀请码 |
+| `openid` | string | kind=admin | 客服的 openid |
+| `addedBy` / `addedAt` | | kind=admin | 由哪个 owner 邀请、何时加入 |
+| `code` | string | kind=invite | 6 位邀请码（去易混淆字符） |
+| `createdBy` / `createdAt` | | kind=invite | 生成者与时间 |
+| `expiresAt` | number | kind=invite | 过期时间戳（生成后 24h） |
+| `usedBy` / `usedAt` | | kind=invite | 一次性：被谁、何时使用 |
+
+**规则**：owner 固定在云函数环境变量 `FEEDBACK_OWNER`，不入库、应用内不可增删；本集合只存被邀请的 admin 与邀请码。仅 owner 可生成邀请码/移除 admin；admin 之间不可互删。
 
 ---
 
@@ -304,4 +343,4 @@
 ---
 
 ## 三、需在云开发控制台预建的集合清单
-`users`、`books`、`members`、`categories`、`records`、`rates`、`chartLayouts`、`aiMessages`（共 8 个）。建好后导入上面的测试数据，并按各集合「索引」小节建立索引。
+`users`、`books`、`members`、`categories`、`records`、`rates`、`chartLayouts`、`aiMessages`、`feedbacks`、`admins`（共 10 个）。建好后导入上面的测试数据，并按各集合「索引」小节建立索引。

@@ -1,0 +1,31 @@
+.fb-screen { padding-bottom: calc(160rpx + env(safe-area-inset-bottom)); }
+
+/* 工单卡 */
+.fb-card { margin: 0 40rpx 24rpx; padding: 32rpx; }
+.fb-card__head { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; }
+.fb-card__title { font-size: var(--text-lg); font-weight: 700; flex: 1; min-width: 0; }
+.fb-card__meta { font-size: var(--text-xs); color: var(--muted); margin-top: 12rpx; }
+.fb-card__content { font-size: var(--text-base); line-height: 1.7; margin-top: 20rpx; word-break: break-all; }
+.fb-card__imgs { display: flex; gap: 16rpx; margin-top: 24rpx; }
+.fb-card__imgs image { width: 160rpx; height: 160rpx; border-radius: var(--radius-sm); }
+
+/* 回复线程：用户靠右、客服靠左 */
+.fb-thread { padding: 0 40rpx; display: flex; flex-direction: column; gap: 24rpx; }
+.fb-msg { display: flex; flex-direction: column; align-items: flex-end; }
+.fb-msg--cs { align-items: flex-start; }
+.fb-msg__who { font-size: var(--text-xs); color: var(--muted); margin-bottom: 8rpx; }
+.fb-msg__bubble {
+  max-width: 80%; padding: 20rpx 28rpx; font-size: var(--text-sm); line-height: 1.6;
+  border-radius: var(--radius-md); background: rgba(0,204,249,0.12); word-break: break-all;
+}
+.fb-msg--cs .fb-msg__bubble { background: var(--surface); box-shadow: var(--shadow-soft); }
+
+/* 底部回复栏 */
+.fb-replybar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+  display: flex; gap: 16rpx; align-items: center;
+  padding: 20rpx 40rpx calc(20rpx + env(safe-area-inset-bottom));
+  background: var(--bg);
+}
+.fb-replybar__input { flex: 1; height: 88rpx; }
+.fb-replybar__send { height: 88rpx; padding: 0 44rpx; display: flex; align-items: center; }

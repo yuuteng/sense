@@ -1,5 +1,23 @@
 /* 统计页专属样式（基础图表卡样式在 app.wxss） */
 
+/* 月份切换（月度类卡片）：‹ 2026年7月 › */
+.month-nav { display: inline-flex; align-items: center; gap: 4rpx; margin-bottom: var(--space-3); }
+.mnav__btn {
+  width: 56rpx; height: 56rpx; border-radius: var(--radius-pill);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 40rpx; line-height: 1; color: var(--accent-ink);
+  background: rgba(0,204,249,0.10);
+}
+.mnav__btn.off { color: var(--muted); background: rgba(62,69,80,0.04); opacity: 0.5; }
+.mnav__btn--press { background: rgba(0,204,249,0.20); }
+.mnav__label {
+  min-width: 220rpx; text-align: center;
+  padding: 10rpx 24rpx; border-radius: var(--radius-pill);
+  font-size: 26rpx; font-weight: 600; color: var(--accent-ink);
+  background: rgba(0,204,249,0.10);
+}
+.mnav__label--press { background: rgba(0,204,249,0.20); }
+
 /* 区间选择 chips */
 .range-chips { display: flex; gap: 12rpx; margin-bottom: var(--space-3); flex-wrap: wrap; }
 .rchip {
@@ -19,15 +37,68 @@
 .pl-v { margin-left: auto; font-weight: 600; }
 .pl-v.strong { font-size: var(--text-base); color: var(--fg); }
 
-/* 编辑态：卡片操作（上移/下移/删除） */
-.card-tools { display: flex; align-items: center; gap: 10rpx; flex-shrink: 0; }
-.ctool {
-  padding: 8rpx 18rpx; border-radius: var(--radius-pill);
-  font-size: 24rpx; font-weight: 600; color: var(--accent-ink);
-  background: rgba(0,204,249,0.12);
+/* 钻取通用：图例行可点箭头 + 柱状图两段式入口条 */
+.pl-item--press, .pl-item--link:active { opacity: 0.72; }
+.pl-go { color: var(--muted); font-size: 26rpx; margin-left: 4rpx; }
+.drill-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16rpx;
+  margin-top: var(--space-2);
+  padding: 18rpx 26rpx;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 204, 249, 0.08);
+  animation: drill-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-.ctool.danger { color: var(--danger); background: rgba(246,33,114,0.12); }
-.ctool.off { color: var(--muted); background: rgba(62,69,80,0.05); }
+.drill-bar--press { background: rgba(0, 204, 249, 0.16); }
+.drill-bar__text { font-size: 26rpx; font-weight: 600; }
+.drill-bar__go { flex-shrink: 0; color: var(--accent-ink); font-size: 26rpx; font-weight: 600; }
+@keyframes drill-in { from { opacity: 0; transform: translateY(-8rpx); } to { opacity: 1; transform: translateY(0); } }
+
+/* 分类占比卡：居中环形 + 中心总额 + 排行列表 */
+.cat-donut { position: relative; width: 300rpx; margin: 8rpx auto 0; }
+.cat-donut__center {
+  position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.cat-donut__center .k { font-size: 22rpx; color: var(--muted); }
+.cat-donut__center .v { font-size: 30rpx; font-weight: 700; margin-top: 4rpx; }
+.cat-rank { margin-top: var(--space-3); }
+.cat-row { display: flex; align-items: center; gap: 14rpx; padding: 18rpx 8rpx; }
+.cat-row + .cat-row { border-top: 1rpx solid var(--border); }
+.cat-row.pressed { background: rgba(62,69,80,0.04); }
+.cat-row.hl { background: rgba(0,204,249,0.06); }
+.cat-row__dot { width: 16rpx; height: 16rpx; border-radius: 50%; flex-shrink: 0; }
+.cat-row__name { flex: 1; font-size: 28rpx; font-weight: 500; }
+.cat-row__count { color: var(--muted); font-size: 22rpx; flex-shrink: 0; }
+.cat-row__amt { font-weight: 600; font-size: 28rpx; flex-shrink: 0; }
+.cat-row__pct { color: var(--muted); font-size: 22rpx; width: 84rpx; text-align: right; flex-shrink: 0; }
+.cat-more { text-align: center; padding: 20rpx; color: var(--accent-ink); font-size: 26rpx; font-weight: 600; }
+.cat-more.pressed { opacity: 0.7; }
+
+/* 编辑模式：整张卡片拖拽排序 */
+.chart-card--edit {
+  border-style: dashed;
+  border-color: rgba(0,137,192,0.45);
+  transition: transform 0.18s ease; /* 让位动画 */
+}
+.chart-card--drag {
+  transition: none; /* 拖动中的卡跟手，不做过渡 */
+  z-index: 6;
+  border-style: solid;
+  border-color: var(--accent-ink);
+  box-shadow: 0 20rpx 48rpx rgba(0,137,192,0.25);
+}
+.chart-card__grip { width: 44rpx; height: 44rpx; flex-shrink: 0; }
+/* 删除角标 */
+.card-x {
+  position: absolute; top: -14rpx; right: -14rpx; z-index: 7;
+  width: 52rpx; height: 52rpx; border-radius: 50%;
+  background: var(--danger); color: #ffffff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28rpx; font-weight: 600;
+  box-shadow: 0 8rpx 20rpx rgba(246,33,114,0.35);
+}
+.card-x--press { transform: scale(0.92); }
 
 /* 图表 SVG（柱状/分组柱状） */
 .chart-svg { width: 100%; height: auto; display: block; margin-top: var(--space-2); }

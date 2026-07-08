@@ -1,6 +1,10 @@
 const api = require('../../utils/api');
 const icons = require('../../utils/icons');
 const cur = require('../../utils/currency');
+const fmt = require('../../utils/format');
+
+// 最近一次导入结果的本地缓存键（关面板后可从导入行摘要重新打开）
+const LAST_IMPORT_KEY = 'sense.lastImportResult';
 
 Page({
   data: {
@@ -9,8 +13,9 @@ Page({
     curCode: 'CNY',
     curLabel: cur.label('CNY'),
     curVisible: false,
-    aiLimit: 50,
     importVal: '',
+    importResult: null, // 导入结果面板：{ success, failed, createdCategories, failures[], allOk }
+    fbUnread: 0,
     loading: true,
   },
 
@@ -19,11 +24,11 @@ Page({
       ic: {
         currency: icons.get('currency', '#0089c0', 1.7),
         list: icons.get('list', '#0089c0', 1.7),
-        aiBox: icons.get('aiBox', '#0089c0', 1.7),
         book: icons.get('book', '#0089c0', 1.7),
         download: icons.get('download', '#0089c0', 1.7),
         upload: icons.get('upload', '#0089c0', 1.7),
         seed: icons.get('privacy', '#0089c0', 1.7),
+        mail: icons.get('mail', '#0089c0', 1.7),
         wipe: icons.get('trash', '#f62172', 1.7),
         refresh: icons.get('refresh', '#0089c0', 1.8),
         chevron: icons.get('chevron', '#748294', 2),
@@ -33,26 +38,34 @@ Page({
 
   onShow() {
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
-      this.getTabBar().setData({ selected: 3 });
+      this.getTabBar().setData({ selected: 3, hidden: false });
     }
     // 用缓存的资料先秒显，避免白屏
     const cached = getApp().globalData && getApp().globalData.profile;
     if (cached) this.setData({ profile: cached, loading: false });
+    // 恢复最近一次导入的摘要（点击可重开结果面板）
+    if (!this.data.importVal) {
+      try {
+        const r = wx.getStorageSync(LAST_IMPORT_KEY);
+        if (r && r.time) this.setData({ importVal: r.undone ? '已撤销' : `成功 ${r.success} · 失败 ${r.failed}` });
+      } catch (e) { /* 读不到当作没有 */ }
+    }
     this.load();
   },
 
   async load() {
     try {
-      const [profile, s] = await Promise.all([
+      const [profile, s, fb] = await Promise.all([
         api.call('user', 'getProfile'),
         api.call('settings', 'get'),
+        api.call('feedback', 'unreadCount').catch(() => ({ count: 0 })),
       ]);
       getApp().globalData.profile = profile;
       this.setData({
         profile,
         curCode: s.displayCurrency,
         curLabel: cur.label(s.displayCurrency),
-        aiLimit: s.aiMessageLimit,
+        fbUnread: fb.count || 0,
         loading: false,
       });
     } catch (e) {
@@ -90,28 +103,99 @@ Page({
 
   goBooks() { wx.navigateTo({ url: '/pages/books/books' }); },
 
+  goFeedback() { wx.navigateTo({ url: '/pages/feedback/feedback' }); },
+
   // 导出：进入独立配置页（选账本 / 时间段 / 格式 / 下载方式）
   onExport() { wx.navigateTo({ url: '/pages/export/export' }); },
 
-  // 导入：选 JSON 文件 → 读取 → 后端解析入库
+  // 导入：选 JSON / CSV / Excel 文件 → 按扩展名读文本或 base64 → 后端解析入库
+  // 外部软件导出的表头会在后端做键名映射适配；结果弹窗给出成功/失败与原因
   onImport() {
     wx.chooseMessageFile({
-      count: 1, type: 'file', extension: ['json'],
+      count: 1, type: 'file', extension: ['json', 'csv', 'xlsx', 'xls'],
       success: (r) => {
-        let content;
-        try { content = wx.getFileSystemManager().readFileSync(r.tempFiles[0].path, 'utf8'); }
-        catch (e) { wx.showToast({ title: '读取文件失败', icon: 'none' }); return; }
+        const f = r.tempFiles[0];
+        const name = String(f.name || '').toLowerCase();
+        const fmt = name.endsWith('.csv') ? 'csv'
+          : (name.endsWith('.xlsx') || name.endsWith('.xls')) ? 'excel' : 'json';
+        const payload = { format: fmt };
+        try {
+          const fsm = wx.getFileSystemManager();
+          if (fmt === 'excel') payload.contentBase64 = fsm.readFileSync(f.path, 'base64');
+          else payload.content = fsm.readFileSync(f.path, 'utf8');
+        } catch (e) { wx.showToast({ title: '读取文件失败', icon: 'none' }); return; }
         wx.showLoading({ title: '导入中…' });
+        let bookId = '';
         api.call('book', 'getCurrent')
-          .then((book) => api.call('data', 'import', { bookId: book.bookId, content }))
+          .then((book) => {
+            bookId = book.bookId;
+            return api.call('data', 'import', { bookId, ...payload });
+          })
           .then((res) => {
             wx.hideLoading();
-            this.setData({ importVal: `成功 ${res.success} · 失败 ${res.failed}` });
-            wx.showToast({ title: `导入成功 ${res.success} 条`, icon: 'success' });
+            // 结果落本地缓存：关闭面板后点导入行摘要可随时重看，撤销也仍可用
+            const result = {
+              success: res.success, failed: res.failed,
+              createdCategories: res.createdCategories || 0,
+              skippedCount: res.skippedCount || 0,
+              skipped: res.skipped || [],
+              failures: res.failures || [],
+              batchId: res.batchId || '',
+              bookId,
+              time: Date.now(),
+              timeLabel: fmt.dateTime(Date.now()),
+              allOk: !res.failed,
+            };
+            try { wx.setStorageSync(LAST_IMPORT_KEY, result); } catch (e) { /* 缓存失败不影响本次展示 */ }
+            this.setData({ importVal: `成功 ${res.success} · 失败 ${res.failed}`, importResult: result });
           })
           .catch((e) => { wx.hideLoading(); api.toast(e); });
       },
     });
+  },
+
+  closeImportResult() { this.setData({ importResult: null }); },
+  noop() {},
+
+  // 重看最近一次导入结果（点导入行的摘要文字）
+  showLastImport() {
+    let r = null;
+    try { r = wx.getStorageSync(LAST_IMPORT_KEY); } catch (e) { /* 读不到当作没有 */ }
+    if (r && r.time) this.setData({ importResult: r });
+  },
+
+  // 撤销本次导入：删除该批次写入的全部记录
+  undoImport() {
+    const r = this.data.importResult;
+    if (!r || !r.batchId || !r.bookId) return;
+    wx.showModal({
+      title: '撤销本次导入',
+      content: `将删除该批次导入的 ${r.success} 条记录（不影响其他数据）。确定撤销？`,
+      confirmColor: '#f62172',
+      success: (res) => {
+        if (!res.confirm) return;
+        wx.showLoading({ title: '撤销中…' });
+        api.call('data', 'undoImport', { bookId: r.bookId, batchId: r.batchId })
+          .then((u) => {
+            wx.hideLoading();
+            // 缓存里的批次标记为已撤销：结果仍可回看，但撤销按钮不再出现
+            const undone = { ...r, batchId: '', undone: true };
+            try { wx.setStorageSync(LAST_IMPORT_KEY, undone); } catch (e) { /* 忽略 */ }
+            this.setData({ importResult: null, importVal: `已撤销（删除 ${u.removed} 条）` });
+            wx.showToast({ title: `已删除 ${u.removed} 条`, icon: 'success' });
+          })
+          .catch((e) => { wx.hideLoading(); api.toast(e); });
+      },
+    });
+  },
+
+  // 复制失败明细，方便去源文件修改后重新导入
+  copyImportFailures() {
+    const r = this.data.importResult;
+    if (!r || !r.failures.length) return;
+    const lines = r.failures.map((f) => `${f.index ? `第 ${f.index} 条` : '—'}${f.summary ? `（${f.summary}）` : ''}：${f.reason}`);
+    const text = `导入失败明细（成功 ${r.success} · 失败 ${r.failed}）\n${lines.join('\n')}\n\n行号按数据行计，不含表头。`;
+    wx.setClipboardData({ data: text, success: () => wx.showToast({ title: '已复制', icon: 'none' }) });
   },
 
   resetData() {
@@ -129,6 +213,7 @@ Page({
             wx.showModal({ title: '部分未清空', showCancel: false, content: '仍有残留：' + left.map(([k, v]) => `${k}(${v.remaining})`).join('、') + '。请再点一次「清空所有数据」。' });
             return;
           }
+          try { wx.removeStorageSync(LAST_IMPORT_KEY); } catch (e) { /* 忽略 */ }
           wx.showToast({ title: '已清空', icon: 'success' });
           setTimeout(() => wx.reLaunch({ url: '/pages/login/login' }), 600);
         }).catch((e) => { wx.hideLoading(); api.toast(e); });
@@ -138,14 +223,30 @@ Page({
 
   initSeed() {
     wx.showModal({
-      title: '初始化测试数据',
-      content: '将清空并重新载入演示数据（账本/成员/记录等），当前用户会成为「小雨」。确定继续？',
+      title: '载入演示数据',
+      content: '将创建两个演示账本（家庭 / 旅行分账）及演示成员与记录，与你的真实账本互不影响；重复载入会先清掉旧演示数据。',
       success: (res) => {
         if (!res.confirm) return;
-        wx.showLoading({ title: '初始化中…' });
+        wx.showLoading({ title: '载入中…' });
         api.call('seed', 'run').then(() => {
           wx.hideLoading();
-          wx.showToast({ title: '初始化完成', icon: 'success' });
+          wx.showToast({ title: '演示数据已载入', icon: 'success' });
+          this.load();
+        }).catch((e) => { wx.hideLoading(); api.toast(e); });
+      },
+    });
+  },
+
+  clearSeed() {
+    wx.showModal({
+      title: '清除演示数据',
+      content: '将删除全部演示账本/成员/记录（seed 标记数据），你的真实数据不受影响。',
+      success: (res) => {
+        if (!res.confirm) return;
+        wx.showLoading({ title: '清除中…' });
+        api.call('seed', 'clear').then(() => {
+          wx.hideLoading();
+          wx.showToast({ title: '演示数据已清除', icon: 'success' });
           this.load();
         }).catch((e) => { wx.hideLoading(); api.toast(e); });
       },

@@ -18,7 +18,8 @@
     </view>
 
     <view class="input-label">账本名称</view>
-    <input class="text-input" placeholder="例如：家庭日常" value="{{bookName}}" bindinput="onNameInput" />
+    <input class="text-input {{nameError ? 'input-error' : ''}}" placeholder="例如：家庭日常" placeholder-class="{{nameError ? 'input-ph-error' : 'input-ph'}}" focus="{{nameFocus}}" value="{{bookName}}" bindinput="onNameInput" />
+    <view wx:if="{{nameError}}" class="field-err">请输入账本名称</view>
 
     <view class="input-label">账本类型</view>
     <view class="type-choice">

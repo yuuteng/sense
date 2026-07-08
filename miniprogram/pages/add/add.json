@@ -3,6 +3,7 @@
     "nav-bar": "/components/nav-bar/index",
     "avatar": "/components/avatar/index",
     "calendar": "/components/calendar/index",
-    "currency-picker": "/components/currency-picker/index"
+    "currency-picker": "/components/currency-picker/index",
+    "loading": "/components/loading/index"
   }
 }

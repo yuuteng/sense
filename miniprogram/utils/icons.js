@@ -43,6 +43,8 @@ const PATHS = {
 
   // —— 账本 / 设置 ——
   book: '<path d="M5 4h11l3 3v13H5z"/><path d="M9 9h6M9 13h6"/>',
+  // 分账账本：同款书本轮廓 + ÷ 号（与 book 成对，共享=横线 / 分账=除号）
+  bookSplit: '<path d="M5 4h11l3 3v13H5z"/><path d="M9 13h6"/><circle cx="12" cy="9.6" r="1.1" fill="CFILL" stroke="none"/><circle cx="12" cy="16.4" r="1.1" fill="CFILL" stroke="none"/>',
   bars: '<path d="M5 20v-6M12 20V5M19 20v-9" stroke-linecap="round"/><path d="M3 20h18" stroke-linecap="round"/>',
   aiBox: '<path d="M4 5h16v10H9l-4 3v-3H4z" stroke-linejoin="round"/>',
   currency: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5c.5-1.5 4-2 4 0 0 1.5-2 1.5-2 3M12 16h.01"/>',

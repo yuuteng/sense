@@ -1,4 +1,5 @@
 <view class="screen {{type==='in' ? 'mode-income' : ''}}">
+  <loading show="{{loading}}"></loading>
   <nav-bar back="{{true}}" center="{{true}}" title="{{navTitle}}" sub="{{book.name}}"></nav-bar>
 
   <!-- 收支切换 -->

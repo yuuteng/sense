@@ -17,11 +17,6 @@
       <view class="li__label">展示币种</view>
       <view class="li__val">{{curLabel}} <image class="chevron" src="{{ic.chevron}}"></image></view>
     </view>
-    <view class="li">
-      <view class="li__ic"><image src="{{ic.aiBox}}"></image></view>
-      <view class="li__label">AI 会话保留上限</view>
-      <view class="li__val num">{{aiLimit}} 条</view>
-    </view>
   </view>
 
   <view class="group__title">账本与数据</view>
@@ -34,12 +29,14 @@
     <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="onExport">
       <view class="li__ic"><image src="{{ic.download}}"></image></view>
       <view class="li__label">导出数据</view>
-      <view class="li__val">账本 / 时间 / 格式 <image class="chevron" src="{{ic.chevron}}"></image></view>
+      <view class="li__val">JSON / Excel / PDF <image class="chevron" src="{{ic.chevron}}"></image></view>
     </view>
     <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="onImport">
       <view class="li__ic"><image src="{{ic.upload}}"></image></view>
       <view class="li__label">导入数据</view>
-      <view class="li__val">{{importVal}}</view>
+      <!-- 有历史结果时，点摘要重开结果面板（catchtap 不触发选文件）；点行内其他区域仍是导入 -->
+      <view wx:if="{{importVal}}" class="li__val" catchtap="showLastImport">{{importVal}} <image class="chevron" src="{{ic.chevron}}"></image></view>
+      <view wx:else class="li__val">JSON / Excel / CSV <image class="chevron" src="{{ic.chevron}}"></image></view>
     </view>
   </view>
 
@@ -53,8 +50,13 @@
     </view>
     <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="initSeed">
       <view class="li__ic"><image src="{{ic.seed}}"></image></view>
-      <view class="li__label">初始化测试数据</view>
-      <view class="li__val">载入演示数据 <image class="chevron" src="{{ic.chevron}}"></image></view>
+      <view class="li__label">载入演示数据</view>
+      <view class="li__val">独立演示账本 <image class="chevron" src="{{ic.chevron}}"></image></view>
+    </view>
+    <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="clearSeed">
+      <view class="li__ic"><image src="{{ic.seed}}"></image></view>
+      <view class="li__label">清除演示数据</view>
+      <view class="li__val">不影响真实数据 <image class="chevron" src="{{ic.chevron}}"></image></view>
     </view>
     <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="resetData">
       <view class="li__ic danger"><image src="{{ic.wipe}}"></image></view>
@@ -63,11 +65,60 @@
   </view>
   </block>
 
-  <view class="group__title">关于</view>
+  <view class="group__title">帮助与关于</view>
   <view class="group group--flat">
+    <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="goFeedback">
+      <view class="li__ic"><image src="{{ic.mail}}"></image></view>
+      <view class="li__label" style="display:flex;align-items:center;gap:14rpx">意见反馈<view wx:if="{{fbUnread}}" class="reddot"></view></view>
+      <view class="li__val">{{fbUnread ? fbUnread + ' 条新回复' : ''}} <image class="chevron" src="{{ic.chevron}}"></image></view>
+    </view>
     <view class="li"><view class="li__label">隐私说明</view><view class="li__val">AI 分析基于你的账本数据</view></view>
     <view class="li"><view class="li__label">版本</view><view class="li__val num">v1.0 · P1</view></view>
   </view>
 
   <currency-picker visible="{{curVisible}}" current="{{curCode}}" bind:select="onCur" bind:close="closeCur"></currency-picker>
+
+  <!-- 导入结果面板（半屏） -->
+  <view wx:if="{{importResult}}" class="imp-mask" bindtap="closeImportResult">
+    <view class="imp-sheet" catchtap="noop">
+      <view class="imp-head">
+        <view class="imp-badge {{importResult.allOk ? 'imp-badge--ok' : 'imp-badge--warn'}}">{{importResult.allOk ? '✓' : '!'}}</view>
+        <view style="flex:1">
+          <view class="imp-title">{{importResult.undone ? '本次导入已撤销' : (importResult.allOk ? '全部导入成功' : '部分记录未能导入')}}</view>
+          <view wx:if="{{importResult.timeLabel}}" class="imp-time">{{importResult.timeLabel}} 导入</view>
+        </view>
+      </view>
+      <view class="imp-nums">
+        <view class="imp-num"><text class="imp-num__v ok">{{importResult.success}}</text><text class="imp-num__k">成功</text></view>
+        <view class="imp-num"><text class="imp-num__v">{{importResult.skippedCount}}</text><text class="imp-num__k">跳过(重复)</text></view>
+        <view class="imp-num"><text class="imp-num__v {{importResult.failed ? 'bad' : ''}}">{{importResult.failed}}</text><text class="imp-num__k">失败</text></view>
+        <view class="imp-num"><text class="imp-num__v">{{importResult.createdCategories}}</text><text class="imp-num__k">新建分类</text></view>
+      </view>
+
+      <block wx:if="{{importResult.failures.length || importResult.skipped.length}}">
+        <scroll-view scroll-y class="imp-list" style="margin-top:32rpx">
+          <block wx:if="{{importResult.failures.length}}">
+            <view class="imp-sec">失败明细 · {{importResult.failures.length}} 条</view>
+            <view wx:for="{{importResult.failures}}" wx:key="index" class="imp-row">
+              <view class="imp-row__where">{{item.index ? '第 ' + item.index + ' 条' : '—'}}<text wx:if="{{item.summary}}" class="imp-row__sum">{{item.summary}}</text></view>
+              <view class="imp-row__reason">{{item.reason}}</view>
+            </view>
+          </block>
+          <block wx:if="{{importResult.skipped.length}}">
+            <view class="imp-sec">跳过明细 · 与账本中已有记录重复</view>
+            <view wx:for="{{importResult.skipped}}" wx:key="index" class="imp-row">
+              <view class="imp-row__where">{{item.index ? '第 ' + item.index + ' 条' : '—'}}<text wx:if="{{item.summary}}" class="imp-row__sum">{{item.summary}}</text></view>
+            </view>
+          </block>
+        </scroll-view>
+        <view class="imp-foot-note">行号按数据行计，不含表头。如确需保留重复记录，修改其备注使其可区分后重新导入。</view>
+      </block>
+
+      <view wx:if="{{importResult.failures.length}}" class="imp-copy-link" hover-class="pressed" hover-stay-time="80" bindtap="copyImportFailures">复制失败明细</view>
+      <view class="imp-actions">
+        <view wx:if="{{importResult.batchId}}" class="btn btn--danger" style="flex:1" hover-class="pressed" hover-stay-time="80" bindtap="undoImport">撤销本次导入</view>
+        <view class="btn btn--primary" style="flex:1" hover-class="pressed" hover-stay-time="80" bindtap="closeImportResult">知道了</view>
+      </view>
+    </view>
+  </view>
 </view>

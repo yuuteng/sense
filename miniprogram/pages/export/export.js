@@ -13,6 +13,8 @@ Page({
     ic: {},
     books: [],
     bookId: '',
+    selBook: null,          // 当前选中账本（折叠行展示）
+    bookSheetVisible: false, // 账本选择弹层
     // 时间范围
     ranges: [
       { key: 'all', label: '全部时间' },
@@ -24,12 +26,12 @@ Page({
     rangeMode: 'all',
     dateFrom: '',
     dateTo: '',
-    // 导出格式（PDF 后端暂未就绪，置灰）
+    // 导出格式（标签精简保证单行放下，格式说明见下方注释文案）
     formats: [
-      { key: 'excel', label: 'Excel (.xlsx)' },
+      { key: 'excel', label: 'Excel' },
       { key: 'csv', label: 'CSV' },
       { key: 'json', label: 'JSON' },
-      { key: 'pdf', label: 'PDF · 开发中', disabled: true },
+      { key: 'pdf', label: 'PDF' },
     ],
     format: 'excel',
     // 下载方式
@@ -47,11 +49,13 @@ Page({
     this.setData({
       ic: {
         book: icons.get('book', '#0089c0', 1.7),
+        bookSplit: icons.get('bookSplit', '#a47d06', 1.7),
         calendar: icons.get('calendar', '#748294', 1.7),
         download: icons.get('download', '#0089c0', 1.7),
         mail: icons.get('mail', '#0089c0', 1.7),
         check: icons.get('check', '#0089c0', 2.4),
         chevron: icons.get('chevron', '#748294', 2),
+        chevronDown: icons.get('chevronDown', '#748294', 2.2),
       },
       email: wx.getStorageSync('exportEmail') || '',
     });
@@ -61,18 +65,30 @@ Page({
   async load() {
     try {
       const books = await api.call('book', 'list');
+      // 图标随账本类型：共享=蓝 book / 分账=黄 bookSplit（全局约定）
       const list = books.map((b) => ({
         bookId: b.bookId, name: b.name, typeLabel: b.typeLabel, roleLabel: ROLE_LABEL[b.myRole] || b.myRole,
+        typeClass: b.type === 'split' ? 'book-type--split' : 'book-type--share',
+        iconSrc: b.type === 'split' ? this.data.ic.bookSplit : this.data.ic.book,
+        iconBg: b.type === 'split' ? 'rgba(255,205,47,0.16)' : 'rgba(0,204,249,0.12)',
+        isCurrent: b.isCurrent || b.isDefault,
       }));
-      const cur = books.find((b) => b.isCurrent || b.isDefault) || books[0];
-      this.setData({ books: list, bookId: cur ? cur.bookId : '', loading: false });
+      const cur = list.find((b) => b.isCurrent) || list[0];
+      this.setData({ books: list, bookId: cur ? cur.bookId : '', selBook: cur || null, loading: false });
     } catch (e) {
       this.setData({ loading: false });
       api.toast(e);
     }
   },
 
-  pickBook(e) { this.setData({ bookId: e.currentTarget.dataset.id }); },
+  // 账本选择：折叠行 → 弹层挑选（复用 book-switcher）
+  openBookSheet() { if (this.data.books.length) this.setData({ bookSheetVisible: true }); },
+  closeBookSheet() { this.setData({ bookSheetVisible: false }); },
+  onBookPick(e) {
+    const id = e.detail.bookId;
+    const sel = this.data.books.find((b) => b.bookId === id);
+    this.setData({ bookId: id, selBook: sel || this.data.selBook, bookSheetVisible: false });
+  },
 
   pickRange(e) {
     const key = e.currentTarget.dataset.key;
@@ -88,10 +104,7 @@ Page({
     this.setData(patch);
   },
 
-  pickFormat(e) {
-    if (e.currentTarget.dataset.off) { wx.showToast({ title: 'PDF 报表开发中，敬请期待', icon: 'none' }); return; }
-    this.setData({ format: e.currentTarget.dataset.key });
-  },
+  pickFormat(e) { this.setData({ format: e.currentTarget.dataset.key }); },
 
   pickDelivery(e) { this.setData({ delivery: e.currentTarget.dataset.key }); },
   onEmail(e) { this.setData({ email: e.detail.value }); },

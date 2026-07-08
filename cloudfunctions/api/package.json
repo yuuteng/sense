@@ -4,8 +4,9 @@
   "description": "心数 Sense 后端主云函数（按 resource.type 路由）",
   "main": "index.js",
   "dependencies": {
+    "nodemailer": "^6.9.14",
+    "pdfkit": "^0.19.1",
     "wx-server-sdk": "~2.6.3",
-    "xlsx": "^0.18.5",
-    "nodemailer": "^6.9.14"
+    "xlsx": "^0.18.5"
   }
 }

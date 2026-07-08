@@ -1,0 +1,3 @@
+<view class="chart-box" style="height:{{height}}">
+  <ec-canvas id="ec" ec="{{ec}}"></ec-canvas>
+</view>

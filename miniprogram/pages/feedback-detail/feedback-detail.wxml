@@ -1,0 +1,45 @@
+<view class="screen fb-screen">
+  <loading show="{{loading}}"></loading>
+  <nav-bar back="{{true}}" center="{{true}}" title="反馈详情"></nav-bar>
+
+  <block wx:if="{{fb}}">
+    <!-- 工单卡 -->
+    <view class="card--flush fb-card">
+      <view class="fb-card__head">
+        <text class="fb-card__title">{{fb.title}}</text>
+        <text class="fb-status {{statusClass}}">{{fb.statusLabel}}</text>
+      </view>
+      <view class="fb-card__meta">{{fb.isAdmin ? fb.fromName + ' · ' : ''}}{{fb.timeLabel}}{{fb.contactEmail ? ' · ' + fb.contactEmail : ''}}</view>
+      <view class="fb-card__content">{{fb.content}}</view>
+      <view wx:if="{{fb.images.length}}" class="fb-card__imgs">
+        <image wx:for="{{fb.images}}" wx:key="*this" src="{{item}}" mode="aspectFill" data-i="{{index}}" bindtap="previewImage"></image>
+      </view>
+    </view>
+
+    <!-- 管理员：状态操作 -->
+    <block wx:if="{{fb.isAdmin}}">
+      <view class="section-label" style="padding-bottom:16rpx">处理状态（客服）</view>
+      <view style="padding:0 40rpx">
+        <view class="segmented">
+          <view wx:for="{{statuses}}" wx:key="k" class="segmented__btn {{fb.status===item.k?'selected':''}}" data-k="{{item.k}}" bindtap="pickStatus">{{item.label}}</view>
+        </view>
+      </view>
+    </block>
+
+    <!-- 回复线程 -->
+    <view class="section-label" style="padding-bottom:16rpx">回复 · {{replies.length}} 条</view>
+    <view class="fb-thread">
+      <view wx:if="{{!replies.length}}" class="ai-disclaimer left" style="padding:0">暂无回复，客服会尽快处理。</view>
+      <view wx:for="{{replies}}" wx:key="index" class="fb-msg {{item.from==='cs' ? 'fb-msg--cs' : ''}}">
+        <view class="fb-msg__who">{{item.from==='cs' ? '客服' : (fb.isAdmin ? fb.fromName : '我')}} · {{item.timeLabel}}</view>
+        <view class="fb-msg__bubble">{{item.content}}</view>
+      </view>
+    </view>
+
+    <!-- 回复输入 -->
+    <view class="fb-replybar">
+      <input class="text-input fb-replybar__input" placeholder="{{fb.isAdmin && !fb.isMine ? '以客服身份回复…' : '继续补充或追问…'}}" placeholder-class="input-ph" value="{{replyText}}" bindinput="onReplyInput" confirm-type="send" bindconfirm="sendReply" />
+      <view class="btn btn--primary fb-replybar__send" hover-class="pressed" hover-stay-time="80" bindtap="sendReply">发送</view>
+    </view>
+  </block>
+</view>

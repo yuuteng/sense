@@ -6,6 +6,8 @@ Page({
   data: {
     statusBarHeight: 20,
     bookName: '',
+    nameFocus: false,
+    nameError: false,
     type: 'share',
     baseCur: 'CNY',
     curLabel: cur.label('CNY'),
@@ -21,7 +23,10 @@ Page({
     });
   },
 
-  onNameInput(e) { this.setData({ bookName: e.detail.value }); },
+  onNameInput(e) {
+    // 开始输入即撤掉错误态
+    this.setData({ bookName: e.detail.value, nameError: e.detail.value.trim() ? false : this.data.nameError });
+  },
   pickType(e) { this.setData({ type: e.currentTarget.dataset.t }); },
 
   openCur() { this.setData({ curVisible: true }); },
@@ -32,7 +37,14 @@ Page({
   },
 
   create() {
-    const name = (this.data.bookName || '').trim() || '我的账本';
+    const name = (this.data.bookName || '').trim();
+    if (!name) {
+      // 行内错误态：输入框标红 + 提示语 + 聚焦，比 toast 更明确
+      this.setData({ nameError: true, nameFocus: true });
+      return;
+    }
+    if (this.creating) return;
+    this.creating = true;
     wx.showLoading({ title: '创建中…' });
     api.call('book', 'create', { name, bookType: this.data.type, baseCurrency: this.data.baseCur })
       .then(() => {
@@ -40,6 +52,6 @@ Page({
         wx.showToast({ title: '账本已创建', icon: 'success' });
         setTimeout(() => wx.switchTab({ url: '/pages/home/home' }), 600);
       })
-      .catch((e) => { wx.hideLoading(); api.toast(e); });
+      .catch((e) => { this.creating = false; wx.hideLoading(); api.toast(e); });
   },
 });

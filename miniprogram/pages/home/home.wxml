@@ -46,7 +46,7 @@
         wx:for="{{g.items}}"
         wx:key="id"
         wx:for-item="it"
-        class="txn"
+        class="txn {{it.pending ? 'txn--pending' : ''}}"
         hover-class="pressed"
         hover-stay-time="80"
         data-id="{{it.id}}"
@@ -71,9 +71,10 @@
     </view>
   </block>
 
-  <view wx:if="{{!needInit && groups.length}}" class="ai-disclaimer" style="padding-top:40rpx">已显示全部记录</view>
+  <view wx:if="{{!needInit && groups.length && loadingMore}}" class="load-more"><view class="mini-spin"></view>正在加载更早的记录…</view>
+  <view wx:elif="{{!needInit && groups.length && !hasMore}}" class="ai-disclaimer" style="padding-top:40rpx">已显示全部记录</view>
 
-  <navigator class="fab" url="/pages/add/add" hover-class="pressed" hover-stay-time="80">
+  <navigator wx:if="{{canAdd}}" class="fab" url="/pages/add/add" hover-class="pressed" hover-stay-time="80">
     <image src="{{plusIcon}}"></image>
   </navigator>
 

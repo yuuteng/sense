@@ -6,13 +6,18 @@
     "pages/settings/settings",
     "pages/add/add",
     "pages/detail/detail",
+    "pages/records/records",
     "pages/books/books",
     "pages/bookConfig/bookConfig",
     "pages/export/export",
     "pages/onboarding/onboarding",
     "pages/settle/settle",
     "pages/login/login",
-    "pages/join/join"
+    "pages/join/join",
+    "pages/feedback/feedback",
+    "pages/feedback-new/feedback-new",
+    "pages/feedback-detail/feedback-detail",
+    "pages/feedback-team/feedback-team"
   ],
   "window": {
     "backgroundColor": "#f6f9fc",

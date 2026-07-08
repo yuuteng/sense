@@ -10,16 +10,15 @@
   <!-- 头像 + 昵称 -->
   <view class="login__card">
     <view class="avatar-wrap">
-      <button class="avatar-pick" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
-        <image wx:if="{{avatarUrl}}" class="avatar-pick__img" src="{{avatarUrl}}" mode="aspectFill"></image>
-        <view wx:else class="avatar-pick__ph">
-          <text class="avatar-pick__plus">＋</text>
-        </view>
-      </button>
+      <image wx:if="{{avatarUrl}}" class="avatar-img" src="{{avatarUrl}}" mode="aspectFill"></image>
+      <view wx:else class="avatar-ph">
+        <text class="avatar-plus">＋</text>
+      </view>
+      <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar"></button>
     </view>
     <view class="avatar-pick__tip">{{avatarUrl ? '点击更换头像' : '点击设置头像'}}</view>
 
-    <input class="login__nickname" type="nickname" maxlength="20" placeholder="填写昵称" value="{{nickname}}" bindinput="onNickname" bindblur="onNickname" />
+    <input class="login__nickname" type="nickname" maxlength="20" placeholder="填写昵称" placeholder-class="input-ph" value="{{nickname}}" bindinput="onNickname" bindblur="onNickname" />
   </view>
 
   <!-- 底部 -->

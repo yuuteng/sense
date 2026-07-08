@@ -12,9 +12,8 @@ Page({
   onLoad() {
     this.setData({
       ic: {
-        bookWhite: icons.get('book', '#ffffff', 1.7),
         bookAccent: icons.get('book', '#0089c0', 1.7),
-        house: icons.get('house', '#a47d06', 1.7),
+        bookSplit: icons.get('bookSplit', '#a47d06', 1.7),
         chevron: icons.get('chevron', '#748294', 2),
         plus: icons.get('plus', '#3e4550', 2.2),
       },
@@ -30,8 +29,9 @@ Page({
         ...b,
         roleMine: ROLE_MINE[b.myRole] || b.myRole,
         typeClass: b.type === 'split' ? 'book-type--split' : 'book-type--share',
-        iconSrc: b.isCurrent ? this.data.ic.bookWhite : (b.type === 'split' ? this.data.ic.house : this.data.ic.bookAccent),
-        iconBg: b.isCurrent ? 'var(--accent)' : (b.type === 'split' ? 'rgba(255,205,47,0.16)' : 'rgba(0,204,249,0.12)'),
+        // 图标只表达账本类型（共享=蓝 / 分账=黄），当前账本由「当前 · 默认」徽章标识
+        iconSrc: b.type === 'split' ? this.data.ic.bookSplit : this.data.ic.bookAccent,
+        iconBg: b.type === 'split' ? 'rgba(255,205,47,0.16)' : 'rgba(0,204,249,0.12)',
       }));
       this.setData({ books: view });
     } catch (e) { api.toast(e); }

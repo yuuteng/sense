@@ -13,6 +13,7 @@ Component({
   data: {
     selected: 0,
     list: [],
+    hidden: false, // 底部弹层打开时置 true（自定义 tabBar 层级高于页面元素，弹层盖不住它，只能藏）
   },
   lifetimes: {
     attached() {

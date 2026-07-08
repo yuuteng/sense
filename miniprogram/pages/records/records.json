@@ -1,0 +1,8 @@
+{
+  "onReachBottomDistance": 600,
+  "usingComponents": {
+    "nav-bar": "/components/nav-bar/index",
+    "avatar": "/components/avatar/index",
+    "loading": "/components/loading/index"
+  }
+}

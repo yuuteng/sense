@@ -1,11 +1,15 @@
 const api = require('../../utils/api');
 const icons = require('../../utils/icons');
 const fmt = require('../../utils/format');
+const tabbar = require('../../utils/tabbar');
+const theme = require('../../utils/chart-theme');
 
 const GREEN = '#9edf10', BLUE = '#00ccf9', TRACK = '#e4e7ec', AXIS = '#97a7b7';
 function enc(svg) { return 'data:image/svg+xml,' + encodeURIComponent(svg); }
 function genId() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
+// —— 以下三个 SVG 生成函数仅用于「添加图表」面板的静态示意缩略图 ——
+// 真实图表已全部迁移 ECharts（utils/chart-theme.js + components/chart）。
 // 甜甜圈饼图：收入(绿) vs 支出(蓝)
 function donutSvg(income, expense) {
   const cx = 100, cy = 100, r = 66, sw = 30, C = 2 * Math.PI * r;
@@ -62,18 +66,50 @@ function pairedSvg(rows) {
 
 // 图表类型（可添加多个同类型实例）
 const TYPES = {
-  monthPie: { title: '本月收支', desc: '本月收入 / 支出占比', kind: 'pie' },
+  monthPie: { title: '月度收支', desc: '任一月份收入 / 支出占比，可切换月份', kind: 'pie' },
+  catBreakdown: { title: '分类占比', desc: '某月支出/收入按分类的占比与排行，可钻取明细', kind: 'cat' },
   weekExpense: { title: '支出趋势', desc: '近 N 日每日支出', kind: 'bars', defRange: 7 },
   yearInOut: { title: '收支趋势', desc: '近 N 月收入 vs 支出', kind: 'paired', defRange: 12 },
   totalPie: { title: '累计收支', desc: '账本累计收入 / 支出占比', kind: 'pie' },
 };
-const TYPE_IDS = ['monthPie', 'weekExpense', 'yearInOut', 'totalPie'];
+const TYPE_IDS = ['monthPie', 'catBreakdown', 'weekExpense', 'yearInOut', 'totalPie'];
 const DEFAULT_LAYOUT = ['monthPie', 'weekExpense', 'yearInOut', 'totalPie'];
+const RANK_TOP = 5; // 分类排行默认展示前 5，其余折叠
+
+// 'YYYY-MM' 偏移 delta 个月
+function shiftYm(ym, delta) {
+  let [y, m] = ym.split('-').map(Number);
+  m += delta;
+  while (m < 1) { m += 12; y--; }
+  while (m > 12) { m -= 12; y++; }
+  return `${y}-${String(m).padStart(2, '0')}`;
+}
+// 本地当月（后端字段缺失时的兜底）
+function localYm() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// 多色环形示意图（分类占比缩略图）：values 为各段占比，colors 对应色
+function catPreviewSvg(values, colors) {
+  const cx = 100, cy = 100, r = 66, sw = 30, C = 2 * Math.PI * r;
+  const total = values.reduce((s, v) => s + v, 0) || 1;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">`;
+  let off = 0;
+  values.forEach((v, i) => {
+    const len = C * (v / total);
+    s += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${colors[i]}" stroke-width="${sw}" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    off += len;
+  });
+  s += `</svg>`;
+  return enc(s);
+}
 
 // 「添加图表」弹层用的示意缩略图：套用真实图表的画法 + 一组样例数据，纯展示、不含真实金额
 const PREVIEW = {
   monthPie: donutSvg(62, 38),
   totalPie: donutSvg(56, 44),
+  catBreakdown: catPreviewSvg([38, 26, 18, 12, 6], theme.CAT_COLORS.slice(0, 5)),
   weekExpense: barsSvg([30, 52, 40, 68, 45, 60, 74], ['', '', '', '', '', '', '']),
   yearInOut: pairedSvg([
     { income: 70, expense: 52, label: '' }, { income: 60, expense: 66, label: '' },
@@ -85,7 +121,8 @@ const PICKER_TYPES = TYPE_IDS.map((id) => ({
   type: id, kind: TYPES[id].kind, title: TYPES[id].title, desc: TYPES[id].desc, preview: PREVIEW[id],
 }));
 
-// 兼容旧布局（字符串 id）与新布局（实例对象）
+// 兼容旧布局（字符串 id）与新布局（实例对象）。
+// month：'YYYY-MM' = 固定看该月；不存 = 跟随当前月（默认卡行为）。
 function normalizeLayout(order) {
   const arr = (Array.isArray(order) && order.length) ? order : DEFAULT_LAYOUT;
   return arr.map((it) => {
@@ -93,7 +130,12 @@ function normalizeLayout(order) {
       if (!TYPES[it]) return null;
       return { iid: genId(), type: it, range: TYPES[it].defRange };
     }
-    if (it && TYPES[it.type]) return { iid: it.iid || genId(), type: it.type, range: it.range || TYPES[it.type].defRange };
+    if (it && TYPES[it.type]) {
+      const inst = { iid: it.iid || genId(), type: it.type, range: it.range || TYPES[it.type].defRange };
+      if (/^\d{4}-\d{2}$/.test(it.month || '')) inst.month = it.month;
+      if (it.type === 'catBreakdown') inst.catKind = it.catKind === 'income' ? 'income' : 'expense';
+      return inst;
+    }
     return null;
   }).filter(Boolean);
 }
@@ -122,22 +164,31 @@ Page({
     pickerRender: false,
     pickerUp: false,
     pickerTypes: PICKER_TYPES,
+    // 编辑模式（长按进入）：整张卡片拖拽排序
+    dragIid: '',
+    dragY: 0,
   },
+
+  onPageScroll(e) { this._scrollTop = e.scrollTop; },
 
   onLoad() {
     this.layout = normalizeLayout(DEFAULT_LAYOUT);
+    const wi = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+    this._winH = wi.windowHeight; // 拖拽时自动滚动的边缘判定
+    this._scrollTop = 0;
     this.setData({
       chevronDown: icons.get('chevronDown', '#748294', 2.2),
       addIcon: icons.get('plus', '#0089c0', 2),
       barsIcon: icons.get('bars', '#97a7b7', 1.4),
+      dragIcon: icons.get('dragHandle', '#97a7b7', 2),
       bookIcon: icons.get('book', '#0089c0', 1.7),
-      houseIcon: icons.get('house', '#a47d06', 1.7),
+      splitIcon: icons.get('bookSplit', '#a47d06', 1.7),
     });
   },
 
   onShow() {
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
-      this.getTabBar().setData({ selected: 1 });
+      this.getTabBar().setData({ selected: 1, hidden: false });
     }
     this.load();
   },
@@ -146,6 +197,7 @@ Page({
     try {
       const book = await api.call('book', 'getCurrent');
       if (!book) { this.setData({ needInit: true, loading: false }); return; }
+      if (this.bookId !== book.bookId) this._catCache = {}; // 切账本清分类聚合缓存
       this.bookId = book.bookId;
       this.cur = book.displayCurrency || 'CNY';
       this.setData({ bookName: book.name, currentBookId: book.bookId, curCode: this.cur, curSym: fmt.symbolOf(this.cur), needInit: false });
@@ -154,10 +206,24 @@ Page({
         api.call('layout', 'get', { bookId: book.bookId }),
       ]);
       this.raw = raw;
+      this._catCache = {}; // 数据可能已变（新记账/改展示币种），聚合重新拉
       this.layout = normalizeLayout(layout.order);
+      await this.ensureCatData();
       this.rebuild();
       this.setData({ loading: false });
     } catch (e) { this.setData({ loading: false }); api.toast(e); }
+  },
+
+  // 确保布局中所有分类占比卡所需月份的聚合数据已就位（并发拉取，去重）
+  async ensureCatData() {
+    const curYm = (this.raw && this.raw.curMonth) || localYm();
+    const months = [...new Set(this.layout.filter((x) => x.type === 'catBreakdown').map((x) => x.month || curYm))];
+    this._catCache = this._catCache || {};
+    const missing = months.filter((ym) => !this._catCache[ym]);
+    if (!missing.length) return;
+    const results = await Promise.all(missing.map((ym) =>
+      api.call('stats', 'getCategoryData', { bookId: this.bookId, month: ym }).catch(() => null)));
+    missing.forEach((ym, i) => { if (results[i]) this._catCache[ym] = results[i]; });
   },
 
   rebuild() {
@@ -166,19 +232,84 @@ Page({
 
   buildCard(inst) {
     const raw = this.raw || {}; const cur = this.cur;
-    if (inst.type === 'monthPie' || inst.type === 'totalPie') {
-      const isMonth = inst.type === 'monthPie';
-      const p = (isMonth ? raw.monthPie : raw.totalPie) || { income: 0, expense: 0 };
+    if (inst.type === 'totalPie') {
+      const p = raw.totalPie || { income: 0, expense: 0 };
       return {
         iid: inst.iid, type: inst.type, kind: 'pie',
-        title: isMonth ? '本月收支' : '账本累计收支',
-        sub: isMonth ? `${raw.monthLabel || ''} · 收入 vs 支出` : '自建立以来 · 收入 vs 支出',
-        svg: donutSvg(p.income, p.expense),
+        title: '账本累计收支', sub: '自建立以来 · 收入 vs 支出',
+        option: theme.donutOption(p.income, p.expense),
         legends: [
-          { dot: GREEN, k: isMonth ? '收入' : '总收入', v: fmt.money(p.income, cur) },
-          { dot: BLUE, k: isMonth ? '支出' : '总支出', v: fmt.money(p.expense, cur) },
-          { k: isMonth ? '结余' : '累计结余', v: fmt.signedTotal(p.income - p.expense, cur), strong: true },
+          { dot: GREEN, k: '总收入', v: fmt.money(p.income, cur), type: 'income' },
+          { dot: BLUE, k: '总支出', v: fmt.money(p.expense, cur), type: 'expense' },
+          { k: '累计结余', v: fmt.signedTotal(p.income - p.expense, cur), strong: true },
         ],
+      };
+    }
+    if (inst.type === 'monthPie') {
+      // 月度收支：inst.month 固定看某月；未设置则跟随当前月
+      const curYm = raw.curMonth || localYm();
+      const firstYm = raw.firstMonth || curYm;
+      const ym = inst.month || curYm;
+      const isCur = ym === curYm;
+      const p = (isCur && raw.monthPie)
+        ? raw.monthPie
+        : ((raw.monthly || []).find((x) => x.ym === ym) || { income: 0, expense: 0 });
+      const [yy, mm] = ym.split('-');
+      const mNum = parseInt(mm, 10);
+      return {
+        iid: inst.iid, type: inst.type, kind: 'pie',
+        title: isCur ? '本月收支' : `${yy}年${mNum}月收支`,
+        sub: `${yy} 年 ${mNum} 月 · 收入 vs 支出`,
+        monthText: `${yy}年${mNum}月`,
+        month: {
+          ym, text: `${yy}年${mNum}月${isCur ? ' · 本月' : ''}`,
+          first: firstYm, last: curYm,
+          prevOk: ym > firstYm, nextOk: ym < curYm,
+        },
+        option: theme.donutOption(p.income, p.expense),
+        legends: [
+          { dot: GREEN, k: '收入', v: fmt.money(p.income, cur), type: 'income' },
+          { dot: BLUE, k: '支出', v: fmt.money(p.expense, cur), type: 'expense' },
+          { k: '结余', v: fmt.signedTotal(p.income - p.expense, cur), strong: true },
+        ],
+      };
+    }
+    if (inst.type === 'catBreakdown') {
+      // 分类占比：某月 × 收/支 × 顶级分类，环形图 + 排行（前 5 折叠）
+      const curYm = raw.curMonth || localYm();
+      const firstYm = raw.firstMonth || curYm;
+      const ym = inst.month || curYm;
+      const isCur = ym === curYm;
+      const kind = inst.catKind || 'expense';
+      const cache = (this._catCache || {})[ym];
+      const kd = (cache && cache[kind]) || { total: 0, cats: [] };
+      const [yy, mm] = ym.split('-');
+      const mNum = parseInt(mm, 10);
+      const expanded = !!(this._catExpand || {})[inst.iid];
+      const rows = kd.cats.map((c, i) => ({
+        categoryId: c.categoryId, name: c.name, count: c.count,
+        total: fmt.money(c.total, cur), percent: c.percent + '%',
+        dot: theme.catColorAt(i),
+      }));
+      const shown = expanded ? rows : rows.slice(0, RANK_TOP);
+      return {
+        iid: inst.iid, type: inst.type, kind: 'cat',
+        title: `${isCur ? '本月' : `${yy}年${mNum}月`}${kind === 'income' ? '收入' : '支出'}分类`,
+        sub: `${yy} 年 ${mNum} 月 · 按顶级分类`,
+        monthText: `${yy}年${mNum}月`,
+        month: {
+          ym, text: `${yy}年${mNum}月${isCur ? ' · 本月' : ''}`,
+          first: firstYm, last: curYm,
+          prevOk: ym > firstYm, nextOk: ym < curYm,
+        },
+        catKind: kind,
+        option: theme.catDonutOption(kd.cats),
+        centerLabel: { k: kind === 'income' ? '总收入' : '总支出', v: fmt.money(kd.total, cur) },
+        rows: shown,
+        totalCount: rows.length,
+        moreCount: rows.length - shown.length,
+        expanded,
+        empty: !rows.length,
       };
     }
     if (inst.type === 'weekExpense') {
@@ -187,7 +318,7 @@ Page({
       return {
         iid: inst.iid, type: inst.type, kind: 'bars', range: 'day', rangeVal: inst.range,
         title: `近 ${inst.range} 日支出`, sub: `按日 · 合计 ${fmt.money(sum, cur)}`,
-        svg: barsSvg(arr.map((x) => x.expense), arr.map((x) => x.label)),
+        option: theme.barsOption(arr.map((x) => x.expense), arr.map((x) => x.label)),
         legends: [{ dot: BLUE, k: '每日支出' }],
       };
     }
@@ -196,49 +327,142 @@ Page({
     return {
       iid: inst.iid, type: inst.type, kind: 'paired', range: 'month', rangeVal: inst.range,
       title: `近 ${inst.range} 个月收支`, sub: '按月 · 收入 vs 支出',
-      svg: pairedSvg(arr),
+      option: theme.pairedOption(arr),
       legends: [{ dot: GREEN, k: '收入' }, { dot: BLUE, k: '支出' }],
     };
   },
 
-  toggleEdit() { this.setData({ editing: !this.data.editing }); },
+  // —— 编辑模式：长按图表卡或点「编辑」进入；抓住卡片头部把整张卡拖走，其余卡片实时让位 ——
+  toggleEdit() { if (this.data.editing) this.exitEdit(); else this.enterEdit(); },
+  enterEdit(e) {
+    if (this.data.editing || !this.layout.length) return;
+    if (e) wx.vibrateShort({ type: 'light' }); // 长按触发时轻震反馈
+    this.setData({ editing: true, dragIid: '', dragY: 0 });
+  },
+  exitEdit() {
+    this._dz = null;
+    this.setData({ editing: false, dragIid: '', dragY: 0 });
+  },
+
+  // 拖拽起手：实测所有卡片的位置与高度（页面坐标 = 视口坐标 + 滚动量），高矮不一也能精确换位
+  onCardTouchStart(e) {
+    if (!this.data.editing) return;
+    const iid = e.currentTarget.dataset.iid;
+    const pos = this.data.cards.findIndex((c) => c.iid === iid);
+    if (pos < 0) return;
+    this._dz = { iid, pos, startPageY: e.touches[0].clientY + this._scrollTop, ready: false, lastScroll: 0 };
+    wx.createSelectorQuery()
+      .selectAll('.chart-card').boundingClientRect()
+      .selectViewport().scrollOffset()
+      .exec((res) => {
+        const dz = this._dz;
+        if (!dz || dz.iid !== iid || !res || !res[0] || res[0].length !== this.data.cards.length) return;
+        const st = res[1] ? res[1].scrollTop : this._scrollTop;
+        const tops = res[0].map((r) => r.top + st);
+        const hs = res[0].map((r) => r.height);
+        dz.gap = tops.length > 1 ? Math.max(0, tops[1] - (tops[0] + hs[0])) : 12;
+        dz.origTops = tops;                                   // 各卡初始页面顶（按 cards 下标）
+        dz.vis = tops.map((t, i) => ({ ci: i, top: t, h: hs[i] })); // 视觉顺序槽位
+        dz.dragH = hs[pos];
+        dz.dragOrigTop = tops[pos];
+        dz.ready = true;
+      });
+    this.setData({ dragIid: iid, dragY: 0 });
+  },
+  onCardTouchMove(e) {
+    const dz = this._dz;
+    if (!dz || !dz.ready) return;
+    const clientY = e.touches[0].clientY;
+    const dy = clientY + this._scrollTop - dz.startPageY;
+    // 拖动卡的渲染中心 = 初始位置 + 手指位移（与槽位记账无关，保证手感跟手）
+    const center = dz.dragOrigTop + dz.dragH / 2 + dy;
+    const patch = { dragY: dy };
+    let moved = true;
+    while (moved) {
+      moved = false;
+      const below = dz.vis[dz.pos + 1];
+      if (below && center > below.top + below.h / 2) {
+        // 下邻上移进拖动卡的槽位；拖动卡槽位下移「下邻高度 + 间距」
+        const slotTop = dz.vis[dz.pos].top;
+        const dragSlot = dz.vis[dz.pos];
+        below.top = slotTop;
+        dragSlot.top = slotTop + below.h + dz.gap;
+        dz.vis[dz.pos] = below;
+        dz.vis[dz.pos + 1] = dragSlot;
+        patch[`cards[${below.ci}].shiftY`] = Math.round(below.top - dz.origTops[below.ci]);
+        dz.pos += 1;
+        moved = true;
+        continue;
+      }
+      const above = dz.vis[dz.pos - 1];
+      if (above && center < above.top + above.h / 2) {
+        // 上邻下移；拖动卡槽位上移到上邻原位置
+        const aboveTop = above.top;
+        const dragSlot = dz.vis[dz.pos];
+        dragSlot.top = aboveTop;
+        above.top = aboveTop + dz.dragH + dz.gap;
+        dz.vis[dz.pos] = above;
+        dz.vis[dz.pos - 1] = dragSlot;
+        patch[`cards[${above.ci}].shiftY`] = Math.round(above.top - dz.origTops[above.ci]);
+        dz.pos -= 1;
+        moved = true;
+      }
+    }
+    this.setData(patch);
+    // 手指贴近视口上下沿：自动滚动，支持长距离拖动
+    const now = Date.now();
+    if (now - dz.lastScroll > 220) {
+      if (clientY < 170 && this._scrollTop > 0) {
+        dz.lastScroll = now;
+        wx.pageScrollTo({ scrollTop: Math.max(0, this._scrollTop - 150), duration: 150 });
+      } else if (clientY > this._winH - 170) {
+        dz.lastScroll = now;
+        wx.pageScrollTo({ scrollTop: this._scrollTop + 150, duration: 150 });
+      }
+    }
+  },
+  onCardTouchEnd() {
+    const dz = this._dz;
+    this._dz = null;
+    if (!dz) return;
+    if (!dz.ready) { this.setData({ dragIid: '', dragY: 0 }); return; }
+    // 按最终视觉顺序提交 cards / layout，清空位移。
+    // wx:key="iid" 让节点随排序移动而非重建，ECharts 画布无损保留。
+    const order = dz.vis.map((v) => v.ci);
+    const newCards = order.map((ci) => ({ ...this.data.cards[ci], shiftY: 0 }));
+    this.layout = order.map((ci) => this.layout[ci]);
+    this.setData({ cards: newCards, dragIid: '', dragY: 0 });
+    this.saveLayout();
+  },
 
   // 添加图表：弹出带示意图的选择面板（可重复添加，例如两个不同区间的支出趋势）
   openPicker() {
+    tabbar.setHidden(true); // tabBar 层级高于弹层，打开时先藏
     this.setData({ pickerRender: true });
     this._pt = setTimeout(() => this.setData({ pickerUp: true }), 20);
   },
   closePicker() {
+    tabbar.setHidden(false);
     this.setData({ pickerUp: false });
     this._pt = setTimeout(() => this.setData({ pickerRender: false }), 300);
   },
   noop() {},
-  pickType(e) {
+  async pickType(e) {
     const { type } = e.currentTarget.dataset;
     if (!type || !TYPES[type]) return;
-    this.layout = this.layout.concat([{ iid: genId(), type, range: TYPES[type].defRange }]);
+    const inst = { iid: genId(), type, range: TYPES[type].defRange };
+    if (type === 'catBreakdown') inst.catKind = 'expense';
+    this.layout = this.layout.concat([inst]);
+    this.closePicker();
+    if (type === 'catBreakdown') await this.ensureCatData();
     this.rebuild();
     this.saveLayout();
-    this.closePicker();
   },
 
-  moveUp(e) {
-    const i = Number(e.currentTarget.dataset.i);
-    if (i <= 0) return;
-    const a = this.layout.slice();
-    [a[i - 1], a[i]] = [a[i], a[i - 1]];
-    this.layout = a; this.rebuild(); this.saveLayout();
-  },
-  moveDown(e) {
-    const i = Number(e.currentTarget.dataset.i);
-    if (i >= this.layout.length - 1) return;
-    const a = this.layout.slice();
-    [a[i + 1], a[i]] = [a[i], a[i + 1]];
-    this.layout = a; this.rebuild(); this.saveLayout();
-  },
   removeCard(e) {
     const iid = e.currentTarget.dataset.iid;
     this.layout = this.layout.filter((x) => x.iid !== iid);
+    if (this.data.editing && !this.layout.length) this.setData({ editing: false }); // 删空自动退出编辑
     this.rebuild(); this.saveLayout();
   },
   setRange(e) {
@@ -247,9 +471,136 @@ Page({
     this.rebuild(); this.saveLayout();
   },
 
+  // —— 月度类卡片：月份切换（箭头逐月 / 原生月份 picker）——
+  // 选中当前月 = 清掉 month（回到「跟随当月」的默认行为）
+  async _setInstMonth(iid, ym) {
+    const raw = this.raw || {};
+    const curYm = raw.curMonth || localYm();
+    const firstYm = raw.firstMonth || curYm;
+    if (!ym || ym > curYm) ym = curYm;
+    if (ym < firstYm) ym = firstYm;
+    this.layout = this.layout.map((x) => {
+      if (x.iid !== iid) return x;
+      const next = { ...x };
+      if (ym === curYm) delete next.month; else next.month = ym;
+      return next;
+    });
+    await this.ensureCatData(); // 分类占比卡切月需拉对应月聚合
+    this.rebuild(); this.saveLayout();
+  },
+  monthShift(e) {
+    const { iid, dir } = e.currentTarget.dataset;
+    const inst = this.layout.find((x) => x.iid === iid);
+    if (!inst) return;
+    const curYm = (this.raw && this.raw.curMonth) || localYm();
+    this._setInstMonth(iid, shiftYm(inst.month || curYm, Number(dir)));
+  },
+  monthPick(e) {
+    this._setInstMonth(e.currentTarget.dataset.iid, e.detail.value);
+  },
+
+  // —— 分类占比卡：收/支切换、排行展开 ——
+  setCatKind(e) {
+    const { iid, kind } = e.currentTarget.dataset;
+    this.layout = this.layout.map((x) => (x.iid === iid ? { ...x, catKind: kind === 'income' ? 'income' : 'expense' } : x));
+    this.rebuild(); this.saveLayout();
+  },
+  toggleCatAll(e) {
+    const iid = e.currentTarget.dataset.iid;
+    this._catExpand = this._catExpand || {};
+    this._catExpand[iid] = !this._catExpand[iid];
+    this.rebuild();
+  },
+
+  // —— 点击钻取：跳记录筛选列表页 ——
+  goRecords(params) {
+    const q = Object.keys(params)
+      .filter((k) => params[k] !== '' && params[k] != null)
+      .map((k) => `${k}=${encodeURIComponent(params[k])}`)
+      .join('&');
+    wx.navigateTo({ url: '/pages/records/records?' + q });
+  },
+  // 分类排行行 → 该月该分类明细
+  onCatRowTap(e) {
+    const d = e.currentTarget.dataset;
+    this.goRecords({
+      bookId: this.bookId,
+      dateFrom: `${d.ym}-01`, dateTo: `${d.ym}-31`,
+      categoryTopId: d.cid, type: d.kind,
+      catName: d.name, monthText: d.mtext,
+    });
+  },
+  // 月度收支 / 累计收支的图例行（收入/支出）→ 该范围该类型明细
+  onLegendTap(e) {
+    const d = e.currentTarget.dataset;
+    if (!d.type) return; // 「结余」行不钻取
+    const p = { bookId: this.bookId, type: d.type };
+    if (d.cardType === 'monthPie' && d.ym) {
+      p.dateFrom = `${d.ym}-01`; p.dateTo = `${d.ym}-31`; p.monthText = d.mtext;
+    }
+    this.goRecords(p);
+  },
+  // 柱状图点柱（两段式第一段）：高亮该柱 + 卡内滑出「查看明细」入口条
+  onBarTap(e) {
+    const iid = e.currentTarget.dataset.iid;
+    const dataIndex = e.detail.dataIndex;
+    const inst = this.layout.find((x) => x.iid === iid);
+    if (!inst || dataIndex == null) return;
+    const raw = this.raw || {};
+    let drill = null;
+    if (inst.type === 'weekExpense') {
+      const row = (raw.daily || []).slice(-inst.range)[dataIndex];
+      if (!row) return;
+      drill = {
+        text: `${fmt.cnMonthDay(row.date)} · 支出 ${fmt.money(row.expense, this.cur)}`,
+        params: { bookId: this.bookId, dateFrom: row.date, dateTo: row.date, type: 'expense', monthText: fmt.cnMonthDay(row.date) },
+      };
+    } else if (inst.type === 'yearInOut') {
+      const row = (raw.monthly || []).slice(-inst.range)[dataIndex];
+      if (!row) return;
+      const [yy, mm] = row.ym.split('-');
+      const mtext = `${yy}年${parseInt(mm, 10)}月`;
+      drill = {
+        text: `${mtext} · 收 ${fmt.money(row.income, this.cur)} / 支 ${fmt.money(row.expense, this.cur)}`,
+        params: { bookId: this.bookId, dateFrom: `${row.ym}-01`, dateTo: `${row.ym}-31`, monthText: mtext },
+      };
+    }
+    if (!drill) return;
+    const comp = this.selectComponent(`#chart-${iid}`);
+    const chart = comp && comp.getChart && comp.getChart();
+    if (chart) {
+      chart.dispatchAction({ type: 'downplay' });
+      chart.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex });
+      if (inst.type === 'yearInOut') chart.dispatchAction({ type: 'highlight', seriesIndex: 1, dataIndex });
+    }
+    this.setData({ cards: this.data.cards.map((c) => (c.iid === iid ? { ...c, drill } : c)) });
+  },
+  // 两段式第二段：点入口条进明细
+  goDrill(e) {
+    const card = this.data.cards.find((c) => c.iid === e.currentTarget.dataset.iid);
+    if (card && card.drill) this.goRecords(card.drill.params);
+  },
+  // 分类环形扇区点击：高亮联动排行行；点「其他」或折叠区扇区则展开列表
+  onCatPieTap(e) {
+    const iid = e.currentTarget.dataset.iid;
+    const name = e.detail.name;
+    const card = this.data.cards.find((c) => c.iid === iid);
+    if (!card || !name || name === '暂无') return;
+    this._catExpand = this._catExpand || {};
+    if (name === '其他' || !card.rows.some((r) => r.name === name)) {
+      if (!this._catExpand[iid]) { this._catExpand[iid] = true; this.rebuild(); }
+      return;
+    }
+    this.setData({
+      cards: this.data.cards.map((c) => (c.iid === iid
+        ? { ...c, rows: c.rows.map((r) => ({ ...r, hl: r.name === name })) }
+        : c)),
+    });
+  },
+
   restoreDefault() {
     this.layout = normalizeLayout(DEFAULT_LAYOUT);
-    this.setData({ editing: false });
+    this.setData({ editing: false, editRows: [], dragIid: '', dragY: 0 });
     this.rebuild(); this.saveLayout();
   },
 
@@ -266,7 +617,7 @@ Page({
         books: list.map((b) => ({
           bookId: b.bookId, name: b.name, typeLabel: b.typeLabel,
           typeClass: b.type === 'split' ? 'book-type--split' : 'book-type--share',
-          iconSrc: b.type === 'split' ? this.data.houseIcon : this.data.bookIcon,
+          iconSrc: b.type === 'split' ? this.data.splitIcon : this.data.bookIcon,
           iconBg: b.type === 'split' ? 'rgba(255,205,47,0.16)' : 'rgba(0,204,249,0.12)',
         })),
         switcherVisible: true,

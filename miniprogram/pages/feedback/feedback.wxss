@@ -1,0 +1,11 @@
+.fb-item__meta { font-size: var(--text-xs); color: var(--muted); margin-top: 10rpx; }
+
+/* 非客服的邀请码入口：低调文字链 */
+.fb-invite-link { text-align: center; font-size: var(--text-xs); color: var(--muted); padding: 48rpx 0 24rpx; }
+
+/* 空态 */
+.fb-empty { display: flex; flex-direction: column; align-items: center; padding: 160rpx 80rpx 0; text-align: center; }
+.fb-empty__ic { width: 128rpx; height: 128rpx; border-radius: 50%; background: rgba(0,204,249,0.10); display: flex; align-items: center; justify-content: center; }
+.fb-empty__ic image { width: 56rpx; height: 56rpx; }
+.fb-empty__t { font-size: var(--text-lg); font-weight: 700; margin-top: 32rpx; }
+.fb-empty__p { font-size: var(--text-sm); color: var(--muted); margin-top: 12rpx; }

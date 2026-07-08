@@ -1,4 +1,5 @@
 const icons = require('../../utils/icons');
+const tabbar = require('../../utils/tabbar');
 
 Component({
   options: { addGlobalClass: true },
@@ -6,6 +7,8 @@ Component({
     visible: { type: Boolean, value: false },
     books: { type: Array, value: [] },
     currentId: { type: String, value: '' },
+    title: { type: String, value: '切换账本' },
+    showManage: { type: Boolean, value: true },
   },
   data: { render: false, anim: false, checkIcon: '', chevron: '' },
   lifetimes: {
@@ -19,6 +22,7 @@ Component({
   },
   observers: {
     visible(v) {
+      tabbar.setHidden(v); // 弹层打开时藏 tabBar，避免盖住弹层底部
       if (v) {
         // 先挂载（初始在屏幕下方），下一帧再加动画类触发滑入
         this.setData({ render: true });

@@ -5,6 +5,42 @@
 
 ---
 
+## 2026-07-05 ~ 2026-07-07（补记，按代码现状归并）
+
+> 本区间开发未逐日记录，以下按代码考古一次性补记。
+
+**图表迁移 ECharts + 统计卡补全（PRD 4.5）**
+- 图表全部迁 ECharts（`ec-canvas` canvas 2d 定制包 + `utils/chart-theme.js` + `components/chart`）；手写 SVG 仅保留「添加图表」面板的静态示意缩略图。
+- 月度收支卡月份切换器（`‹ 2026年7月 ›` 箭头逐月 + 原生月份 picker，范围 = 建账首月~当月；选当月 = 回到「跟随当前月」）。
+- 新增第 5 种卡「分类占比（含排行）」：顶级分类环形 + 前 5 排行（可展开全部）+ 收/支切换 + 扇区点击联动高亮；后端 `stats.getCategoryData` 按月聚合，前端按月缓存。
+- **点击钻取**：新增 `pages/records` 记录筛选列表页（标题 = 筛选条件，按天分组分页，首页同款行样式，withSummary 合计条）；`record.list` 支持 dateFrom/dateTo/categoryTopId/type 过滤。各卡入口：分类排行行、月度/累计图例行、柱状卡两段式（高亮 + 「查看明细」入口条）。
+
+**导入增强（PRD 4.7 对齐）**
+- 指纹查重：`日期|收支|金额|币种|标题|备注`，按「文件条数 − 库中已有条数」配额导入——同文件重复导入幂等、与手动录入重复自动跳过、文件内合法重复不误伤；分页拉全量防大账本漏查。
+- 每批写入带 `importBatchId`，支持「撤销本次导入」（rw 撤自己的批次，admin/owner 撤任意，循环删空）。
+- 结果面板：成功/跳过(重复)/失败/新建分类四计数 + 行号明细 + 复制失败明细；最近一次结果本机缓存，可从「导入数据」行摘要重开，已撤销批次重看时标注。
+
+**分账结算（P2 提前完成核心）**
+- `settle.get`：按每笔付款人+分摊算成员净额，合并为最少转账笔数（金额按各笔记账当日汇率固化换算）；`settle.markTransfer` 结清/撤销持久化。settle 页接真数据，入口在 bookConfig。
+
+**用户反馈工单（PRD 4.9 全套）**
+- 四页：feedback（我的反馈/客服全部工单）、feedback-new（标题/内容/图≤3/邮箱）、feedback-detail（回复线程 + 客服改状态）、feedback-team（owner 管理客服）。
+- 后端 feedback 资源全套：create/list/get/reply/setStatus/unreadCount/listAdmins/createAdminInvite（一次性邀请码 24h）/acceptAdminInvite/removeAdmin；owner 由云函数环境变量 `FEEDBACK_OWNER` 固定。设置页入口带未读红点（unreadCount）。
+
+**AI 收据识别接真模型**
+- `ai.parseReceipt` 走 `cloud.extend.AI` 多模态（环境变量 `AI_PROVIDER`/`AI_VISION_MODEL`，默认 hunyuan-vision）：图片临时链接 + 约束 JSON 提示词 → 解析出 金额/币种/日期/商家/建议分类 → 预填卡；未开通/识别失败明确报错，绝不编造。`ai.ask`（数据问答）仍为占位文案。
+
+**PRD 同步更新**：4.5（五种卡+钻取）、4.7（查重/撤销/结果面板）、4.9（反馈工单）等章节按上述实现修订。
+
+## 2026-07-04
+
+**数据库规模化（索引 + 分页 + 聚合）**
+- 数据库设计评审：单集合多租户为文档库正确模式，无需分表；性能尺度是「单账本记录数 + 索引」。在控制台建立 6 条业务索引：records(bookId↑,date↓,createdAt↓)、members(bookId↑,openid↑)、members(openid↑)、categories(bookId↑,kind↑)、rates(base↑,date↓)、aiMessages(bookId↑,openid↑,createdAt↑)；`_id_`/`_openid_1` 为系统自建，保留。
+- `record.list` 改**按天分页**：先聚合出本页日期集合（20 天/页，多取 1 探测 hasMore），再整天取记录——每日分组与当日合计永远完整；返回 `{groups, hasMore, page}`。
+- 首页滚动加载：`onReachBottomDistance: 600` 提前一屏**静默预取**下一页；用户追上时显示内联小转圈「正在加载更早的记录…」；到底显示「已显示全部记录」。切账本/币种/回页自动重置第 0 页。
+- `stats` 改**服务端聚合**：新增 `aggregateDaily`（按 日期×收支 sum(amountConverted)，回传量 ∝ 记账天数）+ `dayFactor`（`recToDisplay ≡ amountConverted × dayFactor(记录日)`，与列表逐笔换算口径严格一致）；`_compute`/`getChartData` 均改走此路径，1000 条上限对统计失效。全量拉取仅剩 settle（P2 需逐笔 split）。
+- git 提交 `b86e197`（应用户指令）：FPS 换肤 + 多币种模型重构 + 统计页重做 + 顶栏统一。
+
 ## 2026-07-03
 
 **多币种模型重构（核心）**

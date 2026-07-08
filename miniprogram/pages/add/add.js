@@ -44,6 +44,7 @@ Page({
     isSplit: false,
     meOpenid: '',
     amountFocus: false,
+    loading: true, // 数据就绪前整页遮罩，杜绝「加载中乱点 → 刷新后状态错乱」
     // 新增一级分类弹层
     addCat: { visible: false, name: '', iconIndex: 0 },
     iconOptions: [],
@@ -51,6 +52,7 @@ Page({
 
   async onLoad(query) {
     this.editId = query.id || '';
+    this.aiMsgId = query.m || ''; // 来自 AI 预填卡时带上消息 id，保存后回写卡片状态
     try { this.draft = query.d ? JSON.parse(decodeURIComponent(query.d)) : null; } catch (e) { this.draft = null; }
     const t = today();
     this.setData({
@@ -77,7 +79,8 @@ Page({
       const book = await api.call('book', 'getCurrent');
       if (!book) { wx.showToast({ title: '请先创建账本', icon: 'none' }); return; }
       const base = book.baseCurrency;
-      // 录入默认币种跟随「展示币种」（设置里选的）；取不到其汇率时回退基准币
+      // 录入默认币种跟随「展示币种」（用户拍板：录入与看账口径一致）；取不到其汇率时回退基准币。
+      // 防「默认币种莫名不对」靠的是整页 loading 闸门：数据就绪前遮罩挡住一切交互。
       const display = book.displayCurrency || base;
       const [rate, members, exp, inc] = await Promise.all([
         api.call('rate', 'getDaily', { date: t, base }),
@@ -85,7 +88,6 @@ Page({
         api.call('category', 'list', { bookId: book.bookId, kind: 'expense' }),
         api.call('category', 'list', { bookId: book.bookId, kind: 'income' }),
       ]);
-      // 所有能取到汇率的常用币种，默认展示币种排最前（无汇率则基准币在前）
       const front = rate.quotes[display] != null ? display : base;
       const curs = cur.CURRENCIES.filter((c) => rate.quotes[c.code] != null)
         .map((c) => ({ code: c.code, symbol: c.symbol, rate: rate.quotes[c.code] }))
@@ -106,9 +108,10 @@ Page({
       if (this.editId) await this.loadForEdit();
       else if (this.draft) this.prefillFromDraft();
       this.updateComputed();
+      this.setData({ loading: false }); // 数据全部就绪，撤掉遮罩开放交互
       // 内容挂载后再聚焦，避免原生 input 在挂载同帧聚焦导致同层渲染卡成灰框
       if (!this.editId && !this.draft) setTimeout(() => this.setData({ amountFocus: true }), 350);
-    } catch (e) { api.toast(e); }
+    } catch (e) { this.setData({ loading: false }); api.toast(e); }
   },
 
   mapCats(tree) {
@@ -210,7 +213,8 @@ Page({
   },
 
   onAmountInput(e) {
-    let v = (e.detail.value || '').replace(/[^\d.]/g, '');
+    // 法语/德语等地区的 iOS 小数键盘给的是逗号——一律归一化成小数点，再清掉其他字符
+    let v = (e.detail.value || '').replace(/[,，。]/g, '.').replace(/[^\d.]/g, '');
     const parts = v.split('.');
     let out = parts[0].slice(0, 9);
     if (parts.length > 1) out += '.' + parts[1].slice(0, 2);
@@ -227,7 +231,7 @@ Page({
     this.updateComputed();
   },
 
-  openCur() { this.setData({ curVisible: true }); },
+  openCur() { if (!this.data.curs.length) return; this.setData({ curVisible: true }); },
   closeCur() { this.setData({ curVisible: false }); },
   onCur(e) {
     const i = this.data.curs.findIndex((c) => c.code === e.detail.code);
@@ -353,7 +357,7 @@ Page({
   async save() {
     const amount = parseFloat(this.data.amount) || 0;
     if (amount <= 0) { wx.showToast({ title: '请输入金额', icon: 'none' }); return; }
-    if (!this.data.book) return;
+    if (!this.data.book) { wx.showToast({ title: '账本信息加载中，请稍候', icon: 'none' }); return; }
     wx.showLoading({ title: '保存中…', mask: true });
     try {
       const images = await this.uploadPhotos();
@@ -375,6 +379,24 @@ Page({
       }
       if (this.editId) await api.call('record', 'update', { recordId: this.editId, payload });
       else await api.call('record', 'create', { bookId: this.data.book.bookId, payload });
+      // 来自 AI 预填卡：入账成功后把卡片状态回写为「已入账」（返回 AI 页时刷新可见）
+      if (this.aiMsgId) {
+        api.call('ai', 'setCardState', { bookId: this.data.book.bookId, msgId: this.aiMsgId, state: 'done' }).catch(() => {});
+      }
+      // 交接给首页做乐观插入：先本地上屏，服务器数据回来后整体覆盖
+      if (!this.editId) {
+        getApp().globalData.justSaved = {
+          bookId: this.data.book.bookId,
+          date: this.data.date,
+          type: payload.type,
+          title: payload.title,
+          icon: cat ? cat.icon : 'dots',
+          amount,
+          currency: c.code,
+          base: this.data.book.baseCurrency,
+          amountConverted: Math.round(amount * (c.rate || 1) * 100) / 100,
+        };
+      }
       wx.hideLoading();
       wx.showToast({ title: this.editId ? '已更新' : '已保存', icon: 'success' });
       setTimeout(() => wx.navigateBack({ delta: 1, fail() { wx.switchTab({ url: '/pages/home/home' }); } }), 600);

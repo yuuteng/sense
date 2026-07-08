@@ -18,3 +18,11 @@
 .type-card { padding: 24rpx var(--space-4); }
 .type-card .h3 { font-size: var(--text-base); font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
 .type-card__p { font-size: var(--text-sm); color: var(--muted); margin-top: 6rpx; }
+
+/* 名称未填错误态：红框 + 微红底 */
+.input-error {
+  border-color: var(--danger) !important;
+  background: rgba(246, 33, 114, 0.04);
+}
+.input-ph-error { color: rgba(246, 33, 114, 0.55); }
+.field-err { color: var(--danger); font-size: 24rpx; margin-top: 10rpx; }

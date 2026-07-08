@@ -1,78 +1,212 @@
-// 测试数据集（对应 docs/sql.md）。
-// 约定：'openid-yu' 为占位，seed 时替换成调用者真实 openid（即“我/小雨”）。
-// createdAt/joinedAt/updatedAt 为 ISO 字符串，seed 时转为 Date。
+// 演示数据生成器 —— 与用户真实数据完全隔离：
+// - 不触碰调用者的 users 文档（不改昵称/头像/默认账本）
+// - 所有演示文档带 seed: true 标记 + `seed-` 前缀 id，可整体清除（seed.clear）
+// - 演示成员是独立假用户（seed-u-*，无法登录），调用者仅以 owner 身份加入两个演示账本
+// - 不写 rates（汇率走真实快照/懒加载）、不写 chartLayouts（用默认布局）
+// 数据形态：近 45 天高频（覆盖按天分页）+ 早 10 个月稀疏（撑起年度图表）+ 多币种固化 + 分账账本样例
+module.exports = { build };
 
-module.exports = {
-  users: [
-    { _id: 'openid-yu', openid: 'openid-yu', nickname: '小雨', avatarColor: '#2f6feb', avatarInitial: '雨', avatarFileID: '', registered: true, defaultBookId: 'book-home', settings: { displayCurrency: 'CNY', aiMessageLimit: 50 }, createdAt: '2025-09-01T00:00:00.000Z' },
-    { _id: 'openid-zhe', openid: 'openid-zhe', nickname: '阿哲', avatarColor: '#17a34a', avatarInitial: '哲', avatarFileID: '', registered: true, defaultBookId: 'book-home', settings: { displayCurrency: 'CNY', aiMessageLimit: 50 }, createdAt: '2025-11-01T00:00:00.000Z' },
-    { _id: 'openid-lin', openid: 'openid-lin', nickname: '小林', avatarColor: '#b06f3c', avatarInitial: '林', avatarFileID: '', registered: true, defaultBookId: 'book-jp', settings: { displayCurrency: 'CNY', aiMessageLimit: 50 }, createdAt: '2026-05-01T00:00:00.000Z' },
+const BOOK_SHARE = 'seed-book-share';
+const BOOK_SPLIT = 'seed-book-split';
+
+// 北京时间「今天 + offset 天」的 YYYY-MM-DD
+function bjDate(offset) {
+  const d = new Date(Date.now() + 8 * 3600 * 1000);
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+function at(dateStr, hour) {
+  return new Date(`${dateStr}T${hour < 10 ? '0' + hour : hour}:00:00+08:00`);
+}
+// 确定性伪随机（0~1）：同一天生成的数据稳定可复现
+function frac(n) { return ((n * 9301 + 49297) % 233280) / 233280; }
+function pick(arr, n) { return arr[Math.floor(frac(n) * arr.length) % arr.length]; }
+function round2(x) { return Math.round(x * 100) / 100; }
+
+// 假成员（独立于真实用户体系）
+const FAKES = [
+  { openid: 'seed-u-xiaoyu', nickname: '小雨', color: '#00ccf9' },
+  { openid: 'seed-u-azhe', nickname: '阿哲', color: '#9edf10' },
+  { openid: 'seed-u-momo', nickname: 'Momo', color: '#ffcd2f' },
+];
+
+// 演示分类（账本级，两级，收支分离）
+const CATS = {
+  expense: [
+    { key: 'dining', name: '餐饮', icon: 'dining', subs: ['早餐', '午餐', '晚餐', '饮料', '外卖'] },
+    { key: 'transport', name: '交通', icon: 'car', subs: ['打车', '地铁', '加油'] },
+    { key: 'shopping', name: '购物', icon: 'bag', subs: ['日用', '服饰', '数码'] },
+    { key: 'home', name: '居家', icon: 'house', subs: ['房租', '水电'] },
+    { key: 'play', name: '娱乐', icon: 'play', subs: ['电影', '游戏'] },
+    { key: 'medical', name: '医疗', icon: 'medical', subs: [] },
+    { key: 'other', name: '其他', icon: 'dots', subs: [] },
   ],
-
-  books: [
-    { _id: 'book-home', name: '家庭日常', type: 'share', baseCurrency: 'CNY', ownerOpenid: 'openid-yu', memberCount: 2, createdAt: '2025-09-01T00:00:00.000Z' },
-    { _id: 'book-jp', name: '日本旅行 2026', type: 'split', baseCurrency: 'CNY', ownerOpenid: 'openid-zhe', memberCount: 3, createdAt: '2026-05-10T00:00:00.000Z' },
-  ],
-
-  members: [
-    { _id: 'm-home-yu', bookId: 'book-home', openid: 'openid-yu', avatarColor: '#2f6feb', role: 'owner', joinedAt: '2025-09-01T00:00:00.000Z', status: 'active' },
-    { _id: 'm-home-zhe', bookId: 'book-home', openid: 'openid-zhe', avatarColor: '#17a34a', role: 'admin', joinedAt: '2025-11-01T00:00:00.000Z', status: 'active' },
-    { _id: 'm-jp-zhe', bookId: 'book-jp', openid: 'openid-zhe', avatarColor: '#17a34a', role: 'owner', joinedAt: '2026-05-10T00:00:00.000Z', status: 'active' },
-    { _id: 'm-jp-yu', bookId: 'book-jp', openid: 'openid-yu', avatarColor: '#2f6feb', role: 'admin', joinedAt: '2026-05-11T00:00:00.000Z', status: 'active' },
-    { _id: 'm-jp-lin', bookId: 'book-jp', openid: 'openid-lin', avatarColor: '#b06f3c', role: 'rw', joinedAt: '2026-05-11T00:00:00.000Z', status: 'active' },
-  ],
-
-  categories: [
-    // 家庭日常 · 支出
-    { _id: 'cat-food', bookId: 'book-home', kind: 'expense', parentId: null, name: '餐饮', icon: 'dining', order: 1, disabled: false },
-    { _id: 'cat-food-dinner', bookId: 'book-home', kind: 'expense', parentId: 'cat-food', name: '晚餐', order: 1, disabled: false },
-    { _id: 'cat-food-takeout', bookId: 'book-home', kind: 'expense', parentId: 'cat-food', name: '外卖', order: 2, disabled: false },
-    { _id: 'cat-food-coffee', bookId: 'book-home', kind: 'expense', parentId: 'cat-food', name: '咖啡', order: 3, disabled: false },
-    { _id: 'cat-trans', bookId: 'book-home', kind: 'expense', parentId: null, name: '交通', icon: 'train', order: 2, disabled: false },
-    { _id: 'cat-trans-metro', bookId: 'book-home', kind: 'expense', parentId: 'cat-trans', name: '地铁', order: 1, disabled: false },
-    { _id: 'cat-shop', bookId: 'book-home', kind: 'expense', parentId: null, name: '购物', icon: 'bag', order: 3, disabled: false },
-    { _id: 'cat-shop-daily', bookId: 'book-home', kind: 'expense', parentId: 'cat-shop', name: '日用', order: 1, disabled: false },
-    { _id: 'cat-med', bookId: 'book-home', kind: 'expense', parentId: null, name: '医疗', icon: 'medical', order: 4, disabled: false },
-    { _id: 'cat-med-drug', bookId: 'book-home', kind: 'expense', parentId: 'cat-med', name: '药品', order: 1, disabled: false },
-    { _id: 'cat-income-salary', bookId: 'book-home', kind: 'income', parentId: null, name: '职业收入', icon: 'income', order: 1, disabled: false },
-    // 日本旅行 · 支出（简版）
-    { _id: 'cat-jp-hotel', bookId: 'book-jp', kind: 'expense', parentId: null, name: '住宿', icon: 'house', order: 1, disabled: false },
-    { _id: 'cat-jp-trans', bookId: 'book-jp', kind: 'expense', parentId: null, name: '交通', icon: 'train', order: 2, disabled: false },
-    { _id: 'cat-jp-food', bookId: 'book-jp', kind: 'expense', parentId: null, name: '餐饮', icon: 'dining', order: 3, disabled: false },
-    { _id: 'cat-jp-shop', bookId: 'book-jp', kind: 'expense', parentId: null, name: '购物', icon: 'bag', order: 4, disabled: false },
-  ],
-
-  records: [
-    // 家庭日常
-    { _id: 'r-1', bookId: 'book-home', type: 'expense', title: '晚餐 · 外卖', amount: 86.0, currency: 'CNY', rate: 1, baseCurrency: 'CNY', amountConverted: 86.0, categoryId: 'cat-food-takeout', categoryPath: '餐饮 / 外卖', date: '2026-07-01', note: '超市晚餐食材', images: [], recorderOpenid: 'openid-yu', payerOpenid: 'openid-yu', createdAt: '2026-07-01T12:30:00.000Z' },
-    { _id: 'r-2', bookId: 'book-home', type: 'expense', title: '超市采购', amount: 213.5, currency: 'CNY', rate: 1, baseCurrency: 'CNY', amountConverted: 213.5, categoryId: 'cat-shop-daily', categoryPath: '购物 / 日用', date: '2026-07-01', note: '', images: [], recorderOpenid: 'openid-yu', payerOpenid: 'openid-yu', createdAt: '2026-07-01T18:05:00.000Z' },
-    { _id: 'r-3', bookId: 'book-home', type: 'income', title: '工资', amount: 12000.0, currency: 'CNY', rate: 1, baseCurrency: 'CNY', amountConverted: 12000.0, categoryId: 'cat-income-salary', categoryPath: '职业收入 / 工资', date: '2026-06-30', note: '', images: [], recorderOpenid: 'openid-yu', payerOpenid: 'openid-yu', createdAt: '2026-06-30T09:00:00.000Z' },
-    { _id: 'r-4', bookId: 'book-home', type: 'expense', title: '星巴克咖啡', amount: 5.4, currency: 'EUR', rate: 7.83, baseCurrency: 'CNY', amountConverted: 42.3, categoryId: 'cat-food-coffee', categoryPath: '餐饮 / 咖啡', date: '2026-06-30', note: '通勤路上的拿铁', images: [], recorderOpenid: 'openid-yu', payerOpenid: 'openid-yu', createdAt: '2026-06-30T08:12:00.000Z' },
-    { _id: 'r-5', bookId: 'book-home', type: 'expense', title: '地铁通勤', amount: 6.0, currency: 'CNY', rate: 1, baseCurrency: 'CNY', amountConverted: 6.0, categoryId: 'cat-trans-metro', categoryPath: '交通 / 地铁', date: '2026-06-29', note: '', images: [], recorderOpenid: 'openid-zhe', payerOpenid: 'openid-zhe', createdAt: '2026-06-29T08:40:00.000Z' },
-    { _id: 'r-6', bookId: 'book-home', type: 'expense', title: '感冒药', amount: 58.0, currency: 'CNY', rate: 1, baseCurrency: 'CNY', amountConverted: 58.0, categoryId: 'cat-med-drug', categoryPath: '医疗 / 药品', date: '2026-06-29', note: '', images: [], recorderOpenid: 'openid-yu', payerOpenid: 'openid-yu', createdAt: '2026-06-29T20:10:00.000Z' },
-    // 日本旅行（分账结算型）
-    { _id: 'r-jp-1', bookId: 'book-jp', type: 'expense', title: '新宿酒店 3 晚', amount: 2400, currency: 'CNY', rate: 1, baseCurrency: 'CNY', amountConverted: 2400, categoryId: 'cat-jp-hotel', categoryPath: '住宿', date: '2026-06-20', note: '', images: [], recorderOpenid: 'openid-yu', payerOpenid: 'openid-yu', split: { mode: 'even', members: [{ openid: 'openid-yu', share: 800 }, { openid: 'openid-zhe', share: 800 }, { openid: 'openid-lin', share: 800 }] }, createdAt: '2026-06-20T15:00:00.000Z' },
-    { _id: 'r-jp-2', bookId: 'book-jp', type: 'expense', title: 'JR Pass ×3', amount: 1860, currency: 'CNY', rate: 1, baseCurrency: 'CNY', amountConverted: 1860, categoryId: 'cat-jp-trans', categoryPath: '交通', date: '2026-06-20', note: '', images: [], recorderOpenid: 'openid-yu', payerOpenid: 'openid-yu', split: { mode: 'even', members: [{ openid: 'openid-yu', share: 620 }, { openid: 'openid-zhe', share: 620 }, { openid: 'openid-lin', share: 620 }] }, createdAt: '2026-06-20T16:00:00.000Z' },
-    { _id: 'r-jp-3', bookId: 'book-jp', type: 'expense', title: '居酒屋晚餐', amount: 13650, currency: 'JPY', rate: 0.04615, baseCurrency: 'CNY', amountConverted: 630, categoryId: 'cat-jp-food', categoryPath: '餐饮', date: '2026-06-21', note: '', images: [], recorderOpenid: 'openid-zhe', payerOpenid: 'openid-zhe', split: { mode: 'even', members: [{ openid: 'openid-yu', share: 210 }, { openid: 'openid-zhe', share: 210 }, { openid: 'openid-lin', share: 210 }] }, createdAt: '2026-06-21T20:30:00.000Z' },
-    { _id: 'r-jp-4', bookId: 'book-jp', type: 'expense', title: '便利店零食', amount: 90, currency: 'CNY', rate: 1, baseCurrency: 'CNY', amountConverted: 90, categoryId: 'cat-jp-food', categoryPath: '餐饮', date: '2026-06-21', note: '', images: [], recorderOpenid: 'openid-lin', payerOpenid: 'openid-lin', split: { mode: 'even', members: [{ openid: 'openid-yu', share: 30 }, { openid: 'openid-zhe', share: 30 }, { openid: 'openid-lin', share: 30 }] }, createdAt: '2026-06-21T22:00:00.000Z' },
-    { _id: 'r-jp-5', bookId: 'book-jp', type: 'expense', title: '药妆店（个人）', amount: 240, currency: 'CNY', rate: 1, baseCurrency: 'CNY', amountConverted: 240, categoryId: 'cat-jp-shop', categoryPath: '购物', date: '2026-06-22', note: '', images: [], recorderOpenid: 'openid-yu', payerOpenid: 'openid-yu', split: { mode: 'treat', members: [{ openid: 'openid-yu', share: 240 }] }, createdAt: '2026-06-22T11:00:00.000Z' },
-  ],
-
-  rates: [
-    { _id: '2026-06-29_CNY', date: '2026-06-29', base: 'CNY', quotes: { CNY: 1, USD: 7.23, EUR: 7.81, JPY: 0.0461, KRW: 0.0053, HKD: 0.925, GBP: 9.13, AUD: 4.79, CAD: 5.29, SGD: 5.38, TWD: 0.224, THB: 0.199 }, isFallback: false },
-    { _id: '2026-06-30_CNY', date: '2026-06-30', base: 'CNY', quotes: { CNY: 1, USD: 7.24, EUR: 7.83, JPY: 0.0462, KRW: 0.0053, HKD: 0.926, GBP: 9.15, AUD: 4.80, CAD: 5.30, SGD: 5.40, TWD: 0.225, THB: 0.200 }, isFallback: false },
-    { _id: '2026-07-01_CNY', date: '2026-07-01', base: 'CNY', quotes: { CNY: 1, USD: 7.24, EUR: 7.84, JPY: 0.0463, KRW: 0.0054, HKD: 0.926, GBP: 9.16, AUD: 4.81, CAD: 5.31, SGD: 5.41, TWD: 0.225, THB: 0.201 }, isFallback: false },
-  ],
-
-  chartLayouts: [
-    { _id: 'book-home_openid-yu', bookId: 'book-home', openid: 'openid-yu', order: ['overview', 'trend', 'year', 'total'], updatedAt: '2026-07-01T00:00:00.000Z' },
-  ],
-
-  aiMessages: [
-    { _id: 'ai-1', bookId: 'book-home', openid: 'openid-yu', role: 'user', text: '上个月我们餐饮花了多少？', createdAt: '2026-07-01T09:00:00.000Z' },
-    { _id: 'ai-2', bookId: 'book-home', openid: 'openid-yu', role: 'ai', text: '6 月「家庭日常」账本的餐饮合计支出为 ¥1,284.60，共 32 笔。其中外卖占 ¥612，晚餐 ¥458，咖啡/奶茶 ¥214.60（含 3 笔欧元记录已按当日汇率换算）。', createdAt: '2026-07-01T09:00:03.000Z' },
-    { _id: 'ai-3', bookId: 'book-home', openid: 'openid-yu', role: 'user', text: '这周谁花得最多？', createdAt: '2026-07-01T09:01:00.000Z' },
-    { _id: 'ai-4', bookId: 'book-home', openid: 'openid-yu', role: 'ai', text: '本周小雨记账 ¥1,240、阿哲记账 ¥860，合计约 ¥2,100。其中「超市采购 ¥213.50」是最大的一笔。', createdAt: '2026-07-01T09:01:04.000Z' },
-    { _id: 'ai-5', bookId: 'book-home', openid: 'openid-yu', role: 'card', card: { kind: '收据识别', state: 'pending', rows: [{ k: '商家', v: 'City Supermarkt', edit: true }, { k: '金额', v: '€18.90', extra: '≈ ¥147.99', edit: true }, { k: '建议分类', v: '购物 · 日用', edit: true }, { k: '日期', v: '2026-07-01' }, { k: '记录人 / 付款人', v: '小雨' }] }, createdAt: '2026-07-01T09:02:00.000Z' },
+  income: [
+    { key: 'job', name: '职业收入', icon: 'income', subs: ['工资', '奖金', '补贴'] },
+    { key: 'extra', name: '其他收入', icon: 'gift', subs: ['红包', '退款', '理财'] },
   ],
 };
+
+// 消费菜单：{ 标题, 一级 key, 二级名, 金额区间(CNY), 可选外币 }
+const MENU = [
+  { t: '午餐', cat: 'dining', sub: '午餐', lo: 18, hi: 45 },
+  { t: '早餐', cat: 'dining', sub: '早餐', lo: 6, hi: 18 },
+  { t: '晚餐', cat: 'dining', sub: '晚餐', lo: 30, hi: 120 },
+  { t: '咖啡', cat: 'dining', sub: '饮料', lo: 12, hi: 38, fx: 'EUR' },
+  { t: '外卖', cat: 'dining', sub: '外卖', lo: 20, hi: 55 },
+  { t: '打车', cat: 'transport', sub: '打车', lo: 12, hi: 68 },
+  { t: '地铁', cat: 'transport', sub: '地铁', lo: 3, hi: 8 },
+  { t: '超市采购', cat: 'shopping', sub: '日用', lo: 35, hi: 160 },
+  { t: '衣服', cat: 'shopping', sub: '服饰', lo: 99, hi: 420, fx: 'USD' },
+  { t: '数码配件', cat: 'shopping', sub: '数码', lo: 49, hi: 320, fx: 'JPY' },
+  { t: '电影', cat: 'play', sub: '电影', lo: 35, hi: 90 },
+  { t: '水电缴费', cat: 'home', sub: '水电', lo: 80, hi: 260 },
+];
+
+// 演示用固化汇率（原币 → CNY），按月微幅漂移模拟波动；写进每条记录固化保存
+const FX_BASE = { EUR: 7.85, USD: 7.23, JPY: 0.048 };
+function fxRate(cur, dateStr) {
+  const m = parseInt(dateStr.slice(5, 7), 10);
+  const drift = 1 + ((m % 5) - 2) * 0.004;
+  return Math.round(FX_BASE[cur] * drift * 1e6) / 1e6;
+}
+
+function build(me) {
+  const users = FAKES.map((f) => ({
+    _id: f.openid, openid: f.openid, nickname: f.nickname,
+    avatarColor: f.color, avatarInitial: f.nickname.slice(0, 1), avatarFileID: '',
+    registered: true, defaultBookId: '',
+    settings: { displayCurrency: 'CNY', aiMessageLimit: 50 },
+    createdAt: at(bjDate(-360), 9), seed: true,
+  }));
+
+  const books = [
+    { _id: BOOK_SHARE, name: '家庭演示账本', type: 'share', baseCurrency: 'CNY', ownerOpenid: me, memberCount: 4, createdAt: at(bjDate(-320), 9), seed: true },
+    { _id: BOOK_SPLIT, name: '旅行分账演示', type: 'split', baseCurrency: 'CNY', ownerOpenid: me, memberCount: 3, createdAt: at(bjDate(-20), 9), seed: true },
+  ];
+
+  const mk = (bookId, openid, role, color) => ({ bookId, openid, role, avatarColor: color, joinedAt: at(bjDate(-300), 10), status: 'active', seed: true });
+  const members = [
+    mk(BOOK_SHARE, me, 'owner', '#00ccf9'),
+    mk(BOOK_SHARE, FAKES[0].openid, 'admin', FAKES[0].color),
+    mk(BOOK_SHARE, FAKES[1].openid, 'rw', FAKES[1].color),
+    mk(BOOK_SHARE, FAKES[2].openid, 'ro', FAKES[2].color),
+    mk(BOOK_SPLIT, me, 'owner', '#00ccf9'),
+    mk(BOOK_SPLIT, FAKES[0].openid, 'rw', FAKES[0].color),
+    mk(BOOK_SPLIT, FAKES[1].openid, 'rw', FAKES[1].color),
+  ];
+
+  // 分类（两个账本各一套，id 前缀区分）
+  const categories = [];
+  const catId = {}; // `${bookId}|${topKey}|${subName||''}` → id
+  [BOOK_SHARE, BOOK_SPLIT].forEach((bookId, bi) => {
+    ['expense', 'income'].forEach((kind) => {
+      CATS[kind].forEach((c, i) => {
+        const topId = `seed-c-${bi}-${kind}-${c.key}`;
+        categories.push({ _id: topId, bookId, kind, parentId: null, name: c.name, icon: c.icon, order: i + 1, disabled: false, seed: true });
+        catId[`${bookId}|${c.key}|`] = topId;
+        c.subs.forEach((s, j) => {
+          const subId = `${topId}-${j}`;
+          categories.push({ _id: subId, bookId, kind, parentId: topId, name: s, icon: null, order: j + 1, disabled: false, seed: true });
+          catId[`${bookId}|${c.key}|${s}`] = subId;
+        });
+      });
+    });
+  });
+
+  // 记账者轮换（只读成员 Momo 不产生记录）
+  const writers = [me, FAKES[0].openid, FAKES[1].openid];
+
+  const records = [];
+  let sn = 7; // 伪随机步进种子
+  const expByKey = {}; CATS.expense.forEach((c) => { expByKey[c.key] = c; });
+  const incByKey = {}; CATS.income.forEach((c) => { incByKey[c.key] = c; });
+
+  const addExpense = (bookId, dayOffset, idx) => {
+    sn += 13;
+    const item = pick(MENU, sn + idx * 31);
+    const date = bjDate(dayOffset);
+    const amountCny = round2(item.lo + frac(sn * 3 + idx) * (item.hi - item.lo));
+    // 每 ~7 条一条外币记录（记账当日汇率固化进记录）
+    const useFx = item.fx && (sn + idx) % 7 === 0;
+    const currency = useFx ? item.fx : 'CNY';
+    const rate = useFx ? fxRate(currency, date) : 1;
+    const amount = useFx ? round2(amountCny / rate) : amountCny;
+    const who = pick(writers, sn + idx * 17);
+    records.push({
+      bookId, type: 'expense', title: item.t,
+      amount, currency, rate, baseCurrency: 'CNY', amountConverted: round2(amount * rate),
+      categoryId: catId[`${bookId}|${item.cat}|${item.sub}`] || catId[`${bookId}|${item.cat}|`],
+      categoryPath: item.sub ? `${expByKey[item.cat].name} / ${item.sub}` : expByKey[item.cat].name,
+      date, note: '', images: [],
+      recorderOpenid: who, payerOpenid: who, split: null,
+      createdAt: at(date, 10 + (idx % 9)), createdBy: who, updatedAt: at(date, 10 + (idx % 9)), updatedBy: who,
+      seed: true,
+    });
+  };
+  const addIncome = (bookId, dayOffset, subName, amount, title) => {
+    const date = bjDate(dayOffset);
+    const top = (subName === '工资' || subName === '奖金' || subName === '补贴') ? 'job' : 'extra';
+    records.push({
+      bookId, type: 'income', title: title || subName,
+      amount, currency: 'CNY', rate: 1, baseCurrency: 'CNY', amountConverted: amount,
+      categoryId: catId[`${bookId}|${top}|${subName}`] || catId[`${bookId}|${top}|`],
+      categoryPath: `${incByKey[top].name} / ${subName}`,
+      date, note: '', images: [],
+      recorderOpenid: me, payerOpenid: me, split: null,
+      createdAt: at(date, 9), createdBy: me, updatedAt: at(date, 9), updatedBy: me,
+      seed: true,
+    });
+  };
+
+  // ① 近 45 天高频（覆盖分页：20 天/页 ≈ 2 页多）
+  const pattern = [2, 1, 0, 3, 1, 2, 1];
+  for (let d = 0; d >= -44; d--) {
+    const n = pattern[(-d) % pattern.length];
+    for (let i = 0; i < n; i++) addExpense(BOOK_SHARE, d, i);
+  }
+  // ② 早 10 个月稀疏（撑起近 12 月收支趋势）
+  for (let m = 2; m <= 11; m++) {
+    [5, 12, 21, 27].forEach((day, i) => {
+      if (frac(m * 37 + i) < 0.8) addExpense(BOOK_SHARE, -m * 30 - (day % 9), i + m);
+    });
+    addIncome(BOOK_SHARE, -m * 30 - 3, '工资', 8000 + (m % 3) * 400);
+  }
+  // ③ 近期收入
+  addIncome(BOOK_SHARE, -2, '工资', 8600);
+  addIncome(BOOK_SHARE, -9, '红包', 200, '生日红包');
+  addIncome(BOOK_SHARE, -16, '退款', 89.9, '网购退款');
+
+  // ④ 分账账本：付款人 + 分摊样例（含一条外币）
+  const splitAll = [me, FAKES[0].openid, FAKES[1].openid].map((o) => ({ openid: o }));
+  const splitRecs = [
+    { d: -1, t: '民宿房费', amt: 680, payer: me, mode: 'even' },
+    { d: -2, t: '打车去机场', amt: 96, payer: FAKES[0].openid, mode: 'even' },
+    { d: -3, t: '晚餐居酒屋', amt: 5200, payer: FAKES[1].openid, mode: 'even', cur: 'JPY' },
+    { d: -4, t: '门票', amt: 240, payer: me, mode: 'even' },
+    { d: -5, t: '咖啡请客', amt: 58, payer: FAKES[0].openid, mode: 'treat' },
+    { d: -8, t: '超市补给', amt: 132, payer: FAKES[1].openid, mode: 'even' },
+  ];
+  splitRecs.forEach((s, i) => {
+    const date = bjDate(s.d);
+    const currency = s.cur || 'CNY';
+    const rate = currency === 'CNY' ? 1 : fxRate(currency, date);
+    records.push({
+      bookId: BOOK_SPLIT, type: 'expense', title: s.t,
+      amount: s.amt, currency, rate, baseCurrency: 'CNY', amountConverted: round2(s.amt * rate),
+      categoryId: catId[`${BOOK_SPLIT}|other|`],
+      categoryPath: '其他', date, note: '', images: [],
+      recorderOpenid: s.payer, payerOpenid: s.payer,
+      split: { mode: s.mode, members: s.mode === 'treat' ? [{ openid: s.payer }] : splitAll },
+      createdAt: at(date, 12 + i), createdBy: s.payer, updatedAt: at(date, 12 + i), updatedBy: s.payer,
+      seed: true,
+    });
+  });
+
+  // ⑤ AI 会话样例（属于调用者，仅演示账本）
+  const aiMessages = [
+    { bookId: BOOK_SHARE, openid: me, role: 'ai', html: '你好，我是心数 AI 助手。可以问我「本月支出多少」「餐饮花了多少」，也可以说「昨天打车 35」帮你记一笔。', createdAt: at(bjDate(0), 8), seed: true },
+  ];
+
+  return { users, books, members, categories, records, aiMessages };
+}
