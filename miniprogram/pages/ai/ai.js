@@ -24,10 +24,17 @@ Page({
     input: '',
     ic: {},
     bookName: '',
-    displayCurrency: '',
+    // 展示币种胶囊（与首页/统计一致）
+    curCode: 'CNY',
+    curSym: '¥',
+    curVisible: false,
     chevronDown: '',
     loading: true,
     placeholder: '问一句，或说「昨天打车 35」记一笔…',
+    // 语音输入：按住说话（recording）→ 松开识别（recognizing）；上滑取消（recCancel）
+    recording: false,
+    recognizing: false,
+    recCancel: false,
     // 账本切换面板（与首页/统计一致）
     switcherVisible: false,
     currentBookId: '',
@@ -41,6 +48,9 @@ Page({
       splitIcon: icons.get('bookSplit', '#a47d06', 1.7),
       ic: {
         camera: icons.get('camera', '#748294', 1.8),
+        mic: icons.get('mic', '#748294', 1.8),
+        micBig: icons.get('mic', '#7fe6ff', 1.8),
+        micCancel: icons.get('trash', '#ffffff', 1.8),
         send: icons.get('send', '#ffffff', 2),
         checkbox: icons.get('checkbox', '#0089c0', 2),
         clock: icons.get('clock', '#0089c0', 2),
@@ -67,7 +77,8 @@ Page({
       this.setData({
         currentBookId: book.bookId,
         bookName: book.name,
-        displayCurrency: `展示 · ${fmt.symbolOf(cur)} ${cur}`,
+        curCode: cur,
+        curSym: fmt.symbolOf(cur),
         placeholder: this.canWrite ? '问一句，或说「昨天打车 35」记一笔…' : '问一句，如「本月支出多少」…',
         messages: msgs.map(normalize),
         loading: false,
@@ -103,6 +114,20 @@ Page({
     } catch (e2) { api.toast(e2); }
   },
   onSwitcherClose() { this.setData({ switcherVisible: false }); },
+
+  // 展示币种切换（与首页一致）：历史消息不含换算金额，无需整页重载；
+  // 乐观更新胶囊，失败回滚。之后的 AI 回答由服务端按新口径计算。
+  openCurPicker() { this.setData({ curVisible: true }); },
+  closeCurPicker() { this.setData({ curVisible: false }); },
+  onCurPick(e) {
+    const code = e.detail.code;
+    this.setData({ curVisible: false });
+    if (!code || code === this.data.curCode) return;
+    const prev = { curCode: this.data.curCode, curSym: this.data.curSym };
+    this.setData({ curCode: code, curSym: fmt.symbolOf(code) });
+    api.call('settings', 'update', { displayCurrency: code })
+      .catch((err) => { this.setData(prev); api.toast(err); });
+  },
   goManageBooks() {
     this.setData({ switcherVisible: false });
     wx.navigateTo({ url: '/pages/books/books' });
@@ -232,4 +257,96 @@ Page({
     if (m && m.id) api.call('ai', 'setCardState', { bookId: this.bookId, msgId: m.id, state: 'dropped' }).catch(() => {});
   },
   goHome() { wx.switchTab({ url: '/pages/home/home' }); },
+
+  // —— 语音输入：按住说话 → 云存储中转 → 云函数调腾讯云一句话识别 → 文本填入输入框 ——
+  getRecorder() {
+    if (this._recorder) return this._recorder;
+    const rec = wx.getRecorderManager();
+    rec.onStop((res) => this.onRecStop(res));
+    rec.onError(() => {
+      this._recActive = false;
+      this.setData({ recording: false, recCancel: false });
+      wx.showToast({ title: '录音失败，请重试', icon: 'none' });
+    });
+    this._recorder = rec;
+    return rec;
+  },
+
+  micStart(e) {
+    if (this.data.recognizing) return;
+    this._touchY = (e.touches && e.touches[0]) ? e.touches[0].clientY : 0;
+    if (this._authOk) { this.beginRecord(); return; }
+    wx.getSetting({
+      success: (s) => {
+        if (s.authSetting['scope.record']) { this._authOk = true; this.beginRecord(); return; }
+        // 首次授权弹窗会打断长按手势：授权成功后提示用户重新按住
+        wx.authorize({
+          scope: 'scope.record',
+          success: () => { this._authOk = true; wx.showToast({ title: '已授权，请按住说话', icon: 'none' }); },
+          fail: () => wx.showModal({
+            title: '需要麦克风权限',
+            content: '语音输入需要使用麦克风，请在设置中允许。',
+            confirmText: '去设置',
+            success: (r) => { if (r.confirm) wx.openSetting(); },
+          }),
+        });
+      },
+    });
+  },
+  beginRecord() {
+    if (this._recActive) return;
+    this._recActive = true;
+    this.setData({ recording: true, recCancel: false });
+    // 一句话识别上限 60s；16k 采样单声道 mp3，识别引擎 16k_zh 对应
+    this.getRecorder().start({ duration: 60000, format: 'mp3', sampleRate: 16000, numberOfChannels: 1, encodeBitRate: 48000 });
+  },
+  micMove(e) {
+    if (!this._recActive) return;
+    const y = (e.touches && e.touches[0]) ? e.touches[0].clientY : this._touchY;
+    const cancel = this._touchY - y > 80;
+    if (cancel !== this.data.recCancel) this.setData({ recCancel: cancel });
+  },
+  micEnd() {
+    if (!this._recActive) return;
+    this._recActive = false;
+    this.getRecorder().stop(); // 结果在 onRecStop 统一处理（含取消判断）
+  },
+  micCancel() {
+    // 系统打断（来电/切后台）：一律按取消处理
+    if (!this._recActive) return;
+    this._recActive = false;
+    this.setData({ recCancel: true });
+    this.getRecorder().stop();
+  },
+
+  onRecStop(res) {
+    const cancelled = this.data.recCancel;
+    this.setData({ recording: false, recCancel: false });
+    if (cancelled) return;
+    if (!res || !res.tempFilePath || (res.duration || 0) < 600) {
+      wx.showToast({ title: '说话时间太短', icon: 'none' });
+      return;
+    }
+    this.recognize(res.tempFilePath);
+  },
+
+  recognize(tempFilePath) {
+    this.setData({ recognizing: true });
+    wx.cloud.uploadFile({
+      cloudPath: `asr/${Date.now()}-${Math.floor(Math.random() * 1e6)}.mp3`,
+      filePath: tempFilePath,
+    })
+      .then((up) => api.call('asr', 'sentence', { fileID: up.fileID }))
+      .then((r) => {
+        this.setData({ recognizing: false });
+        const text = (r.text || '').trim();
+        if (!text) { wx.showToast({ title: '没听清，请再说一次', icon: 'none' }); return; }
+        // 填入输入框而非直接发送：用户可改错字，也和「AI 绝不自动入账」一致
+        this.setData({ input: (this.data.input || '') + text });
+      })
+      .catch((e) => {
+        this.setData({ recognizing: false });
+        api.toast(e);
+      });
+  },
 });

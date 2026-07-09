@@ -32,6 +32,9 @@
 .donut { width: 220rpx; height: 220rpx; flex-shrink: 0; }
 .pie-legend { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 18rpx; }
 .pl-item { display: flex; align-items: center; gap: 14rpx; font-size: var(--text-sm); }
+/* 标签「收入/支出/结余」永不换行；巨额金额单行省略，不许把标签挤成竖排 */
+.pl-item .pl-k { flex-shrink: 0; white-space: nowrap; }
+.pl-item .pl-v { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pl-dot { width: 16rpx; height: 16rpx; border-radius: 50%; flex-shrink: 0; }
 .pl-k { color: var(--muted); }
 .pl-v { margin-left: auto; font-weight: 600; }
@@ -39,6 +42,13 @@
 
 /* 钻取通用：图例行可点箭头 + 柱状图两段式入口条 */
 .pl-item--press, .pl-item--link:active { opacity: 0.72; }
+/* 扇区点击联动：对应图例行凸显（负 margin 保持左右对齐不跳动） */
+.pl-item--hl {
+  background: rgba(0,204,249,0.10);
+  border-radius: 12rpx;
+  padding: 8rpx 14rpx; margin: -8rpx -14rpx;
+}
+.pl-item--hl .pl-k { color: var(--fg); font-weight: 600; }
 .pl-go { color: var(--muted); font-size: 26rpx; margin-left: 4rpx; }
 .drill-bar {
   display: flex; align-items: center; justify-content: space-between; gap: 16rpx;
@@ -49,7 +59,18 @@
   animation: drill-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .drill-bar--press { background: rgba(0, 204, 249, 0.16); }
-.drill-bar__text { font-size: 26rpx; font-weight: 600; }
+/* 明细入口三段式：左=日期/月份（垂直居中），中=数值上下堆叠（收/支各一行），右=查看明细 */
+.drill-bar__label {
+  flex-shrink: 0;
+  font-size: 26rpx; font-weight: 600;
+  white-space: nowrap;
+}
+.drill-bar__vals {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 6rpx;
+  font-size: 26rpx; font-weight: 600;
+}
+.drill-bar__vals text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .drill-bar__go { flex-shrink: 0; color: var(--accent-ink); font-size: 26rpx; font-weight: 600; }
 @keyframes drill-in { from { opacity: 0; transform: translateY(-8rpx); } to { opacity: 1; transform: translateY(0); } }
 
@@ -74,6 +95,9 @@
 .cat-row__pct { color: var(--muted); font-size: 22rpx; width: 84rpx; text-align: right; flex-shrink: 0; }
 .cat-more { text-align: center; padding: 20rpx; color: var(--accent-ink); font-size: 26rpx; font-weight: 600; }
 .cat-more.pressed { opacity: 0.7; }
+
+/* 分区标题右侧动作组：＋添加 / 编辑 */
+.sec-actions { display: flex; align-items: center; gap: 32rpx; }
 
 /* 编辑模式：整张卡片拖拽排序 */
 .chart-card--edit {
@@ -126,7 +150,9 @@
   width: 100%; background: var(--surface);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
-  max-height: 82%; display: flex; flex-direction: column;
+  /* 固定高度：scroll-view 只有拿到「确定高度」才会真正滚动（flex 压出的高度在部分基础库上失效） */
+  height: 78vh; box-sizing: border-box;
+  display: flex; flex-direction: column;
   transform: translateY(101%);
   transition: transform 340ms cubic-bezier(0.16,1,0.3,1);
   will-change: transform;
@@ -135,10 +161,15 @@
 .cpk__grab { width: 72rpx; height: 8rpx; border-radius: 999rpx; background: var(--border); margin: 16rpx auto 0; flex-shrink: 0; }
 .cpk__title { text-align: center; font-size: var(--text-lg); font-weight: 600; padding: 20rpx 32rpx 8rpx; flex-shrink: 0; }
 .cpk__hint { text-align: center; color: var(--muted); font-size: 24rpx; padding: 0 40rpx 20rpx; flex-shrink: 0; }
-/* 用普通 view 承载：高度随内容自适应、完整显示；类型很多时才滚动。
-   （不用 flex:1 + scroll-view：内容不足一屏时其高度会被算矮而裁掉最后一项） */
-.cpk__list { padding: 0 24rpx 8rpx; overflow-y: auto; }
+/* scroll-view 承载（view 的 overflow-y:auto 在真机不可滚动）：
+   父容器 .cpk 固定高度 → flex:1 + height:0 给出确定高度，内容超出即可滚 */
+.cpk__list { flex: 1; height: 0; min-height: 0; padding: 0 24rpx 8rpx; box-sizing: border-box; }
 
+/* 面板分组标题（环形/柱状/折线） */
+.cpk__sec {
+  padding: 24rpx 16rpx 8rpx;
+  font-size: 24rpx; font-weight: 600; color: var(--muted);
+}
 .cpk__row {
   display: flex; align-items: center; gap: var(--space-4);
   padding: 20rpx 16rpx; border-radius: var(--radius-md);

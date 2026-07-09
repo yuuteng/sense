@@ -1,8 +1,9 @@
 <view class="screen" style="padding-bottom:48rpx">
   <loading show="{{loading}}"></loading>
-  <nav-bar back="{{true}}" center="{{true}}" title="{{title}}"></nav-bar>
-
-  <view wx:if="{{summaryText}}" class="rec-summary">{{summaryText}}</view>
+  <view class="sticky-header">
+    <nav-bar back="{{true}}" center="{{true}}" title="{{title}}"></nav-bar>
+    <view wx:if="{{summaryText}}" class="rec-summary">{{summaryText}}</view>
+  </view>
 
   <!-- 与首页一致的按天分组记录列表 -->
   <block wx:for="{{groups}}" wx:key="date" wx:for-item="g">

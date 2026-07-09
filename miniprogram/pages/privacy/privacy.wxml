@@ -1,0 +1,33 @@
+<view class="screen screen--pad">
+  <nav-bar back="{{true}}" center="{{true}}" title="隐私说明"></nav-bar>
+
+  <view class="pv">
+    <view class="pv-sec">
+      <view class="pv-h">数据存在哪里</view>
+      <view class="pv-p">你的账本、记录、分类与图片全部存储在微信云开发（云数据库 / 云存储）中，跟随你的微信账号。我们没有独立服务器，不会把数据传输给第三方。</view>
+    </view>
+
+    <view class="pv-sec">
+      <view class="pv-h">谁能看到你的数据</view>
+      <view class="pv-p">数据可见性以「账本成员」为边界：只有被邀请加入某个账本的成员才能看到该账本的内容，未受邀的人完全不可见。成员分 owner / 管理 / 读写 / 只读四级角色，所有权限都在服务端校验，前端无法绕过。</view>
+    </view>
+
+    <view class="pv-sec">
+      <view class="pv-h">AI 助手如何使用数据</view>
+      <view class="pv-p">数据问答只基于你当前账本的真实数据作答，不会编造数字；收据识别与自然语言记账只生成「预填记录」，经你确认后才会入账，AI 绝不自动写入。AI 能看到的范围与你本人的账本可见范围一致。</view>
+      <view class="pv-p">AI 会话按账本分别保留，超过条数上限（可在设置中调整）后自动删除最旧的消息。</view>
+      <view class="pv-p">语音输入仅用于把这段话转成文字：录音上传后立即识别、识别完成即删除，不留存任何音频。</view>
+    </view>
+
+    <view class="pv-sec">
+      <view class="pv-h">汇率与金额</view>
+      <view class="pv-p">多币种记录按记账当日的公开汇率换算并固化保存，之后汇率变化不会改动历史金额。汇率数据来自公开的每日汇率源，不涉及你的个人信息。</view>
+    </view>
+
+    <view class="pv-sec">
+      <view class="pv-h">导出与反馈</view>
+      <view class="pv-p">导出的 JSON / Excel / PDF 文件生成后由你自行保管与分享，请注意其中包含账本明细。提交反馈时填写的联系邮箱仅用于就该问题与你联系，不作他用。</view>
+    </view>
+
+  </view>
+</view>

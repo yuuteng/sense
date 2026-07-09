@@ -76,9 +76,11 @@ async function membersMap(bookId) {
   const map = {};
   r.data.forEach((m) => {
     const u = users[m.openid] || {};
-    const name = m.nameOverride || u.nickname || '成员';
+    // 已注销用户：注销时昵称已快照进 nameOverride，展示加后缀，历史记录仍可读
+    const baseName = m.nameOverride || u.nickname || '成员';
+    const name = m.deletedUser ? `${baseName}（已注销）` : baseName;
     map[m.openid] = {
-      name, initial: u.avatarInitial || name.slice(0, 1),
+      name, initial: u.avatarInitial || baseName.slice(0, 1),
       color: m.avatarColor || u.avatarColor || '#00ccf9',
       avatarFileID: u.avatarFileID || '',
       role: m.role,

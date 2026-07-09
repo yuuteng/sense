@@ -7,6 +7,8 @@ Page({
     title: '',
     content: '',
     contactEmail: '',
+    emailError: false,
+    emailFocus: false,
     photos: [],
   },
 
@@ -16,7 +18,12 @@ Page({
 
   onTitle(e) { this.setData({ title: e.detail.value }); },
   onContent(e) { this.setData({ content: e.detail.value }); },
-  onEmail(e) { this.setData({ contactEmail: e.detail.value }); },
+  onEmail(e) {
+    const v = e.detail.value;
+    // 输入过程中：空或格式变合法即清除错误态（与建账本空名交互一致）
+    const ok = !v.trim() || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim());
+    this.setData({ contactEmail: v, emailError: ok ? false : this.data.emailError });
+  },
 
   choosePhoto() {
     const left = 3 - this.data.photos.length;
@@ -43,8 +50,11 @@ Page({
     const email = this.data.contactEmail.trim();
     if (!title) { wx.showToast({ title: '请填写标题', icon: 'none' }); return; }
     if (!content) { wx.showToast({ title: '请填写问题描述', icon: 'none' }); return; }
-    // 邮箱选填，但填了必须是合法格式（服务端同样校验）
-    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { wx.showToast({ title: '联系邮箱格式不正确', icon: 'none' }); return; }
+    // 邮箱选填，但填了必须是合法格式（服务端同样校验）；错误用标红提示而非 toast
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      this.setData({ emailError: true, emailFocus: true });
+      return;
+    }
     if (this.submitting) return;
     this.submitting = true;
     wx.showLoading({ title: '提交中…', mask: true });

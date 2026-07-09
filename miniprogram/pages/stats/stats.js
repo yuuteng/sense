@@ -64,16 +64,29 @@ function pairedSvg(rows) {
   return enc(s);
 }
 
-// 图表类型（可添加多个同类型实例）
+// 图表类型（可添加多个同类型实例）。趋势卡不按「指标×粒度」拆成一堆类型，
+// 而是卡内配置：指标（支出/收入/结余）× 区间（近7/14/30日、近6/12月）——组合全覆盖。
 const TYPES = {
   monthPie: { title: '月度收支', desc: '任一月份收入 / 支出占比，可切换月份', kind: 'pie' },
   catBreakdown: { title: '分类占比', desc: '某月支出/收入按分类的占比与排行，可钻取明细', kind: 'cat' },
-  weekExpense: { title: '支出趋势', desc: '近 N 日每日支出', kind: 'bars', defRange: 7 },
-  yearInOut: { title: '收支趋势', desc: '近 N 月收入 vs 支出', kind: 'paired', defRange: 12 },
-  totalPie: { title: '累计收支', desc: '账本累计收入 / 支出占比', kind: 'pie' },
+  yearPie: { title: '年度收支', desc: '自然年（可切年份）或近一年的收支占比', kind: 'pie' },
+  totalPie: { title: '累计收支', desc: '账本自建立以来收支占比', kind: 'pie' },
+  yearInOut: { title: '收支对比', desc: '近 N 月收入 vs 支出并排柱状', kind: 'paired', defRange: 6 },
+  trendBars: { title: '收支柱状', desc: '支出 / 收入 / 结余，按日或按月，柱状', kind: 'bars' },
+  trendLine: { title: '收支趋势', desc: '支出 / 收入 / 结余，按日或按月，折线', kind: 'line' },
 };
-const TYPE_IDS = ['monthPie', 'catBreakdown', 'weekExpense', 'yearInOut', 'totalPie'];
-const DEFAULT_LAYOUT = ['monthPie', 'weekExpense', 'yearInOut', 'totalPie'];
+const DEFAULT_LAYOUT = ['monthPie', 'catBreakdown', 'trendLine', 'yearInOut'];
+
+// 趋势卡的指标与区间（span：d=按日 m=按月，数字为期数）
+const METRICS = {
+  expense: { label: '支出', color: BLUE },
+  income: { label: '收入', color: GREEN },
+  balance: { label: '结余', color: '#0089c0' },
+};
+const SPANS = [
+  { k: 'd7', label: '近 7 日' }, { k: 'd14', label: '近 14 日' }, { k: 'd30', label: '近 30 日' },
+  { k: 'm6', label: '近 6 月' }, { k: 'm12', label: '近 12 月' },
+];
 const RANK_TOP = 5; // 分类排行默认展示前 5，其余折叠
 
 // 'YYYY-MM' 偏移 delta 个月
@@ -105,38 +118,72 @@ function catPreviewSvg(values, colors) {
   return enc(s);
 }
 
+// 折线示意图（面积 + 线）
+function lineSvg(values, color) {
+  const W = 320, H = 156, base = H - 14, top = 14;
+  const max = Math.max(1, ...values);
+  const n = values.length;
+  const pts = values.map((v, i) => `${((i * W) / (n - 1)).toFixed(1)},${(base - (v / max) * (base - top)).toFixed(1)}`);
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  s += `<polygon points="0,${base} ${pts.join(' ')} ${W},${base}" fill="${color}22"/>`;
+  s += `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
+  s += `</svg>`;
+  return enc(s);
+}
+
 // 「添加图表」弹层用的示意缩略图：套用真实图表的画法 + 一组样例数据，纯展示、不含真实金额
 const PREVIEW = {
   monthPie: donutSvg(62, 38),
+  yearPie: donutSvg(58, 42),
   totalPie: donutSvg(56, 44),
   catBreakdown: catPreviewSvg([38, 26, 18, 12, 6], theme.CAT_COLORS.slice(0, 5)),
-  weekExpense: barsSvg([30, 52, 40, 68, 45, 60, 74], ['', '', '', '', '', '', '']),
+  trendLine: lineSvg([30, 46, 38, 64, 50, 72, 58, 80], BLUE),
+  trendBars: barsSvg([30, 52, 40, 68, 45, 60, 74], ['', '', '', '', '', '', '']),
   yearInOut: pairedSvg([
     { income: 70, expense: 52, label: '' }, { income: 60, expense: 66, label: '' },
     { income: 82, expense: 48, label: '' }, { income: 55, expense: 62, label: '' },
     { income: 76, expense: 58, label: '' }, { income: 64, expense: 72, label: '' },
   ]),
 };
-const PICKER_TYPES = TYPE_IDS.map((id) => ({
-  type: id, kind: TYPES[id].kind, title: TYPES[id].title, desc: TYPES[id].desc, preview: PREVIEW[id],
+// 面板按图形形态分组：先环形、再柱状、后折线，同形态集中展示
+const PICKER_SECTIONS = [
+  { name: '环形图 · 占比', ids: ['monthPie', 'catBreakdown', 'yearPie', 'totalPie'] },
+  { name: '柱状图 · 对比', ids: ['yearInOut', 'trendBars'] },
+  { name: '折线图 · 趋势', ids: ['trendLine'] },
+].map((sec) => ({
+  name: sec.name,
+  items: sec.ids.map((id) => ({ type: id, kind: TYPES[id].kind, title: TYPES[id].title, desc: TYPES[id].desc, preview: PREVIEW[id] })),
 }));
 
-// 兼容旧布局（字符串 id）与新布局（实例对象）。
+// 兼容旧布局（字符串 id / 旧类型 id）与新布局（实例对象）。
 // month：'YYYY-MM' = 固定看该月；不存 = 跟随当前月（默认卡行为）。
+// 旧趋势类型迁移：dayLine/weekExpense/balanceLine → trendLine/trendBars + 指标/区间配置。
+const LEGACY_TREND = {
+  dayLine: (r) => ({ type: 'trendLine', metric: 'expense', span: 'd' + (r || 30) }),
+  balanceLine: (r) => ({ type: 'trendLine', metric: 'balance', span: 'm' + (r || 12) }),
+  weekExpense: (r) => ({ type: 'trendBars', metric: 'expense', span: 'd' + (r || 7) }),
+};
 function normalizeLayout(order) {
   const arr = (Array.isArray(order) && order.length) ? order : DEFAULT_LAYOUT;
-  return arr.map((it) => {
-    if (typeof it === 'string') {
-      if (!TYPES[it]) return null;
-      return { iid: genId(), type: it, range: TYPES[it].defRange };
+  return arr.map((raw0) => {
+    let it = raw0;
+    if (typeof it === 'string') it = { type: it };
+    if (!it || !it.type) return null;
+    if (LEGACY_TREND[it.type]) it = { ...it, ...LEGACY_TREND[it.type](it.range) };
+    if (!TYPES[it.type]) return null;
+    const inst = { iid: it.iid || genId(), type: it.type, range: it.range || TYPES[it.type].defRange };
+    if (/^\d{4}-\d{2}$/.test(it.month || '')) inst.month = it.month;
+    if (it.type === 'catBreakdown') inst.catKind = it.catKind === 'income' ? 'income' : 'expense';
+    if (it.type === 'yearPie') {
+      inst.yearMode = it.yearMode === 'rolling' ? 'rolling' : 'year';
+      const y = Number(it.year);
+      if (y >= 2000 && y <= 2100) inst.year = y; // 不存 = 跟随当前年
     }
-    if (it && TYPES[it.type]) {
-      const inst = { iid: it.iid || genId(), type: it.type, range: it.range || TYPES[it.type].defRange };
-      if (/^\d{4}-\d{2}$/.test(it.month || '')) inst.month = it.month;
-      if (it.type === 'catBreakdown') inst.catKind = it.catKind === 'income' ? 'income' : 'expense';
-      return inst;
+    if (it.type === 'trendLine' || it.type === 'trendBars') {
+      inst.metric = METRICS[it.metric] ? it.metric : 'expense';
+      inst.span = /^[dm]\d+$/.test(it.span || '') ? it.span : (it.type === 'trendLine' ? 'd30' : 'd7');
     }
-    return null;
+    return inst;
   }).filter(Boolean);
 }
 
@@ -160,13 +207,15 @@ Page({
     curCode: 'CNY',
     curSym: '¥',
     curVisible: false,
-    // 添加图表弹层
+    // 添加图表弹层（按图形形态分组）
     pickerRender: false,
     pickerUp: false,
-    pickerTypes: PICKER_TYPES,
+    pickerSections: PICKER_SECTIONS,
     // 编辑模式（长按进入）：整张卡片拖拽排序
     dragIid: '',
     dragY: 0,
+    // 任一弹层打开时卸载图表 canvas（iOS 同层渲染会浮到弹层上）
+    overlayUp: false,
   },
 
   onPageScroll(e) { this._scrollTop = e.scrollTop; },
@@ -241,7 +290,7 @@ Page({
         legends: [
           { dot: GREEN, k: '总收入', v: fmt.money(p.income, cur), type: 'income' },
           { dot: BLUE, k: '总支出', v: fmt.money(p.expense, cur), type: 'expense' },
-          { k: '累计结余', v: fmt.signedTotal(p.income - p.expense, cur), strong: true },
+          { k: '累计结余', v: fmt.signedTotal(p.income - p.expense, cur), strong: true, link: true },
         ],
       };
     }
@@ -266,12 +315,70 @@ Page({
           first: firstYm, last: curYm,
           prevOk: ym > firstYm, nextOk: ym < curYm,
         },
+        drFrom: `${ym}-01`, drTo: `${ym}-31`, drText: `${yy}年${mNum}月`,
         option: theme.donutOption(p.income, p.expense),
         legends: [
           { dot: GREEN, k: '收入', v: fmt.money(p.income, cur), type: 'income' },
           { dot: BLUE, k: '支出', v: fmt.money(p.expense, cur), type: 'expense' },
-          { k: '结余', v: fmt.signedTotal(p.income - p.expense, cur), strong: true },
+          { k: '结余', v: fmt.signedTotal(p.income - p.expense, cur), strong: true, link: true },
         ],
+      };
+    }
+    if (inst.type === 'yearPie') {
+      // 年度收支：自然年（可切年份，默认跟随当前年）或「近一年」滚动 12 个月
+      const curYm = raw.curMonth || localYm();
+      const curYear = Number(curYm.slice(0, 4));
+      const firstYear = Number((raw.firstMonth || curYm).slice(0, 4));
+      const rolling = inst.yearMode === 'rolling';
+      const monthly = raw.monthly || [];
+      const year = Math.max(firstYear, Math.min(curYear, inst.year || curYear));
+      const rows = rolling ? monthly.slice(-12) : monthly.filter((x) => x.ym.slice(0, 4) === String(year));
+      let inc = 0, ex = 0;
+      rows.forEach((x) => { inc += x.income; ex += x.expense; });
+      inc = Math.round(inc * 100) / 100; ex = Math.round(ex * 100) / 100;
+      return {
+        iid: inst.iid, type: inst.type, kind: 'pie',
+        title: rolling ? '近一年收支' : `${year} 年收支`,
+        sub: rolling ? '近 12 个月 · 收入 vs 支出' : `${year} 自然年 · 收入 vs 支出`,
+        yearMode: rolling ? 'rolling' : 'year',
+        yearNav: rolling ? null : { year, prevOk: year > firstYear, nextOk: year < curYear },
+        drFrom: rolling ? (rows[0] ? `${rows[0].ym}-01` : `${curYear}-01-01`) : `${year}-01-01`,
+        drTo: rolling ? `${curYm}-31` : `${year}-12-31`,
+        drText: rolling ? '近一年' : `${year}年`,
+        option: theme.donutOption(inc, ex),
+        legends: [
+          { dot: GREEN, k: '收入', v: fmt.money(inc, cur), type: 'income' },
+          { dot: BLUE, k: '支出', v: fmt.money(ex, cur), type: 'expense' },
+          { k: '结余', v: fmt.signedTotal(inc - ex, cur), strong: true, link: true },
+        ],
+      };
+    }
+    if (inst.type === 'trendLine' || inst.type === 'trendBars') {
+      // 趋势卡：指标（支出/收入/结余）× 区间（近7/14/30日、近6/12月），折线或柱状
+      const metric = METRICS[inst.metric] ? inst.metric : 'expense';
+      const span = /^[dm]\d+$/.test(inst.span || '') ? inst.span : 'd30';
+      const isDay = span[0] === 'd';
+      const n = Number(span.slice(1));
+      const rows = ((isDay ? raw.daily : raw.monthly) || []).slice(-n);
+      const val = (x) => (metric === 'income' ? x.income : metric === 'balance' ? Math.round((x.income - x.expense) * 100) / 100 : x.expense);
+      const vals = rows.map(val);
+      const labels = rows.map((x) => x.label);
+      const m = METRICS[metric];
+      const sub = metric === 'balance'
+        ? `${isDay ? '按日' : '按月'} · 收入 − 支出`
+        : `${isDay ? '按日' : '按月'} · 合计 ${fmt.money(vals.reduce((s, v) => s + v, 0), cur)}`;
+      return {
+        iid: inst.iid, type: inst.type,
+        kind: inst.type === 'trendBars' ? 'bars' : 'line',
+        trend: true,
+        metrics: Object.keys(METRICS).map((k) => ({ k, label: METRICS[k].label, on: k === metric })),
+        spans: SPANS.map((s) => ({ ...s, on: s.k === span })),
+        title: `近 ${n} ${isDay ? '日' : '个月'}${m.label}`,
+        sub,
+        option: inst.type === 'trendBars'
+          ? theme.barsOption(vals, labels, m.color)
+          : theme.lineOption(vals, labels, { color: m.color }),
+        legends: [{ dot: m.color, k: `每${isDay ? '日' : '月'}${m.label}` }],
       };
     }
     if (inst.type === 'catBreakdown') {
@@ -289,7 +396,7 @@ Page({
       const rows = kd.cats.map((c, i) => ({
         categoryId: c.categoryId, name: c.name, count: c.count,
         total: fmt.money(c.total, cur), percent: c.percent + '%',
-        dot: theme.catColorAt(i),
+        dot: theme.catColorAt(i, kind),
       }));
       const shown = expanded ? rows : rows.slice(0, RANK_TOP);
       return {
@@ -303,23 +410,13 @@ Page({
           prevOk: ym > firstYm, nextOk: ym < curYm,
         },
         catKind: kind,
-        option: theme.catDonutOption(kd.cats),
+        option: theme.catDonutOption(kd.cats, kind),
         centerLabel: { k: kind === 'income' ? '总收入' : '总支出', v: fmt.money(kd.total, cur) },
         rows: shown,
         totalCount: rows.length,
         moreCount: rows.length - shown.length,
         expanded,
         empty: !rows.length,
-      };
-    }
-    if (inst.type === 'weekExpense') {
-      const arr = (raw.daily || []).slice(-inst.range);
-      const sum = arr.reduce((s, x) => s + x.expense, 0);
-      return {
-        iid: inst.iid, type: inst.type, kind: 'bars', range: 'day', rangeVal: inst.range,
-        title: `近 ${inst.range} 日支出`, sub: `按日 · 合计 ${fmt.money(sum, cur)}`,
-        option: theme.barsOption(arr.map((x) => x.expense), arr.map((x) => x.label)),
-        legends: [{ dot: BLUE, k: '每日支出' }],
       };
     }
     // yearInOut
@@ -435,14 +532,24 @@ Page({
     this.saveLayout();
   },
 
-  // 添加图表：弹出带示意图的选择面板（可重复添加，例如两个不同区间的支出趋势）
+  // 弹层期间卸载图表 canvas：canvas 2d 同层渲染在部分 iOS 上会浮到弹层之上，
+  // 打开任何弹层（添加面板/账本切换/币种）即卸载画布（占位保高度），关闭后重挂自动重绘
+  _setOverlay(open) {
+    if (this._ovT) { clearTimeout(this._ovT); this._ovT = null; }
+    if (open) this.setData({ overlayUp: true });
+    else this._ovT = setTimeout(() => this.setData({ overlayUp: false }), 320); // 等退场动画结束再重挂
+  },
+
+  // 添加图表：弹出带示意图的选择面板（可重复添加，例如两个不同区间的支出趋势）；编辑模式中也可用
   openPicker() {
     tabbar.setHidden(true); // tabBar 层级高于弹层，打开时先藏
+    this._setOverlay(true);
     this.setData({ pickerRender: true });
     this._pt = setTimeout(() => this.setData({ pickerUp: true }), 20);
   },
   closePicker() {
     tabbar.setHidden(false);
+    this._setOverlay(false);
     this.setData({ pickerUp: false });
     this._pt = setTimeout(() => this.setData({ pickerRender: false }), 300);
   },
@@ -452,11 +559,51 @@ Page({
     if (!type || !TYPES[type]) return;
     const inst = { iid: genId(), type, range: TYPES[type].defRange };
     if (type === 'catBreakdown') inst.catKind = 'expense';
+    if (type === 'yearPie') inst.yearMode = 'year'; // 默认自然年、跟随当前年
+    if (type === 'trendLine') { inst.metric = 'expense'; inst.span = 'd30'; }
+    if (type === 'trendBars') { inst.metric = 'expense'; inst.span = 'd7'; }
     this.layout = this.layout.concat([inst]);
     this.closePicker();
     if (type === 'catBreakdown') await this.ensureCatData();
     this.rebuild();
     this.saveLayout();
+    wx.showToast({ title: `已添加「${TYPES[type].title}」`, icon: 'none' });
+  },
+
+  // —— 趋势卡：指标（支出/收入/结余）与区间（日/月）切换 ——
+  setMetric(e) {
+    const { iid, m } = e.currentTarget.dataset;
+    if (!METRICS[m]) return;
+    this.layout = this.layout.map((x) => (x.iid === iid ? { ...x, metric: m } : x));
+    this.rebuild(); this.saveLayout();
+  },
+  setSpan(e) {
+    const { iid, s } = e.currentTarget.dataset;
+    if (!/^[dm]\d+$/.test(s || '')) return;
+    this.layout = this.layout.map((x) => (x.iid === iid ? { ...x, span: s } : x));
+    this.rebuild(); this.saveLayout();
+  },
+
+  // —— 年度收支卡：年份切换 / 自然年↔近一年 ——
+  yearShift(e) {
+    const { iid, dir } = e.currentTarget.dataset;
+    const raw = this.raw || {};
+    const curYear = Number((raw.curMonth || localYm()).slice(0, 4));
+    const firstYear = Number((raw.firstMonth || raw.curMonth || localYm()).slice(0, 4));
+    this.layout = this.layout.map((x) => {
+      if (x.iid !== iid) return x;
+      let y = (x.year || curYear) + Number(dir);
+      y = Math.max(firstYear, Math.min(curYear, y));
+      const next = { ...x };
+      if (y === curYear) delete next.year; else next.year = y; // 当前年 = 跟随，不固化
+      return next;
+    });
+    this.rebuild(); this.saveLayout();
+  },
+  setYearMode(e) {
+    const { iid, m } = e.currentTarget.dataset;
+    this.layout = this.layout.map((x) => (x.iid === iid ? { ...x, yearMode: m === 'rolling' ? 'rolling' : 'year' } : x));
+    this.rebuild(); this.saveLayout();
   },
 
   removeCard(e) {
@@ -530,38 +677,67 @@ Page({
       catName: d.name, monthText: d.mtext,
     });
   },
-  // 月度收支 / 累计收支的图例行（收入/支出）→ 该范围该类型明细
+  // 饼图类（月度/年度/累计）图例行 → 该范围明细；结余行不带收支筛选（收入+支出合看）。
+  // 日期范围由卡片统一给出（data-from/to/mtext），月度=当月、年度=自然年或近一年、累计=不限
   onLegendTap(e) {
     const d = e.currentTarget.dataset;
-    if (!d.type) return; // 「结余」行不钻取
-    const p = { bookId: this.bookId, type: d.type };
-    if (d.cardType === 'monthPie' && d.ym) {
-      p.dateFrom = `${d.ym}-01`; p.dateTo = `${d.ym}-31`; p.monthText = d.mtext;
-    }
+    if (!d.type && !d.link) return;
+    const p = { bookId: this.bookId };
+    if (d.type) p.type = d.type;
+    if (d.from) { p.dateFrom = d.from; p.dateTo = d.to; p.monthText = d.mtext; }
     this.goRecords(p);
   },
-  // 柱状图点柱（两段式第一段）：高亮该柱 + 卡内滑出「查看明细」入口条
+  // 柱状/折线点数据点（两段式第一段）：高亮 + 卡内滑出「查看明细」入口条；再点同一点取消
   onBarTap(e) {
     const iid = e.currentTarget.dataset.iid;
     const dataIndex = e.detail.dataIndex;
     const inst = this.layout.find((x) => x.iid === iid);
     if (!inst || dataIndex == null) return;
+    const curCard = this.data.cards.find((c) => c.iid === iid);
+    if (curCard && curCard.drill && curCard.drillIdx === dataIndex) {
+      // 再点同一根柱/同一点：收起入口条 + 取消高亮
+      const comp0 = this.selectComponent(`#chart-${iid}`);
+      const chart0 = comp0 && comp0.getChart && comp0.getChart();
+      if (chart0) chart0.dispatchAction({ type: 'downplay' });
+      this.setData({ cards: this.data.cards.map((c) => (c.iid === iid ? { ...c, drill: null, drillIdx: null } : c)) });
+      return;
+    }
     const raw = this.raw || {};
     let drill = null;
-    if (inst.type === 'weekExpense') {
-      const row = (raw.daily || []).slice(-inst.range)[dataIndex];
+    if (inst.type === 'trendLine' || inst.type === 'trendBars') {
+      const span = /^[dm]\d+$/.test(inst.span || '') ? inst.span : 'd30';
+      const isDay = span[0] === 'd';
+      const rows = ((isDay ? raw.daily : raw.monthly) || []).slice(-Number(span.slice(1)));
+      const row = rows[dataIndex];
       if (!row) return;
-      drill = {
-        text: `${fmt.cnMonthDay(row.date)} · 支出 ${fmt.money(row.expense, this.cur)}`,
-        params: { bookId: this.bookId, dateFrom: row.date, dateTo: row.date, type: 'expense', monthText: fmt.cnMonthDay(row.date) },
-      };
+      const metric = METRICS[inst.metric] ? inst.metric : 'expense';
+      const mLabel = METRICS[metric].label;
+      const v = metric === 'income' ? row.income : metric === 'balance' ? row.income - row.expense : row.expense;
+      const vText = metric === 'balance' ? fmt.signedTotal(v, this.cur) : fmt.money(v, this.cur);
+      const typeFilter = metric === 'balance' ? {} : { type: metric }; // 结余 = 收入+支出合看
+      if (isDay) {
+        drill = {
+          label: fmt.cnMonthDay(row.date),
+          lines: [`${mLabel} ${vText}`],
+          params: { bookId: this.bookId, dateFrom: row.date, dateTo: row.date, monthText: fmt.cnMonthDay(row.date), ...typeFilter },
+        };
+      } else {
+        const [yy, mm] = row.ym.split('-');
+        const mtext = `${yy}年${parseInt(mm, 10)}月`;
+        drill = {
+          label: mtext,
+          lines: [`${mLabel} ${vText}`],
+          params: { bookId: this.bookId, dateFrom: `${row.ym}-01`, dateTo: `${row.ym}-31`, monthText: mtext, ...typeFilter },
+        };
+      }
     } else if (inst.type === 'yearInOut') {
       const row = (raw.monthly || []).slice(-inst.range)[dataIndex];
       if (!row) return;
       const [yy, mm] = row.ym.split('-');
       const mtext = `${yy}年${parseInt(mm, 10)}月`;
       drill = {
-        text: `${mtext} · 收 ${fmt.money(row.income, this.cur)} / 支 ${fmt.money(row.expense, this.cur)}`,
+        label: mtext,
+        lines: [`收 ${fmt.money(row.income, this.cur)}`, `支 ${fmt.money(row.expense, this.cur)}`],
         params: { bookId: this.bookId, dateFrom: `${row.ym}-01`, dateTo: `${row.ym}-31`, monthText: mtext },
       };
     }
@@ -573,14 +749,40 @@ Page({
       chart.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex });
       if (inst.type === 'yearInOut') chart.dispatchAction({ type: 'highlight', seriesIndex: 1, dataIndex });
     }
-    this.setData({ cards: this.data.cards.map((c) => (c.iid === iid ? { ...c, drill } : c)) });
+    this.setData({ cards: this.data.cards.map((c) => (c.iid === iid ? { ...c, drill, drillIdx: dataIndex } : c)) });
   },
   // 两段式第二段：点入口条进明细
   goDrill(e) {
     const card = this.data.cards.find((c) => c.iid === e.currentTarget.dataset.iid);
     if (card && card.drill) this.goRecords(card.drill.params);
   },
-  // 分类环形扇区点击：高亮联动排行行；点「其他」或折叠区扇区则展开列表
+  // 收支饼图扇区点击：扇区保持放大 + 右侧对应图例行凸显（再点同一扇区取消）。
+  // 图例行本身是钻取入口，凸显同时起引导作用。
+  onPieTap(e) {
+    const iid = e.currentTarget.dataset.iid;
+    const name = e.detail.name; // '收入' / '支出' / '暂无'
+    if (!name || name === '暂无') return;
+    let hlName = '';
+    const cards = this.data.cards.map((c) => {
+      if (c.iid !== iid) return c;
+      hlName = c.hlName === name ? '' : name;
+      return {
+        ...c,
+        hlName,
+        legends: (c.legends || []).map((lg) => ({ ...lg, hl: !!hlName && (lg.k === hlName || lg.k === '总' + hlName) })),
+      };
+    });
+    const comp = this.selectComponent(`#chart-${iid}`);
+    const chart = comp && comp.getChart && comp.getChart();
+    if (chart) {
+      chart.dispatchAction({ type: 'downplay' });
+      if (hlName) chart.dispatchAction({ type: 'highlight', seriesIndex: 0, name });
+    }
+    this.setData({ cards });
+  },
+
+  // 分类环形扇区点击：扇区保持放大 + 联动排行行凸显（再点同一扇区取消）；
+  // 点「其他」或折叠区扇区则展开列表
   onCatPieTap(e) {
     const iid = e.currentTarget.dataset.iid;
     const name = e.detail.name;
@@ -591,16 +793,24 @@ Page({
       if (!this._catExpand[iid]) { this._catExpand[iid] = true; this.rebuild(); }
       return;
     }
+    const hlName = card.hlName === name ? '' : name; // 再点同一扇区 = 取消
+    const comp = this.selectComponent(`#chart-${iid}`);
+    const chart = comp && comp.getChart && comp.getChart();
+    if (chart) {
+      chart.dispatchAction({ type: 'downplay' });
+      if (hlName) chart.dispatchAction({ type: 'highlight', seriesIndex: 0, name });
+    }
     this.setData({
       cards: this.data.cards.map((c) => (c.iid === iid
-        ? { ...c, rows: c.rows.map((r) => ({ ...r, hl: r.name === name })) }
+        ? { ...c, hlName, rows: c.rows.map((r) => ({ ...r, hl: !!hlName && r.name === hlName })) }
         : c)),
     });
   },
 
-  restoreDefault() {
+  async restoreDefault() {
     this.layout = normalizeLayout(DEFAULT_LAYOUT);
-    this.setData({ editing: false, editRows: [], dragIid: '', dragY: 0 });
+    this.setData({ editing: false, dragIid: '', dragY: 0 });
+    await this.ensureCatData(); // 默认卡含分类占比，先拉当月聚合再渲染，否则空卡直到切月
     this.rebuild(); this.saveLayout();
   },
 
@@ -613,6 +823,7 @@ Page({
   async openSwitcher() {
     try {
       const list = await api.call('book', 'list');
+      this._setOverlay(true);
       this.setData({
         books: list.map((b) => ({
           bookId: b.bookId, name: b.name, typeLabel: b.typeLabel,
@@ -626,6 +837,7 @@ Page({
   },
   async onSwitcherSelect(e) {
     const { bookId } = e.detail;
+    this._setOverlay(false);
     this.setData({ switcherVisible: false });
     if (!bookId || bookId === this.data.currentBookId) return;
     try {
@@ -635,18 +847,22 @@ Page({
       wx.showToast({ title: '已切换账本', icon: 'none' });
     } catch (e2) { api.toast(e2); }
   },
-  onSwitcherClose() { this.setData({ switcherVisible: false }); },
-  goManageBooks() { this.setData({ switcherVisible: false }); wx.navigateTo({ url: '/pages/books/books' }); },
+  onSwitcherClose() { this._setOverlay(false); this.setData({ switcherVisible: false }); },
+  goManageBooks() { this._setOverlay(false); this.setData({ switcherVisible: false }); wx.navigateTo({ url: '/pages/books/books' }); },
 
   // 展示币种切换（顶部按钮 → 币种选择器）
-  openCurPicker() { this.setData({ curVisible: true }); },
-  closeCurPicker() { this.setData({ curVisible: false }); },
+  openCurPicker() { this._setOverlay(true); this.setData({ curVisible: true }); },
+  closeCurPicker() { this._setOverlay(false); this.setData({ curVisible: false }); },
   onCurPick(e) {
     const code = e.detail.code;
+    this._setOverlay(false);
     this.setData({ curVisible: false });
     if (!code || code === this.data.curCode) return;
+    const prev = { curCode: this.data.curCode, curSym: this.data.curSym };
+    // 胶囊即时切换 + 即刻加载态；图表数值必须等服务器重算，失败回滚胶囊
+    this.setData({ curCode: code, curSym: fmt.symbolOf(code), loading: true });
     api.call('settings', 'update', { displayCurrency: code })
-      .then(() => { this.setData({ loading: true }); return this.load(); })
-      .catch(api.toast);
+      .then(() => this.load())
+      .catch((err) => { this.setData({ ...prev, loading: false }); api.toast(err); });
   },
 });

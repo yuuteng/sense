@@ -1,12 +1,17 @@
 <view class="screen screen--pad">
   <loading show="{{loading}}"></loading>
-  <nav-bar title="我的"></nav-bar>
+  <nav-bar center="{{true}}" title="我的"></nav-bar>
 
-  <!-- 个人头（点击改昵称）-->
+  <!-- 个人头：点头像换头像（微信头像选择），点其余区域改昵称 -->
   <view class="li" style="margin:0 40rpx 40rpx;border-radius:var(--radius-md);padding:32rpx" hover-class="pressed" hover-stay-time="80" bindtap="editProfile">
-    <image wx:if="{{profile.avatarFileID}}" src="{{profile.avatarFileID}}" style="width:96rpx;height:96rpx;border-radius:50%" mode="aspectFill"></image>
-    <text wx:else class="avatar" style="background:{{profile.avatarColor}};width:96rpx;height:96rpx;font-size:36rpx">{{profile.avatarInitial}}</text>
-    <view class="li__label">{{profile.nickname || '未登录'}}<view class="li__val">已加入 {{profile.bookCount}} 个账本{{profile.defaultBookName ? ' · 默认「' + profile.defaultBookName + '」' : ''}}</view></view>
+    <button class="avatar-choose" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar" catchtap="noop">
+      <image wx:if="{{profile.avatarFileID}}" src="{{profile.avatarFileID}}" style="width:96rpx;height:96rpx;border-radius:50%" mode="aspectFill"></image>
+      <text wx:else class="avatar" style="background:{{profile.avatarColor}};width:96rpx;height:96rpx;font-size:36rpx">{{profile.avatarInitial}}</text>
+    </button>
+    <view class="li__label">{{profile.nickname || '未登录'}}
+      <view class="li__val">已加入 {{profile.bookCount}} 个账本</view>
+      <view class="li__val li__val--sub" wx:if="{{profile.defaultBookName}}">默认「{{profile.defaultBookName}}」</view>
+    </view>
     <image class="chevron" src="{{ic.chevron}}"></image>
   </view>
 
@@ -72,8 +77,20 @@
       <view class="li__label" style="display:flex;align-items:center;gap:14rpx">意见反馈<view wx:if="{{fbUnread}}" class="reddot"></view></view>
       <view class="li__val">{{fbUnread ? fbUnread + ' 条新回复' : ''}} <image class="chevron" src="{{ic.chevron}}"></image></view>
     </view>
-    <view class="li"><view class="li__label">隐私说明</view><view class="li__val">AI 分析基于你的账本数据</view></view>
-    <view class="li"><view class="li__label">版本</view><view class="li__val num">v1.0 · P1</view></view>
+    <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="goPrivacy">
+      <view class="li__label">隐私说明</view>
+      <view class="li__val">数据存储与 AI 使用范围 <image class="chevron" src="{{ic.chevron}}"></image></view>
+    </view>
+    <view class="li"><view class="li__label">版本</view><view class="li__val num">{{versionLabel}}</view></view>
+  </view>
+
+  <view class="group__title">账户</view>
+  <view class="group group--flat">
+    <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="deleteAccount">
+      <view class="li__ic danger"><image src="{{ic.wipe}}"></image></view>
+      <view class="li__label" style="color:var(--danger)">注销账户</view>
+      <view class="li__val">不可恢复 <image class="chevron" src="{{ic.chevron}}"></image></view>
+    </view>
   </view>
 
   <currency-picker visible="{{curVisible}}" current="{{curCode}}" bind:select="onCur" bind:close="closeCur"></currency-picker>

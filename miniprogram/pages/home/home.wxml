@@ -4,7 +4,7 @@
     <nav-bar>
       <view slot="left" class="appbar__book" hover-class="appbar__book--press" hover-stay-time="80" bindtap="openSwitcher">
         <image src="{{bookIcon}}" style="width:30rpx;height:30rpx"></image>
-        {{bookName}}
+        <text class="appbar__book-name">{{bookName}}</text>
         <image src="{{chevronDown}}" style="width:28rpx;height:28rpx"></image>
       </view>
       <view slot="right" class="cur-pill" hover-class="cur-pill--press" hover-stay-time="80" bindtap="openCurPicker">

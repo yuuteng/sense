@@ -32,9 +32,9 @@
     <!-- 成员 -->
     <view class="section-label section-label--row">
       <text>成员 · {{members.length}} 人</text>
-      <button wx:if="{{canManage}}" class="invite-btn" open-type="share" hover-class="invite-btn--h" hover-stay-time="80">
+      <view wx:if="{{canManage}}" class="invite-btn" hover-class="invite-btn--h" hover-stay-time="80" bindtap="openInvite">
         <view class="invite-pill"><image src="{{ic.plus}}"></image><text>邀请成员</text></view>
-      </button>
+      </view>
     </view>
     <view class="group group--flat">
       <view wx:for="{{members}}" wx:key="openid" class="li" data-i="{{index}}" hover-class="pressed" hover-stay-time="80" bindtap="onTapMember">
@@ -62,4 +62,21 @@
       </view>
     </block>
   </block>
+
+  <!-- 邀请成员：先选权限，再由分享按钮直接拉起微信分享（分享必须由用户点击 open-type=share 触发） -->
+  <view wx:if="{{inviteVisible}}" class="inv-mask" bindtap="closeInvite" catchtouchmove="noop">
+    <view class="inv-sheet" catchtap="noop">
+      <view class="inv-title">邀请成员</view>
+      <view class="inv-hint">选择新成员加入后的权限，随后转发邀请卡片给好友；加入后可在成员列表随时调整。</view>
+      <button class="inv-btn" open-type="share" data-role="rw" hover-class="inv-btn--h" hover-stay-time="80" bindtap="closeInvite">
+        <view class="inv-btn__t">邀请为读写成员</view>
+        <view class="inv-btn__d">可记账、改删自己的记录</view>
+      </button>
+      <button class="inv-btn" open-type="share" data-role="ro" hover-class="inv-btn--h" hover-stay-time="80" bindtap="closeInvite">
+        <view class="inv-btn__t">邀请为只读成员</view>
+        <view class="inv-btn__d">只能查看账目与统计，可用 AI 问答</view>
+      </button>
+      <view class="inv-cancel" hover-class="pressed" hover-stay-time="80" bindtap="closeInvite">取消</view>
+    </view>
+  </view>
 </view>

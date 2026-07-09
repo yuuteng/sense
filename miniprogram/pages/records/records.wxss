@@ -1,3 +1,6 @@
+/* 吸顶区（导航 + 摘要条）：底部留白进 padding，避免透明 margin 缝隙露出滚动内容 */
+.sticky-header { padding-bottom: 16rpx; }
+
 /* 筛选摘要行 */
 .rec-summary {
   margin: 8rpx var(--space-5) 0;

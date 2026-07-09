@@ -16,11 +16,20 @@ Page({
     importVal: '',
     importResult: null, // 导入结果面板：{ success, failed, createdCategories, failures[], allOk }
     fbUnread: 0,
+    versionLabel: '',
     loading: true,
   },
 
   onLoad() {
+    // 真实版本号：正式版取上架版本；体验/开发环境无版本号，标注环境
+    let versionLabel = '开发版';
+    try {
+      const mp = (wx.getAccountInfoSync() || {}).miniProgram || {};
+      if (mp.version) versionLabel = 'v' + mp.version;
+      else if (mp.envVersion === 'trial') versionLabel = '体验版';
+    } catch (e) { /* 取不到就保持开发版 */ }
     this.setData({
+      versionLabel,
       ic: {
         currency: icons.get('currency', '#0089c0', 1.7),
         list: icons.get('list', '#0089c0', 1.7),
@@ -73,16 +82,42 @@ Page({
     }
   },
 
+  // 改昵称：乐观更新本地与全局缓存，失败回滚
   editProfile() {
     wx.showModal({
       title: '修改昵称', editable: true, content: this.data.profile.nickname,
       success: (res) => {
         if (!res.confirm || !res.content.trim()) return;
-        api.call('user', 'updateProfile', { nickname: res.content.trim() })
-          .then(() => this.load())
-          .catch(api.toast);
+        const nickname = res.content.trim().slice(0, 20);
+        const prev = this.data.profile.nickname;
+        if (nickname === prev) return;
+        const apply = (name) => {
+          this.setData({ 'profile.nickname': name, 'profile.avatarInitial': name.slice(0, 1) });
+          const g = getApp().globalData;
+          if (g && g.profile) { g.profile.nickname = name; g.profile.avatarInitial = name.slice(0, 1); }
+        };
+        apply(nickname);
+        api.call('user', 'updateProfile', { nickname })
+          .catch((e) => { apply(prev); api.toast(e); });
       },
     });
+  },
+
+  // 换头像：微信头像选择 → 乐观先显示临时图 → 传云存储 → 落库（失败回滚）
+  onChooseAvatar(e) {
+    const url = e.detail && e.detail.avatarUrl;
+    if (!url) return;
+    const prev = this.data.profile.avatarFileID;
+    this.setData({ 'profile.avatarFileID': url });
+    wx.cloud.uploadFile({ cloudPath: `avatars/${Date.now()}-${Math.floor(Math.random() * 1e6)}.png`, filePath: url })
+      .then((up) => api.call('user', 'updateProfile', { avatarFileID: up.fileID }).then(() => up.fileID))
+      .then((fileID) => {
+        this.setData({ 'profile.avatarFileID': fileID });
+        const g = getApp().globalData;
+        if (g && g.profile) g.profile.avatarFileID = fileID;
+        wx.showToast({ title: '头像已更新', icon: 'success' });
+      })
+      .catch((err) => { this.setData({ 'profile.avatarFileID': prev }); api.toast(err); });
   },
 
   openCur() { this.setData({ curVisible: true }); },
@@ -104,6 +139,8 @@ Page({
   goBooks() { wx.navigateTo({ url: '/pages/books/books' }); },
 
   goFeedback() { wx.navigateTo({ url: '/pages/feedback/feedback' }); },
+
+  goPrivacy() { wx.navigateTo({ url: '/pages/privacy/privacy' }); },
 
   // 导出：进入独立配置页（选账本 / 时间段 / 格式 / 下载方式）
   onExport() { wx.navigateTo({ url: '/pages/export/export' }); },
@@ -198,10 +235,56 @@ Page({
     wx.setClipboardData({ data: text, success: () => wx.showToast({ title: '已复制', icon: 'none' }) });
   },
 
+  // 注销账户：两段确认（列后果 → 输入「注销」）。破坏性导航流程，按 PRD 例外用加载态。
+  // owner 多人账本会被服务端阻断（OWNER_BLOCKED），弹窗引导先解散/移交。
+  deleteAccount() {
+    wx.showModal({
+      title: '注销账户',
+      content: '注销后：你独享的账本将解散并删除全部数据；你在多人账本中的记录会保留，显示为「昵称（已注销）」；AI 会话、图表布局、反馈工单将删除。操作不可恢复，之后重新使用将从零开始。',
+      confirmText: '继续',
+      confirmColor: '#f62172',
+      success: (res) => {
+        if (!res.confirm) return;
+        wx.showModal({
+          title: '确认注销',
+          editable: true,
+          placeholderText: '输入「注销」两字确认',
+          content: '',
+          confirmColor: '#f62172',
+          success: (r2) => {
+            if (!r2.confirm) return;
+            if ((r2.content || '').trim() !== '注销') {
+              wx.showToast({ title: '未输入「注销」，已取消', icon: 'none' });
+              return;
+            }
+            wx.showLoading({ title: '注销中…', mask: true });
+            api.call('user', 'deleteAccount')
+              .then(() => {
+                wx.hideLoading();
+                try { wx.clearStorageSync(); } catch (e) { /* 忽略 */ }
+                const g = getApp().globalData;
+                if (g) g.profile = null;
+                wx.showToast({ title: '已注销', icon: 'success' });
+                setTimeout(() => wx.reLaunch({ url: '/pages/login/login' }), 600);
+              })
+              .catch((e) => {
+                wx.hideLoading();
+                if (e && e.code === 'OWNER_BLOCKED') {
+                  wx.showModal({ title: '暂不能注销', content: e.errMsg, showCancel: false });
+                } else {
+                  api.toast(e);
+                }
+              });
+          },
+        });
+      },
+    });
+  },
+
   resetData() {
     wx.showModal({
       title: '清空所有数据',
-      content: '将删除全部账本/成员/记录/分类/会话，以及所有用户登录信息，回到全新状态（需重新登录）。此操作不可恢复，确定继续？',
+      content: '将删除全部账本/成员/记录/分类/会话、云存储图片与文件，以及所有用户登录信息，回到全新状态（需重新登录）。此操作不可恢复，确定继续？',
       confirmColor: '#f62172',
       success: (res) => {
         if (!res.confirm) return;

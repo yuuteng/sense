@@ -56,6 +56,8 @@ Page({
     if (this.data.delConfirm) {
       try {
         await api.call('record', 'delete', { recordId: this.recordId });
+        // 交接给首页做乐观移除：返回时该行立即消失，服务器数据回来后整体校正
+        getApp().globalData.justDeleted = this.recordId;
         wx.showToast({ title: '已删除', icon: 'success' });
         setTimeout(() => wx.navigateBack({ delta: 1, fail() { wx.switchTab({ url: '/pages/home/home' }); } }), 500);
       } catch (e) { api.toast(e); }

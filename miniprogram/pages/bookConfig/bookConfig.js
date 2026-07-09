@@ -16,6 +16,7 @@ Page({
     ic: {},
     dissolveText: '解散账本',
     dissolveConfirm: false,
+    inviteVisible: false,
     loading: true,
   },
 
@@ -44,6 +45,7 @@ Page({
       const raw = await api.call('member', 'list', { bookId: this.bookId });
       const members = raw.map((m) => ({
         openid: m.openid, name: m.name + (m.isMe ? '（我）' : ''), initial: m.avatarInitial, color: m.avatarColor,
+        avatarFileID: m.avatarFileID || '', // 真实头像，缺失时 avatar 组件回退首字母
         roleBadge: ROLE_BADGE[m.role], roleClass: ROLE_CLASS[m.role], role: m.role, isMe: m.isMe,
       }));
       this.setData({
@@ -57,40 +59,54 @@ Page({
     } catch (e) { this.setData({ loading: false }); api.toast(e); }
   },
 
+  // 改名：乐观更新本地名称，失败回滚
   editBookName() {
     if (!this.data.canManage) return;
     wx.showModal({
       title: '编辑账本名称', editable: true, content: this.data.book.name,
       success: (res) => {
         if (!res.confirm || !res.content.trim()) return;
-        api.call('book', 'update', { bookId: this.bookId, name: res.content.trim() })
-          .then(() => this.load()).catch(api.toast);
+        const name = res.content.trim();
+        const prev = this.data.book.name;
+        if (name === prev) return;
+        this.setData({ 'book.name': name });
+        api.call('book', 'update', { bookId: this.bookId, name })
+          .catch((e) => { this.setData({ 'book.name': prev }); api.toast(e); });
       },
     });
   },
 
+  // 设为默认：乐观切换标记，失败回滚
   setDefault() {
-    api.call('book', 'setDefault', { bookId: this.bookId }).then(() => {
-      wx.showToast({ title: '已设为默认', icon: 'success' });
-      this.load();
-    }).catch(api.toast);
+    if (this.data.book.isDefault) return;
+    this.setData({ 'book.isDefault': true });
+    wx.showToast({ title: '已设为默认', icon: 'success' });
+    api.call('book', 'setDefault', { bookId: this.bookId })
+      .catch((e) => { this.setData({ 'book.isDefault': false }); api.toast(e); });
   },
 
   goSettle() {
     wx.navigateTo({ url: '/pages/settle/settle?bookId=' + this.bookId });
   },
 
-  // 微信分享卡片邀请（由 <button open-type="share"> 触发）
-  onShareAppMessage() {
+  // 邀请弹层：先选权限，再由 open-type=share 按钮直接拉起分享
+  openInvite() { this.setData({ inviteVisible: true }); },
+  closeInvite() { this.setData({ inviteVisible: false }); },
+  noop() {},
+
+  // 微信分享卡片邀请（由弹层内 <button open-type="share" data-role> 触发，角色随卡片链接下发）
+  onShareAppMessage(res) {
     const name = this.data.book ? this.data.book.name : '账本';
+    const role = res && res.target && res.target.dataset && res.target.dataset.role === 'ro' ? 'ro' : 'rw';
     return {
       title: `邀请你加入「${name}」一起记账`,
-      path: `/pages/join/join?bookId=${this.bookId}`,
+      path: `/pages/join/join?bookId=${this.bookId}&role=${role}`,
     };
   },
 
   onTapMember(e) {
-    const m = this.data.members[e.currentTarget.dataset.i];
+    const i = e.currentTarget.dataset.i;
+    const m = this.data.members[i];
     // 自己：不在此改名（昵称在「我的」里改，且不允许他人代改）
     if (m.isMe) return;
     if (!this.data.canManage || m.role === 'owner') return;
@@ -100,20 +116,45 @@ Page({
       success: (r) => {
         const roles = ['admin', 'rw', 'ro'];
         if (r.tapIndex < 3) {
-          api.call('member', 'updateRole', { bookId: this.bookId, openid: m.openid, role: roles[r.tapIndex] })
-            .then(() => this.load()).catch(api.toast);
+          this.changeRole(i, roles[r.tapIndex]);
         } else {
           wx.showModal({
             title: '移除成员', content: `确定将「${m.name}」移出账本？`,
-            success: (c) => {
-              if (!c.confirm) return;
-              api.call('member', 'remove', { bookId: this.bookId, openid: m.openid })
-                .then(() => this.load()).catch(api.toast);
-            },
+            success: (c) => { if (c.confirm) this.removeMember(i); },
           });
         }
       },
     });
+  },
+
+  // 乐观更新：本地立即改角色徽章，云端失败回滚并提示（消除「改完等一秒」）
+  changeRole(i, role) {
+    const m = this.data.members[i];
+    if (!m || m.role === role) return;
+    const prev = { role: m.role, roleBadge: m.roleBadge, roleClass: m.roleClass };
+    this.setData({
+      [`members[${i}].role`]: role,
+      [`members[${i}].roleBadge`]: ROLE_BADGE[role],
+      [`members[${i}].roleClass`]: ROLE_CLASS[role],
+    });
+    api.call('member', 'updateRole', { bookId: this.bookId, openid: m.openid, role })
+      .catch((e) => {
+        this.setData({
+          [`members[${i}].role`]: prev.role,
+          [`members[${i}].roleBadge`]: prev.roleBadge,
+          [`members[${i}].roleClass`]: prev.roleClass,
+        });
+        api.toast(e);
+      });
+  },
+  // 乐观移除：本地先消失，失败恢复列表
+  removeMember(i) {
+    const m = this.data.members[i];
+    if (!m) return;
+    const prevList = this.data.members;
+    this.setData({ members: prevList.filter((_x, idx) => idx !== i) });
+    api.call('member', 'remove', { bookId: this.bookId, openid: m.openid })
+      .catch((e) => { this.setData({ members: prevList }); api.toast(e); });
   },
 
   onDissolve() {

@@ -4,7 +4,7 @@
     <nav-bar>
       <view slot="left" class="appbar__book" hover-class="appbar__book--press" hover-stay-time="80" bindtap="openSwitcher">
         <image src="{{bookIcon}}" style="width:30rpx;height:30rpx"></image>
-        {{bookName}}
+        <text class="appbar__book-name">{{bookName}}</text>
         <image src="{{chevronDown}}" style="width:28rpx;height:28rpx"></image>
       </view>
       <view slot="right" class="cur-pill" hover-class="cur-pill--press" hover-stay-time="80" bindtap="openCurPicker">
@@ -20,7 +20,12 @@
   </view>
 
   <view wx:else>
-    <view wx:if="{{cards.length}}" class="section-label">图表<text class="link" bindtap="toggleEdit">{{editing ? '完成' : '编辑'}}</text></view>
+    <view wx:if="{{cards.length}}" class="section-label">图表
+      <view class="sec-actions">
+        <text class="link" bindtap="openPicker">＋ 添加</text>
+        <text class="link" bindtap="toggleEdit">{{editing ? '完成' : '编辑'}}</text>
+      </view>
+    </view>
 
     <view wx:if="{{editing}}" class="ai-disclaimer" style="padding-top:0">拖住卡片头部整张移动排序 · 点 ✕ 删除 · 改动自动保存</view>
 
@@ -57,38 +62,55 @@
         <view class="mnav__btn {{card.month.nextOk?'':'off'}}" data-iid="{{card.iid}}" data-dir="1" hover-class="{{card.month.nextOk?'mnav__btn--press':''}}" hover-stay-time="80" bindtap="{{card.month.nextOk?'monthShift':''}}">›</view>
       </view>
 
-      <!-- 区间选择 -->
-      <view wx:if="{{card.range==='day'}}" class="range-chips">
-        <text class="rchip {{card.rangeVal===7?'on':''}}" data-iid="{{card.iid}}" data-r="7" bindtap="setRange">近 7 日</text>
-        <text class="rchip {{card.rangeVal===14?'on':''}}" data-iid="{{card.iid}}" data-r="14" bindtap="setRange">近 14 日</text>
-        <text class="rchip {{card.rangeVal===30?'on':''}}" data-iid="{{card.iid}}" data-r="30" bindtap="setRange">近 30 日</text>
-      </view>
-      <view wx:elif="{{card.range==='month'}}" class="range-chips">
+      <!-- 区间选择（收支对比：近 N 月） -->
+      <view wx:if="{{card.range==='month'}}" class="range-chips">
         <text class="rchip {{card.rangeVal===6?'on':''}}" data-iid="{{card.iid}}" data-r="6" bindtap="setRange">近 6 月</text>
         <text class="rchip {{card.rangeVal===12?'on':''}}" data-iid="{{card.iid}}" data-r="12" bindtap="setRange">近 12 月</text>
       </view>
 
-      <!-- 饼图 -->
+      <!-- 趋势卡：指标（支出/收入/结余）+ 区间（近7/14/30日、近6/12月） -->
+      <block wx:if="{{card.trend}}">
+        <view class="range-chips">
+          <text wx:for="{{card.metrics}}" wx:key="k" wx:for-item="mi" class="rchip {{mi.on?'on':''}}" data-iid="{{card.iid}}" data-m="{{mi.k}}" bindtap="setMetric">{{mi.label}}</text>
+        </view>
+        <view class="range-chips">
+          <text wx:for="{{card.spans}}" wx:key="k" wx:for-item="sp" class="rchip {{sp.on?'on':''}}" data-iid="{{card.iid}}" data-s="{{sp.k}}" bindtap="setSpan">{{sp.label}}</text>
+        </view>
+      </block>
+
+      <!-- 年度收支：自然年 ↔ 近一年 + 年份切换 -->
+      <view wx:if="{{card.yearMode}}" class="range-chips">
+        <text class="rchip {{card.yearMode==='year'?'on':''}}" data-iid="{{card.iid}}" data-m="year" bindtap="setYearMode">自然年</text>
+        <text class="rchip {{card.yearMode==='rolling'?'on':''}}" data-iid="{{card.iid}}" data-m="rolling" bindtap="setYearMode">近一年</text>
+      </view>
+      <view wx:if="{{card.yearNav}}" class="month-nav">
+        <view class="mnav__btn {{card.yearNav.prevOk?'':'off'}}" data-iid="{{card.iid}}" data-dir="-1" hover-class="{{card.yearNav.prevOk?'mnav__btn--press':''}}" hover-stay-time="80" bindtap="{{card.yearNav.prevOk?'yearShift':''}}">‹</view>
+        <view class="mnav__label">{{card.yearNav.year}} 年</view>
+        <view class="mnav__btn {{card.yearNav.nextOk?'':'off'}}" data-iid="{{card.iid}}" data-dir="1" hover-class="{{card.yearNav.nextOk?'mnav__btn--press':''}}" hover-stay-time="80" bindtap="{{card.yearNav.nextOk?'yearShift':''}}">›</view>
+      </view>
+
+      <!-- 饼图（弹层打开时卸载 canvas，防 iOS 同层渲染浮到弹层上；.donut 固定尺寸保高度） -->
       <view wx:if="{{card.kind==='pie'}}" class="pie-wrap">
-        <view class="donut"><chart option="{{card.option}}" height="220rpx"></chart></view>
+        <view class="donut"><chart wx:if="{{!overlayUp}}" id="chart-{{card.iid}}" data-iid="{{card.iid}}" option="{{card.option}}" height="220rpx" bind:chartclick="onPieTap"></chart></view>
         <view class="pie-legend">
           <view
             wx:for="{{card.legends}}"
             wx:key="k"
             wx:for-item="lg"
-            class="pl-item {{lg.type?'pl-item--link':''}}"
-            hover-class="{{lg.type?'pl-item--press':''}}"
+            class="pl-item {{(lg.type||lg.link)?'pl-item--link':''}} {{lg.hl?'pl-item--hl':''}}"
+            hover-class="{{(lg.type||lg.link)?'pl-item--press':''}}"
             hover-stay-time="80"
             data-type="{{lg.type||''}}"
-            data-card-type="{{card.type}}"
-            data-ym="{{card.month.ym||''}}"
-            data-mtext="{{card.monthText||''}}"
+            data-link="{{lg.link||''}}"
+            data-from="{{card.drFrom||''}}"
+            data-to="{{card.drTo||''}}"
+            data-mtext="{{card.drText||''}}"
             bindtap="onLegendTap"
           >
             <text wx:if="{{lg.dot}}" class="pl-dot" style="background:{{lg.dot}}"></text>
             <text class="pl-k">{{lg.k}}</text>
             <text class="pl-v num {{lg.strong?'strong':''}}">{{lg.v}}</text>
-            <text wx:if="{{lg.type}}" class="pl-go">›</text>
+            <text wx:if="{{lg.type||lg.link}}" class="pl-go">›</text>
           </view>
         </view>
       </view>
@@ -100,7 +122,8 @@
           <text class="rchip {{card.catKind==='income'?'on':''}}" data-iid="{{card.iid}}" data-kind="income" bindtap="setCatKind">收入</text>
         </view>
         <view class="cat-donut">
-          <chart id="chart-{{card.iid}}" data-iid="{{card.iid}}" option="{{card.option}}" height="300rpx" bind:chartclick="onCatPieTap"></chart>
+          <chart wx:if="{{!overlayUp}}" id="chart-{{card.iid}}" data-iid="{{card.iid}}" option="{{card.option}}" height="300rpx" bind:chartclick="onCatPieTap"></chart>
+          <view wx:else style="height:300rpx"></view>
           <view class="cat-donut__center">
             <view class="k">{{card.centerLabel.k}}</view>
             <view class="v num">{{card.centerLabel.v}}</view>
@@ -135,11 +158,15 @@
         </view>
       </block>
 
-      <!-- 柱状 / 分组柱状 -->
+      <!-- 柱状 / 分组柱状 / 折线 -->
       <block wx:else>
-        <chart id="chart-{{card.iid}}" data-iid="{{card.iid}}" option="{{card.option}}" height="312rpx" bind:chartclick="onBarTap"></chart>
+        <chart wx:if="{{!overlayUp}}" id="chart-{{card.iid}}" data-iid="{{card.iid}}" option="{{card.option}}" height="312rpx" bind:chartclick="onBarTap"></chart>
+        <view wx:else style="height:312rpx"></view>
         <view wx:if="{{card.drill}}" class="drill-bar" hover-class="drill-bar--press" hover-stay-time="80" data-iid="{{card.iid}}" bindtap="goDrill">
-          <text class="drill-bar__text num">{{card.drill.text}}</text>
+          <text class="drill-bar__label num">{{card.drill.label}}</text>
+          <view class="drill-bar__vals num">
+            <text wx:for="{{card.drill.lines}}" wx:key="*this">{{item}}</text>
+          </view>
           <text class="drill-bar__go">查看明细 ›</text>
         </view>
         <view class="legend">
@@ -165,29 +192,33 @@
   </view>
 
   <!-- 添加图表：带示意图的选择面板 -->
-  <view wx:if="{{pickerRender}}" class="cpk-mask {{pickerUp ? 'cpk-mask--show' : ''}}" bindtap="closePicker">
+  <view wx:if="{{pickerRender}}" class="cpk-mask {{pickerUp ? 'cpk-mask--show' : ''}}" bindtap="closePicker" catchtouchmove="noop">
     <view class="cpk {{pickerUp ? 'cpk--up' : ''}}" catchtap="noop">
       <view class="cpk__grab"></view>
       <view class="cpk__title">添加图表</view>
       <view class="cpk__hint">选一种图表加入统计，同一种可加多个（如不同区间的支出趋势）</view>
-      <view class="cpk__list">
-        <view
-          wx:for="{{pickerTypes}}"
-          wx:key="type"
-          class="cpk__row"
-          hover-class="cpk__row--press"
-          hover-stay-time="80"
-          data-type="{{item.type}}"
-          bindtap="pickType"
-        >
-          <view class="cpk__thumb cpk__thumb--{{item.kind}}"><image src="{{item.preview}}" mode="aspectFit"></image></view>
-          <view class="cpk__info">
-            <view class="cpk__t">{{item.title}}</view>
-            <view class="cpk__d">{{item.desc}}</view>
+      <scroll-view scroll-y class="cpk__list" show-scrollbar="{{false}}">
+        <block wx:for="{{pickerSections}}" wx:key="name" wx:for-item="sec">
+          <view class="cpk__sec">{{sec.name}}</view>
+          <view
+            wx:for="{{sec.items}}"
+            wx:key="type"
+            class="cpk__row"
+            hover-class="cpk__row--press"
+            hover-stay-time="80"
+            data-type="{{item.type}}"
+            bindtap="pickType"
+          >
+            <view class="cpk__thumb cpk__thumb--{{item.kind}}"><image src="{{item.preview}}" mode="aspectFit"></image></view>
+            <view class="cpk__info">
+              <view class="cpk__t">{{item.title}}</view>
+              <view class="cpk__d">{{item.desc}}</view>
+            </view>
+            <image class="cpk__plus" src="{{addIcon}}"></image>
           </view>
-          <image class="cpk__plus" src="{{addIcon}}"></image>
-        </view>
-      </view>
+        </block>
+        <view style="height:16rpx"></view>
+      </scroll-view>
     </view>
   </view>
 

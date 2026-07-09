@@ -18,7 +18,8 @@
     </view>
 
     <view class="input-label">联系邮箱（选填）</view>
-    <input class="text-input" placeholder="便于我们在小程序之外联系你" placeholder-class="input-ph" maxlength="100" value="{{contactEmail}}" bindinput="onEmail" />
+    <input class="text-input {{emailError ? 'input-error' : ''}}" placeholder="便于我们在小程序之外联系你" placeholder-class="{{emailError ? 'input-ph-error' : 'input-ph'}}" focus="{{emailFocus}}" maxlength="100" value="{{contactEmail}}" bindinput="onEmail" />
+    <view wx:if="{{emailError}}" class="field-err">联系邮箱格式不正确</view>
 
     <view class="ai-disclaimer left" style="padding:24rpx 0 0">提交后可在「意见反馈」列表查看处理进度与客服回复。</view>
   </view>

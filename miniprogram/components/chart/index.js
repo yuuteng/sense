@@ -15,39 +15,47 @@ Component({
   observers: {
     option(opt) {
       if (!opt) return;
-      if (this.chart) { this.chart.setOption(opt, true); return; }
-      if (this._ready) this._init(opt);
-      else this._pending = opt; // ready 之前先存起来
+      try {
+        if (this.chart) { this.chart.setOption(opt, true); return; }
+        if (this._ready) this._init(opt);
+        else this._pending = opt; // ready 之前先存起来
+      } catch (e) { console.error('[chart] setOption/init 失败', e); }
     },
   },
   lifetimes: {
     ready() {
       this._ready = true;
       // 注意：observers 对「创建时就带着的初始值」不触发（小程序规范），
-      // 所以 ready 时要主动兜底读 data.option，否则首次渲染/重建后图表永远空白
+      // 所以 ready 时要主动兜底读 data.option，否则首次渲染/重建后图表永远空白。
+      // 全程 try/catch：图表引擎任何故障只降级为空画布，绝不连累卡片渲染。
       const opt = this._pending || this.data.option;
-      if (opt) { this._init(opt); this._pending = null; }
+      if (opt) {
+        try { this._init(opt); } catch (e) { console.error('[chart] ready init 失败', e); }
+        this._pending = null;
+      }
     },
     detached() {
-      if (this.chart) { this.chart.dispose(); this.chart = null; }
+      try { if (this.chart) { this.chart.dispose(); this.chart = null; } } catch (e) { /* 忽略 */ }
     },
   },
   methods: {
     _init(opt) {
       const ecc = this.selectComponent('#ec');
-      if (!ecc) return;
+      if (!ecc) { console.error('[chart] 找不到 ec-canvas 子组件'); return; }
       ecc.init((canvas, width, height, dpr) => {
-        const chart = echarts.init(canvas, null, { width, height, devicePixelRatio: dpr });
-        canvas.setChart(chart);
-        chart.setOption(opt);
-        chart.on('click', (p) => {
-          this.triggerEvent('chartclick', {
-            seriesIndex: p.seriesIndex, dataIndex: p.dataIndex,
-            seriesName: p.seriesName, name: p.name, value: p.value,
+        try {
+          const chart = echarts.init(canvas, null, { width, height, devicePixelRatio: dpr });
+          canvas.setChart(chart);
+          chart.setOption(opt);
+          chart.on('click', (p) => {
+            this.triggerEvent('chartclick', {
+              seriesIndex: p.seriesIndex, dataIndex: p.dataIndex,
+              seriesName: p.seriesName, name: p.name, value: p.value,
+            });
           });
-        });
-        this.chart = chart;
-        return chart;
+          this.chart = chart;
+          return chart;
+        } catch (e) { console.error('[chart] echarts.init 失败', e); return null; }
       });
     },
     // 供页面主动获取实例（如 dispatchAction 高亮）

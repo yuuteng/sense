@@ -43,10 +43,18 @@ Page({
     this.load();
   },
 
-  // 记完一笔回来：先把刚保存的记录本地上屏（乐观更新），load() 拿到服务器数据后整体覆盖。
-  // 只在能如实渲染时插入（原币=展示币 或 基准币=展示币）；回填历史日期等少数场景直接等刷新。
+  // 记完/删完回来：先本地上屏或移除（乐观更新），load() 拿到服务器数据后整体覆盖。
   applyOptimistic() {
     const app = getApp();
+    // 删除：按 id 立即从列表移除，空组一并收掉（金额合计等服务器校正）
+    const delId = app.globalData && app.globalData.justDeleted;
+    if (delId) {
+      app.globalData.justDeleted = null;
+      const groups = this.data.groups
+        .map((g) => ({ ...g, items: g.items.filter((it) => it.id !== delId) }))
+        .filter((g) => g.items.length);
+      this.setData({ groups });
+    }
     const j = app.globalData && app.globalData.justSaved;
     if (!j) return;
     app.globalData.justSaved = null;
@@ -219,8 +227,11 @@ Page({
     const code = e.detail.code;
     this.setData({ curVisible: false });
     if (!code || code === this.data.curCode) return;
+    const prev = { curCode: this.data.curCode, curSym: this.data.curSym };
+    // 胶囊即时切换 + 即刻进入加载态；金额换算必须等服务器（口径在服务端），失败回滚胶囊
+    this.setData({ curCode: code, curSym: fmt.symbolOf(code), loading: true });
     api.call('settings', 'update', { displayCurrency: code })
-      .then(() => { this.setData({ loading: true }); return this.load(); })
-      .catch(api.toast);
+      .then(() => this.load())
+      .catch((err) => { this.setData({ ...prev, loading: false }); api.toast(err); });
   },
 });

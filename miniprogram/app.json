@@ -17,7 +17,8 @@
     "pages/feedback/feedback",
     "pages/feedback-new/feedback-new",
     "pages/feedback-detail/feedback-detail",
-    "pages/feedback-team/feedback-team"
+    "pages/feedback-team/feedback-team",
+    "pages/privacy/privacy"
   ],
   "window": {
     "backgroundColor": "#f6f9fc",

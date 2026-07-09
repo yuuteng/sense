@@ -33,7 +33,7 @@ async function ensureUser(openid) {
   }
   return u;
 }
-const COLLECTIONS = ['users', 'books', 'members', 'categories', 'records', 'rates', 'chartLayouts', 'aiMessages', 'feedbacks', 'admins'];
+const COLLECTIONS = ['users', 'books', 'members', 'categories', 'records', 'rates', 'chartLayouts', 'aiMessages', 'feedbacks', 'admins', 'files'];
 async function ensureCollections() {
   for (const c of COLLECTIONS) { await db.createCollection(c).catch(() => {}); }
 }
@@ -51,6 +51,45 @@ async function clearCollection(name) {
   return removed;
 }
 
+// 按条件删光集合中匹配的文档：where().remove() 单次有批量上限，循环直到无可删（同 clearCollection）
+async function removeAllWhere(name, where) {
+  for (let guard = 0; guard < 1000; guard++) {
+    const res = await db.collection(name).where(where).remove().catch(() => null);
+    const n = res && res.stats ? res.stats.removed : 0;
+    if (!n) break;
+  }
+}
+
+// 分批删除云存储文件（deleteFile 单次上限 50，失败不阻断流程）
+async function deleteFiles(fileIDs) {
+  const ids = [...new Set((fileIDs || []).filter(Boolean))];
+  for (let i = 0; i < ids.length; i += 50) {
+    await cloud.deleteFile({ fileList: ids.slice(i, i + 50) }).catch(() => {});
+  }
+  return ids.length;
+}
+
+// 收集某账本全部记录图片的云存储 fileID（分页，防大账本截断）
+async function collectBookImageFileIDs(bookId) {
+  const PAGE = 1000; const ids = [];
+  for (let skip = 0; ; skip += PAGE) {
+    const r = await db.collection('records').where({ bookId }).field({ images: true }).skip(skip).limit(PAGE).get();
+    r.data.forEach((rec) => { (rec.images || []).forEach((f) => ids.push(f)); });
+    if (r.data.length < PAGE) break;
+  }
+  return ids;
+}
+
+// 解散账本：先删记录图片的云存储文件（否则文件泄漏无人引用），再删各集合数据与账本本身
+async function dissolveBook(bookId) {
+  const imgs = await collectBookImageFileIDs(bookId).catch(() => []);
+  await deleteFiles(imgs);
+  for (const c of ['records', 'members', 'categories', 'chartLayouts', 'aiMessages']) {
+    await removeAllWhere(c, { bookId });
+  }
+  await db.collection('books').doc(bookId).remove().catch(() => {});
+}
+
 // 新账本的默认两级分类（之后用户可增/删，按账本独立）
 const DEFAULT_CATS = {
   expense: [
@@ -64,8 +103,14 @@ const DEFAULT_CATS = {
     { name: '其他', icon: 'dots', subs: [] },
   ],
   income: [
-    { name: '职业收入', icon: 'income', subs: ['工资', '奖金', '补贴'] },
-    { name: '其他收入', icon: 'dots', subs: ['红包', '理财', '退款'] },
+    { name: '工资薪酬', icon: 'income', subs: ['工资', '奖金', '补贴', '加班费'] },
+    { name: '兼职副业', icon: 'pencil', subs: ['兼职', '稿费', '接单'] },
+    { name: '投资理财', icon: 'bars', subs: ['利息', '分红', '基金', '股票'] },
+    { name: '租金经营', icon: 'house', subs: ['房租', '经营'] },
+    { name: '人情往来', icon: 'gift', subs: ['红包', '礼金', '压岁钱'] },
+    { name: '报销退款', icon: 'refresh', subs: ['报销', '退款', '返现'] },
+    { name: '奖励中奖', icon: 'star', subs: ['中奖', '积分兑换'] },
+    { name: '其他收入', icon: 'dots', subs: [] },
   ],
 };
 async function seedDefaultCategories(bookId) {
@@ -261,10 +306,7 @@ const book = {
 
   async dissolve(p, ctx) {
     const m = await requireMember(p.bookId, ctx.openid); requireRole(m, 'owner');
-    for (const c of ['records', 'members', 'categories', 'chartLayouts', 'aiMessages']) {
-      await db.collection(c).where({ bookId: p.bookId }).remove().catch(() => {});
-    }
-    await db.collection('books').doc(p.bookId).remove().catch(() => {});
+    await dissolveBook(p.bookId);
     return { ok: true };
   },
 };
@@ -290,19 +332,23 @@ const member = {
     const b = await db.collection('books').doc(p.bookId).get();
     return { inviteToken: p.bookId, bookName: b.data ? b.data.name : '账本', expireAt: null };
   },
-  // 通过分享卡片加入账本（默认读写权限）
+  // 通过分享卡片加入账本。邀请人可在分享时指定权限（仅 rw/ro，admin 不允许经链接授予）；
+  // 加入后把该账本设为默认——用户点邀请卡的意图就是去这个账本
   async join(p, ctx) {
     const b = await db.collection('books').doc(p.bookId).get().catch(() => null);
     if (!b || !b.data) throw new AppError('NOT_FOUND', '账本不存在或已解散');
-    const existing = await getMember(p.bookId, ctx.openid);
-    if (existing) return { ok: true, bookId: p.bookId, name: b.data.name, already: true };
     const u = await ensureUser(ctx.openid);
-    await db.collection('members').add({ data: {
-      bookId: p.bookId, openid: ctx.openid, avatarColor: u.avatarColor,
-      role: 'rw', joinedAt: db.serverDate(), status: 'active',
-    } });
-    await db.collection('books').doc(p.bookId).update({ data: { memberCount: _.inc(1) } }).catch(() => {});
-    return { ok: true, bookId: p.bookId, name: b.data.name };
+    const existing = await getMember(p.bookId, ctx.openid);
+    if (!existing) {
+      const role = p.role === 'ro' ? 'ro' : 'rw';
+      await db.collection('members').add({ data: {
+        bookId: p.bookId, openid: ctx.openid, avatarColor: u.avatarColor,
+        role, joinedAt: db.serverDate(), status: 'active',
+      } });
+      await db.collection('books').doc(p.bookId).update({ data: { memberCount: _.inc(1) } }).catch(() => {});
+    }
+    await db.collection('users').doc(ctx.openid).update({ data: { defaultBookId: p.bookId } }).catch(() => {});
+    return { ok: true, bookId: p.bookId, name: b.data.name, already: !!existing, registered: !!u.registered };
   },
   async updateRole(p, ctx) {
     const me = await requireMember(p.bookId, ctx.openid); requireRole(me, 'admin');
@@ -382,7 +428,8 @@ const record = {
     if (p.dateFrom && p.dateTo) match.date = _.gte(p.dateFrom).and(_.lte(p.dateTo));
     else if (p.dateFrom) match.date = _.gte(p.dateFrom);
     else if (p.dateTo) match.date = _.lte(p.dateTo);
-    if (p.type === 'income' || p.type === 'expense') match.type = p.type;
+    // 收支筛选走独立字段 recordType（p.type 是路由字段，不能复用）
+    if (p.recordType === 'income' || p.recordType === 'expense') match.type = p.recordType;
     if (p.categoryTopId) {
       if (p.categoryTopId === '_none') {
         match.categoryId = null; // 「未分类」聚合桶：categoryId 为空的记录
@@ -778,16 +825,26 @@ function parseNL(text) {
   const m = t.match(/(\d+(\.\d+)?)/);
   const amt = m ? parseFloat(m[1]) : 0;
   // 收/支判定：命中收入关键词则为收入
-  const isIncome = /工资|薪水|薪资|奖金|收入|红包|退款|报销|返现|理财|利息|分红|中奖|收款|进账/.test(t);
+  const isIncome = /工资|薪水|薪资|奖金|收入|红包|礼金|压岁钱|退款|报销|返现|理财|利息|分红|中奖|兼职|稿费|收租|收款|进账/.test(t);
   const type = isIncome ? 'income' : 'expense';
   let cat = isIncome ? '其他收入' : '其他';
   if (isIncome) {
-    if (/工资|薪水|薪资/.test(t)) cat = '职业收入 / 工资';
-    else if (/奖金/.test(t)) cat = '职业收入 / 奖金';
-    else if (/补贴/.test(t)) cat = '职业收入 / 补贴';
-    else if (/红包/.test(t)) cat = '其他收入 / 红包';
-    else if (/理财|利息|分红/.test(t)) cat = '其他收入 / 理财';
-    else if (/退款|报销|返现/.test(t)) cat = '其他收入 / 退款';
+    if (/工资|薪水|薪资/.test(t)) cat = '工资薪酬 / 工资';
+    else if (/加班/.test(t)) cat = '工资薪酬 / 加班费';
+    else if (/奖金|年终奖/.test(t)) cat = '工资薪酬 / 奖金';
+    else if (/补贴/.test(t)) cat = '工资薪酬 / 补贴';
+    else if (/兼职|稿费|接单|外快/.test(t)) cat = '兼职副业';
+    else if (/基金/.test(t)) cat = '投资理财 / 基金';
+    else if (/股票/.test(t)) cat = '投资理财 / 股票';
+    else if (/理财|利息|分红/.test(t)) cat = '投资理财';
+    else if (/收租|租金/.test(t)) cat = '租金经营 / 房租';
+    else if (/压岁钱/.test(t)) cat = '人情往来 / 压岁钱';
+    else if (/礼金/.test(t)) cat = '人情往来 / 礼金';
+    else if (/红包/.test(t)) cat = '人情往来 / 红包';
+    else if (/报销/.test(t)) cat = '报销退款 / 报销';
+    else if (/返现/.test(t)) cat = '报销退款 / 返现';
+    else if (/退款/.test(t)) cat = '报销退款 / 退款';
+    else if (/中奖|彩票/.test(t)) cat = '奖励中奖 / 中奖';
   } else {
     if (/打车|滴滴|出租|网约车/.test(t)) cat = '交通 / 打车';
     else if (/地铁/.test(t)) cat = '交通 / 地铁';
@@ -1225,6 +1282,66 @@ const user = {
     await db.collection('users').doc(ctx.openid).update({ data });
     return { ok: true };
   },
+
+  // 注销账户（不可恢复）。处理原则：
+  // - 我独享的 owner 账本 → 连数据带图片整本删除；
+  // - 多人账本我是 owner → 阻断，要求先解散/移交；
+  // - 他人账本里我的记录 → 保留（其他成员的统计与分账依赖这些数据），
+  //   成员行快照昵称进 nameOverride 并标记 deletedUser，历史记录显示「原名（已注销）」；
+  // - 个人私有数据（用户文档/图表布局/AI 会话/反馈工单/客服身份/头像文件）→ 全部删除。
+  // 无跨集合事务，靠顺序保证可重试：users 文档最后删，中途失败可重新发起注销。
+  async deleteAccount(_p, ctx) {
+    const openid = ctx.openid;
+    const u = await getUser(openid);
+    const nickname = (u && u.nickname) || '成员';
+
+    // 1) 阻断检查：我是 owner 且仍有其他活跃成员的账本
+    const allMs = await db.collection('members').where({ openid }).get();
+    const activeMs = allMs.data.filter((m) => m.status !== 'removed');
+    const soloBookIds = []; const blocked = [];
+    for (const m of activeMs) {
+      const b = await db.collection('books').doc(m.bookId).get().catch(() => null);
+      if (!b || !b.data || b.data.ownerOpenid !== openid) continue;
+      const others = await db.collection('members')
+        .where({ bookId: m.bookId, openid: _.neq(openid), status: _.neq('removed') }).count();
+      if (others.total > 0) blocked.push(b.data.name);
+      else soloBookIds.push(m.bookId);
+    }
+    if (blocked.length) {
+      throw new AppError('OWNER_BLOCKED', `你仍是多人账本「${blocked.join('」「')}」的 owner，请先在账本管理中解散或移交后再注销`);
+    }
+
+    // 2) 昵称快照 + 标记已注销：含历史已被移除的成员行，保证他人账本的历史记录仍显示原名
+    for (const m of allMs.data) {
+      await db.collection('members').doc(m._id).update({ data: {
+        nameOverride: m.nameOverride || nickname, status: 'removed', deletedUser: true,
+      } }).catch(() => {});
+    }
+
+    // 3) 独享账本整本删除（含记录图片文件）
+    for (const bookId of soloBookIds) await dissolveBook(bookId);
+
+    // 4) 留存账本成员数减一
+    for (const m of activeMs) {
+      if (soloBookIds.includes(m.bookId)) continue;
+      await db.collection('books').doc(m.bookId).update({ data: { memberCount: _.inc(-1) } }).catch(() => {});
+    }
+
+    // 5) 个人私有数据：布局、AI 会话（全部账本）、反馈工单（含图片）、客服身份、头像文件
+    await removeAllWhere('chartLayouts', { openid });
+    await removeAllWhere('aiMessages', { openid });
+    const fbs = await db.collection('feedbacks').where({ openid }).get().catch(() => ({ data: [] }));
+    const fbImgs = [];
+    (fbs.data || []).forEach((f) => { (f.images || []).forEach((x) => fbImgs.push(x)); });
+    await deleteFiles(fbImgs);
+    await removeAllWhere('feedbacks', { openid });
+    await removeAllWhere('admins', { openid });
+    if (u && u.avatarFileID) await deleteFiles([u.avatarFileID]);
+
+    // 6) 最后删用户文档（此步成功即注销完成；之前任何一步失败，重新发起即可续跑）
+    await db.collection('users').doc(openid).remove();
+    return { ok: true, dissolvedBooks: soloBookIds.length, keptBooks: activeMs.length - soloBookIds.length };
+  },
 };
 
 // ============================== data（导入导出）==============================
@@ -1310,6 +1427,9 @@ const data = {
       cloudPath: `exports/${p.bookId}-${Date.now()}.${ext}`,
       fileContent,
     });
+    // 登记到 files 集合：导出文件（前端下载路径）不被任何业务文档引用，
+    // reset 清库时靠这份台账才能连云存储一起清掉
+    await db.collection('files').add({ data: { kind: 'export', fileID: up.fileID, openid: ctx.openid, createdAt: db.serverDate() } }).catch(() => {});
     return { fileID: up.fileID, fileName: `${safeName}-${stamp}.${ext}`, fileType: ext, count: rows.length, bookName: b.data.name };
   },
 
@@ -1724,21 +1844,112 @@ const feedback = {
   },
 };
 
+// ============================== asr（语音识别 · 腾讯云一句话识别）==============================
+// 音频经云存储中转（callFunction 传参有大小上限，直传 base64 会超），云函数下载后
+// 用 TC3-HMAC-SHA256 手写签名直调腾讯云 API（不引第三方 SDK，免云端装依赖）。
+// 密钥只存云函数环境变量 TENCENT_SECRET_ID / TENCENT_SECRET_KEY；音频识别完立即删除，不留存。
+const crypto = require('crypto');
+function tc3Request(host, action, version, payload, secretId, secretKey) {
+  const hmac = (key, msg) => crypto.createHmac('sha256', key).update(msg, 'utf8').digest();
+  const sha256hex = (msg) => crypto.createHash('sha256').update(msg, 'utf8').digest('hex');
+  const service = host.split('.')[0];
+  const timestamp = Math.floor(Date.now() / 1000);
+  const date = new Date(timestamp * 1000).toISOString().slice(0, 10);
+  const canonical = ['POST', '/', '', 'content-type:application/json; charset=utf-8', `host:${host}`, '', 'content-type;host', sha256hex(payload)].join('\n');
+  const stringToSign = ['TC3-HMAC-SHA256', timestamp, `${date}/${service}/tc3_request`, sha256hex(canonical)].join('\n');
+  const kSigning = hmac(hmac(hmac('TC3' + secretKey, date), service), 'tc3_request');
+  const signature = crypto.createHmac('sha256', kSigning).update(stringToSign, 'utf8').digest('hex');
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      host, method: 'POST', path: '/',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Length': Buffer.byteLength(payload),
+        Host: host,
+        Authorization: `TC3-HMAC-SHA256 Credential=${secretId}/${date}/${service}/tc3_request, SignedHeaders=content-type;host, Signature=${signature}`,
+        'X-TC-Action': action,
+        'X-TC-Version': version,
+        'X-TC-Timestamp': String(timestamp),
+      },
+    }, (res) => {
+      let d = '';
+      res.on('data', (c) => { d += c; });
+      res.on('end', () => { try { resolve(JSON.parse(d)); } catch (e) { reject(e); } });
+    });
+    req.on('error', reject);
+    req.setTimeout(15000, () => req.destroy(new Error('ASR_TIMEOUT')));
+    req.write(payload);
+    req.end();
+  });
+}
+
+const asr = {
+  // 一句话识别：fileID 指向云存储里的临时 mp3（≤60s）
+  async sentence(p) {
+    const sid = process.env.TENCENT_SECRET_ID;
+    const skey = process.env.TENCENT_SECRET_KEY;
+    if (!sid || !skey) throw new AppError('ASR_NOT_CONFIGURED', '语音服务未配置，请手动输入');
+    if (!p.fileID) throw new AppError('INVALID_PARAM', '缺少音频文件');
+    let buf;
+    try {
+      const dl = await cloud.downloadFile({ fileID: p.fileID });
+      buf = dl.fileContent;
+      if (!buf || !buf.length) throw new AppError('INVALID_PARAM', '音频为空，请重试');
+      if (buf.length > 3 * 1024 * 1024) throw new AppError('INVALID_PARAM', '录音过长，请分段说');
+      const payload = JSON.stringify({
+        EngSerViceType: '16k_zh', SourceType: 1, VoiceFormat: 'mp3',
+        Data: buf.toString('base64'), DataLen: buf.length,
+        UsrAudioKey: 'sense-' + Date.now(),
+      });
+      const res = await tc3Request('asr.tencentcloudapi.com', 'SentenceRecognition', '2019-06-14', payload, sid, skey);
+      const err = res.Response && res.Response.Error;
+      if (err) {
+        console.error('[asr]', err.Code, err.Message);
+        // 额度/欠费类 → 明确告知；鉴权类 → 配置问题；其余统一「重试」
+        if (/NoFreeAmount|Arrears|Isolate|ResourceInsufficient|ResourcesSoldOut|PackageExhausted/i.test(err.Code)) {
+          throw new AppError('ASR_QUOTA', '本月语音识别额度已用完，请手动输入');
+        }
+        if (/AuthFailure|Signature|SecretId/i.test(err.Code)) {
+          throw new AppError('ASR_AUTH', '语音服务配置异常，请手动输入');
+        }
+        throw new AppError('ASR_FAIL', '识别失败，请重试或手动输入');
+      }
+      return { text: (res.Response && res.Response.Result) || '' };
+    } finally {
+      // 临时音频用完即删，失败也不留存
+      await cloud.deleteFile({ fileIdList: [p.fileID] }).catch(() => {});
+    }
+  },
+};
+
 // ============================== seed（演示数据 · 与用户真实数据隔离）==============================
-// 演示文档全部带 seed:true / `seed-` 前缀 id：载入不触碰调用者的用户资料与真实账本，可整体清除。
-const SEED_COLLECTIONS = ['records', 'categories', 'members', 'aiMessages', 'books', 'users'];
-async function clearSeedData() {
+// 演示文档全部带 seed:true + seedBy:<openid>，id 带用户后缀：多用户互不覆盖，
+// 载入不触碰调用者的用户资料与真实账本，清除只清「自己的」演示数据。
+const SEED_COLLECTIONS = ['records', 'categories', 'members', 'aiMessages', 'books', 'users', 'feedbacks'];
+async function clearSeedData(openid) {
   const result = {};
-  for (const c of SEED_COLLECTIONS) {
-    await db.createCollection(c).catch(() => {});
+  const wipe = async (c, where) => {
     let removed = 0;
     for (let guard = 0; guard < 200; guard++) { // 单次 remove 有批量上限，循环删空
-      const r = await db.collection(c).where({ seed: true }).remove().catch(() => null);
+      const r = await db.collection(c).where(where).remove().catch(() => null);
       const n = r && r.stats ? r.stats.removed : 0;
       if (!n) break;
       removed += n;
     }
-    result[c] = removed;
+    return removed;
+  };
+  for (const c of SEED_COLLECTIONS) {
+    await db.createCollection(c).catch(() => {});
+    // 自己的演示数据 + 无归属的旧版演示数据（固定 id 时代的共享残留，顺带自愈清理）
+    result[c] = await wipe(c, { seed: true, seedBy: openid })
+      + await wipe(c, { seed: true, seedBy: _.exists(false) });
+  }
+  // 用户在演示账本里手动记的账/会话/自建分类没有 seed 标记——按演示账本 id 清孤儿
+  // （含旧版固定 id 的两个账本）
+  const bookIds = SEED.seedBookIds(openid).concat(['seed-book-share', 'seed-book-split']);
+  for (const c of ['records', 'aiMessages', 'categories', 'chartLayouts', 'members']) {
+    await db.createCollection(c).catch(() => {});
+    result[c] = (result[c] || 0) + await wipe(c, { bookId: _.in(bookIds) });
   }
   return result;
 }
@@ -1748,7 +1959,7 @@ const seed = {
     if (!IS_DEV) {
       throw new AppError('NO_PERMISSION', '当前非 dev 模式，禁止初始化。请在云开发控制台把云函数 api 的环境变量 APP_ENV 设为 dev 后重试。');
     }
-    await clearSeedData();
+    await clearSeedData(ctx.openid);
     const data = SEED.build(ctx.openid);
     const counts = {};
     for (const c of Object.keys(data)) {
@@ -1769,25 +1980,40 @@ const seed = {
     return { ok: true, counts };
   },
 
-  // 清除演示数据（只删 seed 标记的文档，用户真实数据不受影响）
+  // 清除演示数据（只删自己的 seed 数据，他人与真实数据不受影响）
   async clear(_p, ctx) {
     if (!IS_DEV) throw new AppError('NO_PERMISSION', '非 dev 模式禁止操作');
-    const result = await clearSeedData();
+    const result = await clearSeedData(ctx.openid);
     return { ok: true, result };
   },
 
-  // 清空全部数据（含用户，需重新登录），回到干净测试状态（dev）
+  // 清空全部数据（含用户，需重新登录），回到干净测试状态（dev）。
+  // 云存储一并清：先趁数据还在，把各集合引用的 fileID 全收集起来（删完库就找不到了）。
   async reset(_p, ctx) {
     if (!IS_DEV) throw new AppError('NO_PERMISSION', '非 dev 模式禁止清空数据');
+    const fileIDs = [];
+    const collect = async (coll, pick) => {
+      for (let skip = 0; ; skip += 1000) {
+        const r = await db.collection(coll).skip(skip).limit(1000).get().catch(() => ({ data: [] }));
+        (r.data || []).forEach(pick);
+        if ((r.data || []).length < 1000) break;
+      }
+    };
+    await collect('users', (d) => { if (d.avatarFileID) fileIDs.push(d.avatarFileID); });        // 头像
+    await collect('records', (d) => { (d.images || []).forEach((f) => fileIDs.push(f)); });      // 记录图片
+    await collect('feedbacks', (d) => { (d.images || []).forEach((f) => fileIDs.push(f)); });    // 反馈截图
+    await collect('aiMessages', (d) => { if (d.fileID) fileIDs.push(d.fileID); });               // 收据图
+    await collect('files', (d) => { if (d.fileID) fileIDs.push(d.fileID); });                    // 导出文件台账
+    const filesRemoved = await deleteFiles(fileIDs);
     const result = {};
-    for (const c of COLLECTIONS) { // 全部 8 个集合，含 users
+    for (const c of COLLECTIONS) { // 全部集合，含 users
       await db.createCollection(c).catch(() => {});
       const removed = await clearCollection(c);
       const left = await db.collection(c).where({ _id: _.exists(true) }).count().catch(() => ({ total: -1 }));
       result[c] = { removed, remaining: left.total };
     }
-    return { ok: true, result };
+    return { ok: true, result, filesRemoved };
   },
 };
 
-module.exports = { book, member, category, record, rate, stats, layout, ai, settings, user, data, settle, feedback, seed };
+module.exports = { book, member, category, record, rate, stats, layout, ai, settings, user, data, settle, feedback, asr, seed };

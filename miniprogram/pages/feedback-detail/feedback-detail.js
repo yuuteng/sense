@@ -43,27 +43,40 @@ Page({
 
   onReplyInput(e) { this.setData({ replyText: e.detail.value }); },
 
+  // 乐观发送：回复立即上屏 + 清空输入框，云端失败回滚并还原草稿
   async sendReply() {
     const content = this.data.replyText.trim();
     if (!content) { wx.showToast({ title: '请输入回复内容', icon: 'none' }); return; }
     if (this.sending) return;
     this.sending = true;
+    const fb = this.data.fb;
+    const from = fb && fb.isAdmin && !fb.isMine ? 'cs' : 'user';
+    const prevReplies = this.data.replies;
+    const optimistic = { from, content, time: new Date().toISOString(), timeLabel: '刚刚' };
+    this.setData({ replies: prevReplies.concat([optimistic]), replyText: '' });
     try {
       await api.call('feedback', 'reply', { feedbackId: this.data.id, content });
-      this.setData({ replyText: '' });
-      await this.load();
-    } catch (e) { api.toast(e); }
+      this.load(); // 后台校正（服务器时间戳/状态联动），不阻塞
+    } catch (e) {
+      this.setData({ replies: prevReplies, replyText: content });
+      api.toast(e);
+    }
     this.sending = false;
   },
 
-  // 管理员：改状态
+  // 管理员：改状态（乐观更新，失败回滚）
   async pickStatus(e) {
     const status = e.currentTarget.dataset.k;
     if (!this.data.fb || status === this.data.fb.status) return;
+    const prev = { status: this.data.fb.status, statusLabel: this.data.fb.statusLabel, statusClass: this.data.statusClass };
+    const label = (STATUSES.find((s) => s.k === status) || {}).label || status;
+    this.setData({ 'fb.status': status, 'fb.statusLabel': label, statusClass: STATUS_CLASS[status] || '' });
     try {
       await api.call('feedback', 'setStatus', { feedbackId: this.data.id, status });
-      await this.load();
       wx.showToast({ title: '状态已更新', icon: 'none' });
-    } catch (e) { api.toast(e); }
+    } catch (e) {
+      this.setData({ 'fb.status': prev.status, 'fb.statusLabel': prev.statusLabel, statusClass: prev.statusClass });
+      api.toast(e);
+    }
   },
 });

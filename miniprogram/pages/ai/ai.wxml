@@ -4,15 +4,22 @@
     <nav-bar>
       <view slot="left" class="appbar__book" hover-class="appbar__book--press" hover-stay-time="80" bindtap="openSwitcher">
         <image src="{{bookIcon}}" style="width:30rpx;height:30rpx"></image>
-        {{bookName}}
+        <text class="appbar__book-name">{{bookName}}</text>
         <image src="{{chevronDown}}" style="width:28rpx;height:28rpx"></image>
       </view>
-      <text slot="right" class="muted" style="font-size:24rpx">{{displayCurrency}}</text>
+      <view slot="right" class="cur-pill" hover-class="cur-pill--press" hover-stay-time="80" bindtap="openCurPicker">
+        展示币种 {{curSym}} {{curCode}}
+        <image src="{{chevronDown}}" style="width:24rpx;height:24rpx"></image>
+      </view>
     </nav-bar>
   </view>
 
   <view class="chat">
-    <view class="ai-disclaimer">AI 分析基于你的账本数据进行 · 会话完整保留 · 免费额度 50 次 AI 调用</view>
+    <!-- 拆两行：避免长句在「50 次 AI 调用」中间被折行；包一层避免吃 .chat 的 flex gap -->
+    <view class="ai-disclaimer">
+      <view>AI 分析基于你的账本数据进行 · 会话完整保留</view>
+      <view>免费额度 50 次 AI 调用</view>
+    </view>
 
     <block wx:for="{{messages}}" wx:key="index" wx:for-item="m">
       <!-- 用户：收据图片 -->
@@ -61,16 +68,38 @@
 <!-- 输入区（固定，浮于 tabBar 之上）-->
 <view class="composer">
   <view class="composer__ic" hover-class="pressed" hover-stay-time="80" bindtap="onUpload"><image src="{{ic.camera}}"></image></view>
-  <input
-    class="composer__input"
-    placeholder="{{placeholder}}"
-    value="{{input}}"
-    bindinput="onInput"
-    confirm-type="send"
-    bindconfirm="onSend"
-    cursor-spacing="20"
-  />
+  <view class="composer__field">
+    <input
+      class="composer__input composer__input--mic"
+      placeholder="{{placeholder}}"
+      value="{{input}}"
+      bindinput="onInput"
+      confirm-type="send"
+      bindconfirm="onSend"
+      cursor-spacing="20"
+    />
+    <!-- 语音按钮：微信风格放输入框内右侧，有文字时隐藏；按住说话/上滑取消 -->
+    <view
+      wx:if="{{!input}}"
+      class="composer__mic {{recording ? 'composer__mic--on' : ''}}"
+      catchtouchstart="micStart"
+      catchtouchmove="micMove"
+      catchtouchend="micEnd"
+      catchtouchcancel="micCancel"
+    >
+      <image src="{{ic.mic}}"></image>
+    </view>
+  </view>
   <view class="composer__send" hover-class="pressed" hover-stay-time="80" bindtap="onSend"><image src="{{ic.send}}"></image></view>
+</view>
+
+<!-- 录音/识别浮层 -->
+<view wx:if="{{recording || recognizing}}" class="rec-mask">
+  <view class="rec-panel {{recCancel ? 'rec-panel--cancel' : ''}}">
+    <image class="rec-panel__ic" src="{{recCancel ? ic.micCancel : ic.micBig}}"></image>
+    <view wx:if="{{recording && !recCancel}}" class="rec-wave"><view class="rw"></view><view class="rw"></view><view class="rw"></view><view class="rw"></view><view class="rw"></view></view>
+    <view class="rec-panel__tip">{{recognizing ? '识别中…' : (recCancel ? '松开取消' : '松开结束 · 上滑取消')}}</view>
+  </view>
 </view>
 
 <book-switcher
@@ -81,3 +110,5 @@
   bind:close="onSwitcherClose"
   bind:manage="goManageBooks"
 ></book-switcher>
+
+<currency-picker visible="{{curVisible}}" current="{{curCode}}" bind:select="onCurPick" bind:close="closeCurPicker"></currency-picker>

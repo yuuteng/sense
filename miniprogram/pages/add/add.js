@@ -29,7 +29,6 @@ Page({
     payerIndex: 0,
     splitModes: [
       { k: 'even', label: '均摊' },
-      { k: 'by', label: '按人指定' },
       { k: 'treat', label: '我请客' },
     ],
     splitMode: 'even',
@@ -148,7 +147,8 @@ Page({
     if (r.payerOpenid) { const pi = this.data.members.findIndex((m) => m.openid === r.payerOpenid); if (pi >= 0) payerIndex = pi; }
     let splitMembers = this.data.splitMembers; let splitMode = this.data.splitMode;
     if (r.split) {
-      splitMode = r.split.mode || 'even';
+      // 旧记录可能存过已下线的「按人指定」(by)——统一归一化为均摊
+      splitMode = r.split.mode === 'treat' ? 'treat' : 'even';
       const sel = {}; (r.split.members || []).forEach((m) => { sel[m.openid] = true; });
       splitMembers = this.data.splitMembers.map((m) => ({ ...m, selected: !!sel[m.openid] }));
     }
@@ -206,8 +206,7 @@ Page({
     if (mode === 'treat') splitHint = `我请客：本人全额承担 ${fmt.money(conv, display)}`;
     else {
       const n = this.data.splitMembers.filter((m) => m.selected).length || 1;
-      if (mode === 'even') splitHint = `均摊：${n} 人 · 每人 ${fmt.money(conv / n, display)}`;
-      else splitHint = `按人指定：${n} 人参与（P1 仅记录分摊）`;
+      splitHint = `均摊：${n} 人 · 每人 ${fmt.money(conv / n, display)}`;
     }
     this.setData({ fxHint, splitHint });
   },
@@ -310,11 +309,16 @@ Page({
       title: '停用分类', content: `停用「${cat.key}」？其下二级分类一并隐藏，历史记录仍保留原分类名。`, confirmColor: '#f62172',
       success: (res) => {
         if (!res.confirm) return;
+        // 乐观移除：本地立即从九宫格消失，云端失败再拉回真实列表
+        const cats = this.data.cats.filter((c) => c.id !== cat.id);
+        this.catsByKind[kind] = cats;
+        const ci = Math.min(this.data.catIndex, Math.max(0, cats.length - 1));
+        this.setData({ cats, catIndex: ci, subs: cats[ci] ? cats[ci].subs : [], subIndex: 0 });
         api.call('category', 'disable', { bookId: this.data.book.bookId, categoryId: cat.id })
-          .then(() => this.reloadKind(kind).then((cats) => {
-            const ci = Math.min(this.data.catIndex, Math.max(0, cats.length - 1));
-            this.setData({ cats, catIndex: ci, subs: cats[ci] ? cats[ci].subs : [], subIndex: 0 });
-          })).catch(api.toast);
+          .catch((e) => {
+            api.toast(e);
+            this.reloadKind(kind).then((real) => this.setData({ cats: real, catIndex: 0, subs: real[0] ? real[0].subs : [], subIndex: 0 }));
+          });
       },
     });
   },
@@ -326,11 +330,17 @@ Page({
       title: '停用分类', content: `停用「${sub.name}」？历史记录仍保留原分类名。`, confirmColor: '#f62172',
       success: (res) => {
         if (!res.confirm) return;
+        // 乐观移除二级：本地立即消失，失败拉回真实列表
+        const ci = this.data.catIndex;
+        const subs = this.data.subs.filter((s) => s.categoryId !== sub.categoryId);
+        const cats = this.data.cats.map((c, i) => (i === ci ? { ...c, subs } : c));
+        this.catsByKind[kind] = cats;
+        this.setData({ cats, subs, subIndex: 0 });
         api.call('category', 'disable', { bookId: this.data.book.bookId, categoryId: sub.categoryId })
-          .then(() => this.reloadKind(kind).then((cats) => {
-            const ci = this.data.catIndex < cats.length ? this.data.catIndex : 0;
-            this.setData({ cats, subs: cats[ci] ? cats[ci].subs : [], subIndex: 0 });
-          })).catch(api.toast);
+          .catch((e) => {
+            api.toast(e);
+            this.reloadKind(kind).then((real) => this.setData({ cats: real, subs: real[ci] ? real[ci].subs : [], subIndex: 0 }));
+          });
       },
     });
   },

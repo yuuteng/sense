@@ -1,4 +1,8 @@
 const WxCanvas = require('./wx-canvas');
+// 直接 require 本地 echarts 构建。原版把 echarts 当组件属性由外部传入，
+// 但小程序 setData 会把函数剥掉，模块对象根本传不进来 —— this.data.echarts
+// 永远是 undefined，init 内 setCanvasCreator 抛错，图表从未初始化。
+const echartsLib = require('./echarts');
 
 let ctx;
 
@@ -49,18 +53,16 @@ Component({
   },
 
   data: {
-    isUseNewCanvas: false
+    // 默认即用 canvas 2d（同层渲染）：初始 false 会先挂一帧「旧版原生 canvas」，
+    // 原生组件浮于 tabBar/弹层之上（柱子穿透 tabBar 的元凶）。基础库 ≥2.9.0 均支持 2d。
+    isUseNewCanvas: true
   },
 
   ready: function () {
-    if (!this.data.echarts) {
-      console.warn('组件需要传入 echarts')
-      return;
-    }
-
     // Disable prograssive because drawImage doesn't support DOM as parameter
     // See https://developers.weixin.qq.com/miniprogram/dev/api/canvas/CanvasContext.drawImage.html
-    this.data.echarts.registerPreprocessor(option => {
+    try {
+    (this.data.echarts || echartsLib).registerPreprocessor(option => {
       if (option && option.series) {
         if (option.series.length > 0) {
           option.series.forEach(series => {
@@ -82,13 +84,17 @@ Component({
     if (!this.data.ec.lazyLoad) {
       this.init();
     }
+    } catch (e) { console.error('[ec-canvas] ready 失败', e); }
   },
 
   methods: {
     init: function (callback) {
-      // 新 API 优先（getSystemInfoSync 已废弃），失败回退
+      // 新 API 优先（getSystemInfoSync 已废弃），失败回退；SDKVersion 取不到时保底 2.9.0
       let version = '2.9.0';
-      try { version = (wx.getAppBaseInfo ? wx.getAppBaseInfo() : wx.getSystemInfoSync()).SDKVersion; } catch (e) { /* 用默认 */ }
+      try {
+        const info = wx.getAppBaseInfo ? wx.getAppBaseInfo() : wx.getSystemInfoSync();
+        if (info && info.SDKVersion) version = info.SDKVersion;
+      } catch (e) { /* 用默认 */ }
 
       const canUseNewCanvas = compareVersion(version, '2.9.0') >= 0;
       const forceUseOldCanvas = this.data.forceUseOldCanvas;
@@ -122,7 +128,7 @@ Component({
       ctx = wx.createCanvasContext(this.data.canvasId, this);
       const canvas = new WxCanvas(ctx, this.data.canvasId, false);
 
-      this.data.echarts.setCanvasCreator(() => {
+      (this.data.echarts || echartsLib).setCanvasCreator(() => {
         return canvas;
       });
       // const canvasDpr = wx.getSystemInfoSync().pixelRatio // 微信旧的canvas不能传入dpr
@@ -153,6 +159,16 @@ Component({
         .select('.ec-canvas')
         .fields({ node: true, size: true })
         .exec(res => {
+          if (!res || !res[0] || !res[0].node) {
+            // setData(isUseNewCanvas) 后 2d canvas 可能尚未渲染进 DOM，下一拍重试
+            if ((this._initRetry = (this._initRetry || 0) + 1) <= 10) {
+              setTimeout(() => this.initByNewWay(callback), 60);
+            } else {
+              console.error('ec-canvas: 2d canvas 节点始终查询不到，初始化失败');
+            }
+            return;
+          }
+          this._initRetry = 0;
           const canvasNode = res[0].node
           this.canvasNode = canvasNode
 
@@ -163,7 +179,7 @@ Component({
           const ctx = canvasNode.getContext('2d')
 
           const canvas = new WxCanvas(ctx, this.data.canvasId, true, canvasNode)
-          this.data.echarts.setCanvasCreator(() => {
+          ;(this.data.echarts || echartsLib).setCanvasCreator(() => {
             return canvas
           })
 

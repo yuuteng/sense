@@ -1,1 +1,9 @@
 .fb-textarea { height: 320rpx; padding: 24rpx 32rpx; line-height: 1.6; width: 100%; }
+
+/* 邮箱格式错误态：红框 + 微红底（与 onboarding 建账本空名一致） */
+.input-error {
+  border-color: var(--danger) !important;
+  background: rgba(246, 33, 114, 0.04);
+}
+.input-ph-error { color: rgba(246, 33, 114, 0.55); }
+.field-err { color: var(--danger); font-size: 24rpx; margin-top: 10rpx; }

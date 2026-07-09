@@ -54,11 +54,15 @@ Page({
   },
 
   fetch(page) {
+    // 收支筛选用 recordType 传（type 是云函数路由字段，直接展开会把路由覆盖成 record.income）
     return api.call('record', 'list', {
       bookId: this.bookId,
       page,
       withSummary: page === 0,
-      ...this.filters,
+      dateFrom: this.filters.dateFrom,
+      dateTo: this.filters.dateTo,
+      categoryTopId: this.filters.categoryTopId,
+      recordType: this.filters.type,
     });
   },
 

@@ -1,5 +1,16 @@
 /* settings 页面样式继承自 app.wxss；以下为导入结果面板 */
 
+/* 个人头副行：默认账本单独一行，过长省略 */
+.li__val--sub { margin-top: 2rpx; display: block; max-width: 420rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 头像选择按钮：裸 button 重置，只留头像本身（open-type=chooseAvatar 触发微信头像选择） */
+.avatar-choose {
+  margin: 0; padding: 0; background: transparent; line-height: normal;
+  width: 96rpx; height: 96rpx; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.avatar-choose::after { border: none; }
+
 .imp-mask {
   position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 100;
   background: rgba(20, 30, 40, 0.45);

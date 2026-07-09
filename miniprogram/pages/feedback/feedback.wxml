@@ -1,6 +1,6 @@
 <view class="screen screen--pad">
   <loading show="{{loading}}"></loading>
-  <nav-bar back="{{true}}" center="{{true}}" title="{{isAdmin ? '反馈工单（客服）' : '意见反馈'}}">
+  <nav-bar back="{{true}}" center="{{true}}" title="{{isAdmin ? '反馈工单' : '意见反馈'}}" sub="{{isAdmin ? '客服视角' : ''}}">
     <view slot="right" class="appbar__btn" hover-class="active" hover-stay-time="80" bindtap="goNew">
       <image src="{{ic.plus}}" style="width:48rpx;height:48rpx"></image>
     </view>
@@ -26,10 +26,13 @@
     </view>
   </block>
 
-  <!-- 客服视角：用户工单（他人提交的处理队列） -->
-  <block wx:if="{{isAdmin && queueItems.length}}">
-    <view class="section-label">用户工单 · {{queueItems.length}} 条</view>
-    <view class="group group--flat">
+  <!-- 客服视角：用户工单（他人提交的处理队列）；空时也展示分区，说明入口在这里 -->
+  <block wx:if="{{isAdmin && !loading && items.length}}">
+    <view class="section-label">用户工单{{queueItems.length ? ' · ' + queueItems.length + ' 条' : ''}}</view>
+    <view wx:if="{{!queueItems.length}}" class="group group--flat">
+      <view class="li"><view class="li__label" style="color:var(--muted);font-size:var(--text-sm)">暂无用户工单，其他用户提交的反馈会出现在这里</view></view>
+    </view>
+    <view wx:else class="group group--flat">
       <view wx:for="{{queueItems}}" wx:key="feedbackId" class="li" style="align-items:flex-start;padding-top:28rpx;padding-bottom:28rpx" hover-class="pressed" hover-stay-time="80" data-id="{{item.feedbackId}}" bindtap="goDetail">
         <view style="flex:1;min-width:0">
           <view style="display:flex;align-items:center;gap:14rpx">

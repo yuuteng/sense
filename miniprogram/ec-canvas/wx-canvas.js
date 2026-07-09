@@ -41,6 +41,20 @@ class WxCanvas {
     // noop
   }
 
+  // 新版 echarts/zrender 初始化时会对 canvas 调 DOM 事件 API；
+  // 小程序无 DOM，给空实现即可（触摸事件由 ec-canvas 组件手动转发给 zr handler）
+  addEventListener() {
+    // noop
+  }
+
+  removeEventListener() {
+    // noop
+  }
+
+  dispatchEvent() {
+    return true;
+  }
+
   _initCanvas(zrender, ctx) {
     zrender.util.getContext = function () {
       return ctx;

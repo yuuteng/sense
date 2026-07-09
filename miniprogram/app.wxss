@@ -107,12 +107,18 @@ image { display: block; }
 }
 .appbar__book image { flex-shrink: 0; }
 .appbar__book--press { background: rgba(62,69,80,0.10); }
-/* 顶部展示币种切换按钮（右上角小胶囊，黄色）*/
+/* 账本名超长：单行省略，不许把胶囊撑成两行 */
+.appbar__book-name {
+  min-width: 0; max-width: 300rpx;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 顶部展示币种切换按钮（右上角小胶囊，黄色）：固定单行、不参与压缩 */
 .cur-pill {
   display: inline-flex; align-items: center; gap: 6rpx;
   padding: 8rpx 16rpx; border-radius: var(--radius-pill);
   background: rgba(255,205,47,0.18);
   font-size: 24rpx; font-weight: 600; color: #a47d06;
+  white-space: nowrap; flex-shrink: 0;
 }
 .cur-pill--press { background: rgba(255,205,47,0.32); }
 

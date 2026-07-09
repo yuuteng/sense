@@ -52,6 +52,7 @@ const PATHS = {
   upload: '<path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 21h14"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M4 7l8 6 8-6"/>',
   camera: '<rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.2"/><path d="M8 6l1.5-2h5L16 6"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke-linecap="round"/>',
   send: '<path d="M4 12l16-8-6 16-3.5-6L4 12Z" stroke-linejoin="round"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5l3 2"/>',
   checkbox: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',

@@ -14,10 +14,12 @@
    外层 button 只作触发器：重置为无样式、贴合内容、margin-left:auto 顶到最右；
    视觉胶囊放在内层 view，view 能可靠 inline-flex 收缩到「＋邀请成员」内容宽度，
    避免原生 button 不吃 display/width 而撑宽、文字居中飘着。 */
+/* 原生 button 不吃 width:auto，会撑满剩余宽度导致胶囊看着悬在中间——
+   让 button 自己做 flex 容器把胶囊推到最右，宽度多少都不影响视觉 */
 .invite-btn {
-  margin: 0 0 0 auto; padding: 0;
+  margin: 0; padding: 0;
   background: transparent; line-height: normal;
-  display: inline-block; width: auto;
+  flex: 1; display: flex; justify-content: flex-end;
 }
 .invite-btn::after { border: none; }
 .invite-pill {
@@ -33,3 +35,29 @@
 }
 .invite-pill image { width: 26rpx; height: 26rpx; flex-shrink: 0; }
 .invite-btn--h .invite-pill { background: rgba(0, 204, 249, 0.22); transform: scale(0.96); }
+
+/* 邀请权限选择弹层 */
+.inv-mask {
+  position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 300;
+  background: rgba(62, 69, 80, 0.45);
+  display: flex; align-items: flex-end;
+}
+.inv-sheet {
+  width: 100%; background: var(--surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 32rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+.inv-title { text-align: center; font-size: var(--text-lg); font-weight: 600; }
+.inv-hint { text-align: center; color: var(--muted); font-size: 24rpx; margin: 12rpx 0 24rpx; }
+.inv-btn {
+  width: 100%; text-align: left; margin: 0 0 16rpx; padding: 24rpx 28rpx;
+  background: rgba(0, 204, 249, 0.06);
+  border: 1rpx solid rgba(0, 204, 249, 0.25); border-radius: var(--radius-md);
+  line-height: 1.4;
+}
+.inv-btn::after { border: none; }
+.inv-btn--h { background: rgba(0, 204, 249, 0.14); }
+.inv-btn__t { font-size: 30rpx; font-weight: 600; color: var(--fg); }
+.inv-btn__d { font-size: 24rpx; color: var(--muted); margin-top: 4rpx; }
+.inv-cancel { text-align: center; padding: 20rpx; color: var(--muted); font-size: 28rpx; }
