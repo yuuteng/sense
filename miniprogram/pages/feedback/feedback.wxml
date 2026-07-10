@@ -26,11 +26,11 @@
     </view>
   </block>
 
-  <!-- 客服视角：用户工单（他人提交的处理队列）；空时也展示分区，说明入口在这里 -->
+  <!-- 客服视角：全部工单（含自己提交的，提交人标「我」）；空时也展示分区，说明入口在这里 -->
   <block wx:if="{{isAdmin && !loading && items.length}}">
     <view class="section-label">用户工单{{queueItems.length ? ' · ' + queueItems.length + ' 条' : ''}}</view>
     <view wx:if="{{!queueItems.length}}" class="group group--flat">
-      <view class="li"><view class="li__label" style="color:var(--muted);font-size:var(--text-sm)">暂无用户工单，其他用户提交的反馈会出现在这里</view></view>
+      <view class="li"><view class="li__label" style="color:var(--muted);font-size:var(--text-sm)">暂无工单，用户提交的反馈会出现在这里</view></view>
     </view>
     <view wx:else class="group group--flat">
       <view wx:for="{{queueItems}}" wx:key="feedbackId" class="li" style="align-items:flex-start;padding-top:28rpx;padding-bottom:28rpx" hover-class="pressed" hover-stay-time="80" data-id="{{item.feedbackId}}" bindtap="goDetail">
@@ -39,7 +39,7 @@
             <view wx:if="{{item.unread}}" class="reddot"></view>
             <text class="ellip" style="font-weight:600">{{item.title}}</text>
           </view>
-          <view class="fb-item__meta">{{item.fromName}} · {{item.timeLabel}}<text wx:if="{{item.replyCount}}"> · {{item.replyCount}} 条回复</text></view>
+          <view class="fb-item__meta">{{item.mine ? '我' : item.fromName}} · {{item.timeLabel}}<text wx:if="{{item.replyCount}}"> · {{item.replyCount}} 条回复</text></view>
         </view>
         <text class="fb-status {{item.statusClass}}">{{item.statusLabel}}</text>
         <image class="chevron" src="{{ic.chevron}}"></image>

@@ -109,7 +109,7 @@
           >
             <text wx:if="{{lg.dot}}" class="pl-dot" style="background:{{lg.dot}}"></text>
             <text class="pl-k">{{lg.k}}</text>
-            <text class="pl-v num {{lg.strong?'strong':''}}">{{lg.v}}</text>
+            <text class="pl-v num {{lg.strong?'strong':''}} {{lg.compact?'compact':''}}">{{lg.v}}</text>
             <text wx:if="{{lg.type||lg.link}}" class="pl-go">›</text>
           </view>
         </view>

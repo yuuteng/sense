@@ -30,13 +30,14 @@ Page({
     curVisible: false,
     chevronDown: '',
     loading: true,
-    placeholder: '问一句，或说「昨天打车 35」记一笔…',
+    placeholder: '问一句，或说：昨天打车 35',
     // 空会话起手示例：点击只填入输入框（与语音一致，不自动发送）
     starters: [
       { hint: '查数据', q: '这个月吃饭花了多少？' },
       { hint: '一句话记账', q: '昨天打车 35' },
     ],
     quotaText: '', // 由 ai.quota 下发；限额关闭时保持空 = 整行隐藏
+    aiOn: true,    // 服务端 AI_ENABLED 开关：false 时隐藏收据识别入口（纯关键词模式）
     // 语音输入：按住说话（recording）→ 松开识别（recognizing）；上滑取消（recCancel）
     recording: false,
     recognizing: false,
@@ -53,8 +54,9 @@ Page({
       bookIcon: icons.get('book', '#0089c0', 1.7),
       splitIcon: icons.get('bookSplit', '#8a690a', 1.7),
       ic: {
-        camera: icons.get('camera', '#748294', 1.8),
-        mic: icons.get('mic', '#748294', 1.8),
+        // 相机/话筒是可点操作，比占位提示文字（grey-600）更深一档，拉开「可点 vs 提示」层级
+        camera: icons.get('camera', '#3e4550', 1.8),
+        mic: icons.get('mic', '#3e4550', 1.8),
         micBig: icons.get('mic', '#00ccf9', 1.8),
         micCancel: icons.get('trash', '#ffffff', 1.8),
         send: icons.get('send', '#ffffff', 2),
@@ -72,13 +74,25 @@ Page({
     this.load();
   },
 
+  // 占位符 = aiOn × 角色 四态：关闭模型后不承诺「问一句」（答不了的事不写在输入框上）
+  _placeholder() {
+    const w = this.canWrite !== false;
+    if (this.data.aiOn) return w ? '问一句，或说：昨天打车 35' : '问一句：本月支出多少';
+    return w ? '说一句记账，如：昨天打车 35' : '只读成员暂无法使用助手';
+  },
+
   // 剩余额度显示（静态「50 次」会让第一次被拒显得莫名其妙）；失败静默，不打扰主流程
   refreshQuota() {
     api.call('ai', 'quota').then((q) => {
+      const aiOn = q.aiOn !== false;
       this.setData({
+        aiOn,
+        // 纯关键词模式：答不了统计问题，起手示例只留记账句
+        starters: aiOn ? this.data.starters : this.data.starters.filter((x) => x.hint !== '查数据'),
         // 限额关闭 → 不显示；开着 → 付费不限 / 剩余次数
         quotaText: !q.enabled ? '' : (q.left < 0 ? '已解锁 · 不限次数' : `免费额度剩余 ${q.left}/${q.total} 次`),
       });
+      this.setData({ placeholder: this._placeholder() });
     }).catch(() => {});
   },
 
@@ -86,6 +100,7 @@ Page({
     try {
       const book = await api.call('book', 'getCurrent');
       if (!book) { this.setData({ loading: false }); return; }
+      if (book.fallback) wx.showToast({ title: `原账本已不可访问，已切换到「${book.name}」`, icon: 'none', duration: 2500 });
       this.bookId = book.bookId;
       this.canWrite = book.myRole !== 'ro'; // 只读成员：可问答，不产生入账
       const cur = book.displayCurrency || 'CNY';
@@ -96,10 +111,10 @@ Page({
         bookName: book.name,
         curCode: cur,
         curSym: fmt.symbolOf(cur),
-        placeholder: this.canWrite ? '问一句，或说「昨天打车 35」记一笔…' : '问一句，如「本月支出多少」…',
         messages: msgs.map(normalize),
         loading: false,
       });
+      this.setData({ placeholder: this._placeholder() }); // canWrite 就绪后按 aiOn × 角色定文案
       this.scrollBottom();
     } catch (e) { this.setData({ loading: false }); api.toast(e); }
   },

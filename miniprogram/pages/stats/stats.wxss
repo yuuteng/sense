@@ -41,6 +41,8 @@
 .pl-k { color: var(--muted); }
 .pl-v { margin-left: auto; font-weight: 600; }
 .pl-v.strong { font-size: var(--text-base); color: var(--fg); }
+/* 超长金额（>12 字符，JS 标记）降回 text-sm：先降号保完整，实在放不下才走 ellipsis */
+.pl-v.strong.compact { font-size: var(--text-sm); letter-spacing: -0.03em; }
 
 /* 钻取通用：图例行可点箭头 + 柱状图两段式入口条 */
 .pl-item--press, .pl-item--link:active { opacity: 0.72; }

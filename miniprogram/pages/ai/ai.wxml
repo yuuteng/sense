@@ -17,7 +17,7 @@
   <view class="chat">
     <!-- 拆两行：避免长句在「50 次 AI 调用」中间被折行；包一层避免吃 .chat 的 flex gap -->
     <view class="ai-disclaimer">
-      <view>AI 分析基于你的账本数据进行 · 会话完整保留</view>
+      <view>分析基于你的账本数据 · 会话完整保留</view>
       <view wx:if="{{quotaText}}">{{quotaText}}</view>
     </view>
 
@@ -28,7 +28,7 @@
         <text class="ai-starter__hint">{{item.hint}}</text>
         <text class="ai-starter__q">「{{item.q}}」</text>
       </view>
-      <view class="ai-starter__row ai-starter__row--static">
+      <view wx:if="{{aiOn}}" class="ai-starter__row ai-starter__row--static">
         <text class="ai-starter__hint">拍收据</text>
         <text class="ai-starter__q">点左下角 📷 上传小票，自动识别成一笔待确认的账</text>
       </view>
@@ -80,7 +80,7 @@
 
 <!-- 输入区（固定，浮于 tabBar 之上）-->
 <view class="composer">
-  <view class="composer__ic" hover-class="pressed" hover-stay-time="80" bindtap="onUpload"><image src="{{ic.camera}}"></image></view>
+  <view wx:if="{{aiOn}}" class="composer__ic" hover-class="pressed" hover-stay-time="80" bindtap="onUpload"><image src="{{ic.camera}}"></image></view>
   <view class="composer__field">
     <input
       class="composer__input composer__input--mic"

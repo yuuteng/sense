@@ -5,6 +5,12 @@ const tabbar = require('../../utils/tabbar');
 const theme = require('../../utils/chart-theme');
 
 const GREEN = '#9edf10', BLUE = '#00ccf9', TRACK = '#e4e7ec', AXIS = '#5f6c7d';
+// 饼卡「结余」图例行（三张饼卡共用）：带符号金额是最长的一行，超 12 字符标记 compact，
+// wxss 据此降一号字，窄屏不再截断成「+¥84,622.…」
+function balanceLegend(inc, ex, cur) {
+  const v = fmt.signedTotal(inc - ex, cur);
+  return { k: '结余', v, strong: true, link: true, compact: v.length > 12 };
+}
 function enc(svg) { return 'data:image/svg+xml,' + encodeURIComponent(svg); }
 function genId() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
@@ -267,6 +273,7 @@ Page({
     try {
       const book = await api.call('book', 'getCurrent');
       if (!book) { this.setData({ needInit: true, loading: false }); return; }
+      if (book.fallback) wx.showToast({ title: `原账本已不可访问，已切换到「${book.name}」`, icon: 'none', duration: 2500 });
       if (this.bookId !== book.bookId) { this._catCache = {}; this._memberCache = {}; } // 切账本清聚合缓存
       this.bookId = book.bookId;
       this.isSplit = book.type === 'split'; // 成员卡：分账账本才有「垫付/应摊」切换
@@ -333,9 +340,10 @@ Page({
         title: '账本累计收支', sub: '自建立以来 · 收入 vs 支出',
         option: theme.donutOption(p.income, p.expense),
         legends: [
+          // 「累计」由副标题「自建立以来」交代，标签与其他饼卡统一叫 结余
           { dot: GREEN, k: '总收入', v: fmt.money(p.income, cur), type: 'income' },
           { dot: BLUE, k: '总支出', v: fmt.money(p.expense, cur), type: 'expense' },
-          { k: '累计结余', v: fmt.signedTotal(p.income - p.expense, cur), strong: true, link: true },
+          balanceLegend(p.income, p.expense, cur),
         ],
       };
     }
@@ -365,7 +373,7 @@ Page({
         legends: [
           { dot: GREEN, k: '收入', v: fmt.money(p.income, cur), type: 'income' },
           { dot: BLUE, k: '支出', v: fmt.money(p.expense, cur), type: 'expense' },
-          { k: '结余', v: fmt.signedTotal(p.income - p.expense, cur), strong: true, link: true },
+          balanceLegend(p.income, p.expense, cur),
         ],
       };
     }
@@ -394,7 +402,7 @@ Page({
         legends: [
           { dot: GREEN, k: '收入', v: fmt.money(inc, cur), type: 'income' },
           { dot: BLUE, k: '支出', v: fmt.money(ex, cur), type: 'expense' },
-          { k: '结余', v: fmt.signedTotal(inc - ex, cur), strong: true, link: true },
+          balanceLegend(inc, ex, cur),
         ],
       };
     }

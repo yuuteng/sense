@@ -20,9 +20,7 @@
   <view class="group group--flat">
     <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="openCur">
       <view class="li__ic"><image src="{{ic.currency}}"></image></view>
-      <view class="li__label">默认展示币种
-        <view class="li__val">新账本的初始口径；各账本可在顶栏胶囊单独设</view>
-      </view>
+      <view class="li__label">默认展示币种</view>
       <view class="li__val">{{curLabel}} <image class="chevron" src="{{ic.chevron}}"></image></view>
     </view>
   </view>
@@ -88,7 +86,7 @@
     </view>
     <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="goPrivacy">
       <view class="li__label">隐私说明</view>
-      <view class="li__val">数据存储与 AI 使用范围 <image class="chevron" src="{{ic.chevron}}"></image></view>
+      <view class="li__val">数据存储与使用范围 <image class="chevron" src="{{ic.chevron}}"></image></view>
     </view>
     <view class="li"><view class="li__label">版本</view><view class="li__val num">{{versionLabel}}</view></view>
   </view>

@@ -5,7 +5,7 @@ const ACTIVE = '#01749f';
 const BASE = [
   { path: '/pages/home/home', text: '首页', key: 'tabHome' },
   { path: '/pages/stats/stats', text: '统计', key: 'tabStats' },
-  { path: '/pages/ai/ai', text: 'AI 助手', key: 'tabAi' },
+  { path: '/pages/ai/ai', text: '助手', key: 'tabAi' },
   { path: '/pages/settings/settings', text: '我的', key: 'tabMe' },
 ];
 

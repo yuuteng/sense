@@ -71,7 +71,7 @@
   <view class="card--flush" style="margin:0 40rpx">
     <view class="field-row">
       <view class="field-row__label"><image src="{{ic.note}}"></image>备注</view>
-      <view class="field-row__val"><input placeholder="添加备注…" placeholder-class="input-ph" value="{{note}}" bindinput="onNoteInput" /></view>
+      <view class="field-row__val"><input placeholder="添加备注" placeholder-class="input-ph" value="{{note}}" bindinput="onNoteInput" /></view>
     </view>
     <view class="field-row" hover-class="pressed" hover-stay-time="80" bindtap="openCalendar">
       <view class="field-row__label"><image src="{{ic.calendar}}"></image>日期</view>

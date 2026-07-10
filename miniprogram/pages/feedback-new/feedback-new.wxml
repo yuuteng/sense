@@ -6,7 +6,7 @@
     <input class="text-input" placeholder="一句话概括问题或建议" placeholder-class="input-ph" maxlength="50" value="{{title}}" bindinput="onTitle" />
 
     <view class="input-label">问题描述</view>
-    <textarea class="text-input fb-textarea" placeholder="请描述遇到的问题、操作步骤或你的建议…" placeholder-class="input-ph" maxlength="1000" value="{{content}}" bindinput="onContent"></textarea>
+    <textarea class="text-input fb-textarea" placeholder="请描述遇到的问题、操作步骤或你的建议" placeholder-class="input-ph" maxlength="1000" value="{{content}}" bindinput="onContent"></textarea>
 
     <view class="input-label">截图（选填，最多 3 张）</view>
     <view class="photo-strip" style="padding:0">

@@ -40,7 +40,7 @@
       <view wx:for="{{members}}" wx:key="openid" class="li" data-i="{{index}}" hover-class="pressed" hover-stay-time="80" bindtap="onTapMember">
         <avatar src="{{item.avatarFileID}}" initial="{{item.initial}}" color="{{item.color}}" size="68"></avatar>
         <view class="li__label ellip">{{item.name}}</view>
-        <text class="role {{item.roleClass}}">{{item.roleBadge}}</text>
+        <text class="role {{item.roleClass}}" style="margin-left:auto">{{item.roleBadge}}</text>
         <image wx:if="{{canManage && !item.isMe && item.role!=='owner'}}" class="chevron" src="{{ic.chevron}}"></image>
       </view>
     </view>
@@ -67,14 +67,16 @@
   <view wx:if="{{inviteVisible}}" class="inv-mask" bindtap="closeInvite" catchtouchmove="noop">
     <view class="inv-sheet" catchtap="noop">
       <view class="inv-title">邀请成员</view>
-      <view class="inv-hint">选择新成员加入后的权限，随后转发邀请卡片给好友；加入后可在成员列表随时调整。</view>
+      <!-- 提示压到一行内：居中多行会出现「一长一短」的怪尾行 -->
+      <view class="inv-hint">选好权限转发给好友，加入后可随时调整</view>
+      <!-- 选项不重复标题里的动词（邀请），差异词打头：扫一眼就能区分 -->
       <button class="inv-btn" open-type="share" data-role="rw" hover-class="inv-btn--h" hover-stay-time="80" bindtap="closeInvite">
-        <view class="inv-btn__t">邀请为读写成员</view>
-        <view class="inv-btn__d">可记账、改删自己的记录</view>
+        <view class="inv-btn__t">读写成员</view>
+        <view class="inv-btn__d">可记账，改删自己的记录</view>
       </button>
       <button class="inv-btn" open-type="share" data-role="ro" hover-class="inv-btn--h" hover-stay-time="80" bindtap="closeInvite">
-        <view class="inv-btn__t">邀请为只读成员</view>
-        <view class="inv-btn__d">只能查看账目与统计，可用 AI 问答</view>
+        <view class="inv-btn__t">只读成员</view>
+        <view class="inv-btn__d">只看不记，可用助手查数据</view>
       </button>
       <view class="inv-cancel" hover-class="pressed" hover-stay-time="80" bindtap="closeInvite">取消</view>
     </view>

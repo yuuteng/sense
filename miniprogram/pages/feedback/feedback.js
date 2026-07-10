@@ -33,9 +33,10 @@ Page({
         timeLabel: fmt.dateTime(f.updatedAt),
         statusClass: STATUS_CLASS[f.status] || '',
       }));
-      // 客服视角分区：用户工单（他人提交，待处理队列）/ 我的反馈（自己作为用户提交的）
-      const queueItems = r.isAdmin ? items.filter((f) => !f.mine) : [];
-      const mineItems = r.isAdmin ? items.filter((f) => f.mine) : items;
+      // 客服视角：「用户工单」= 全部工单（含自己提交的，标「我」）——与 PRD「客服看到全部工单」
+      // 的心智一致，避免「自己的单在队列里消失」的困惑；「我的反馈」分区仅普通用户视角使用
+      const queueItems = r.isAdmin ? items : [];
+      const mineItems = r.isAdmin ? [] : items;
       this.setData({
         loading: false,
         isAdmin: r.isAdmin,

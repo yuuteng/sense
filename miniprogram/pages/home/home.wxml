@@ -84,9 +84,8 @@
   <view wx:if="{{!needInit && !loading && !groups.length}}" class="empty">
     <view class="empty__title">这个账本还没有记录</view>
     <block wx:if="{{canAdd}}">
-      <view class="empty__sub">点右下角 ＋ 记第一笔，金额、分类、保存，3 步就好。</view>
-      <view class="empty__sub" style="margin-top:4rpx">也可以去「AI 助手」说一句「昨天打车 35」试试。</view>
-      <navigator class="btn btn--primary" style="display:inline-flex;margin-top:36rpx" url="/pages/add/add" hover-class="pressed" hover-stay-time="80">记第一笔</navigator>
+      <view class="empty__sub">点右下角「＋ 记一笔」，3 步搞定</view>
+      <view class="empty__sub" style="margin-top:4rpx">或去「助手」说一句：昨天打车 35</view>
     </block>
     <view wx:else class="empty__sub">你是只读成员：等其他成员记上第一笔，这里就会出现记录。</view>
   </view>

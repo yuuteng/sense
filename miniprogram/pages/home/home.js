@@ -101,6 +101,8 @@ Page({
       const book = await api.call('book', 'getCurrent');
       // 无账本 → 引导创建
       if (!book) { wx.reLaunch({ url: '/pages/onboarding/onboarding' }); return; }
+      // 原默认账本已解散/被移出：服务端已自动回退，告知一声，避免「账本静默变了」
+      if (book.fallback) wx.showToast({ title: `原账本已不可访问，已切换到「${book.name}」`, icon: 'none', duration: 2500 });
       const cur = book.displayCurrency || 'CNY';
       const sym = fmt.symbolOf(cur);
       const [summary, list] = await Promise.all([

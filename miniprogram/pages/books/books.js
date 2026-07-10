@@ -1,7 +1,8 @@
 const api = require('../../utils/api');
 const icons = require('../../utils/icons');
 
-const ROLE_MINE = { owner: '我是 Owner', admin: '我是 Admin', rw: '我是 读写', ro: '我是 只读' };
+// meta 行用词：类型 · 角色（纯文字，不做胶囊——列表行的主角是账本名）
+const ROLE_MINE = { owner: 'Owner', admin: 'Admin', rw: '读写', ro: '只读' };
 
 Page({
   data: {
@@ -29,7 +30,7 @@ Page({
         ...b,
         roleMine: ROLE_MINE[b.myRole] || b.myRole,
         typeClass: b.type === 'split' ? 'book-type--split' : 'book-type--share',
-        // 图标只表达账本类型（共享=蓝 / 分账=黄），当前账本由「当前 · 默认」徽章标识
+        // 图标只表达账本类型（共享=蓝 / 分账=黄），默认（=当前）账本由「默认」徽章标识
         iconSrc: b.type === 'split' ? this.data.ic.bookSplit : this.data.ic.bookAccent,
         iconBg: b.type === 'split' ? 'rgba(255,205,47,0.16)' : 'rgba(0,204,249,0.12)',
       }));

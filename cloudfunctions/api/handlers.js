@@ -271,19 +271,39 @@ const book = {
 
   async getCurrent(_p, ctx) {
     const user = await ensureUser(ctx.openid, ctx.channel);
-    let bookId = user.defaultBookId;
-    if (!bookId) {
-      const m = await db.collection('members').where({ openid: ctx.openid }).limit(1).get();
-      bookId = m.data[0] && m.data[0].bookId;
+    // 校验某账本对我仍有效：账本存在 且 我仍是成员（getMember 已过滤被移除）
+    const tryBook = async (id) => {
+      if (!id) return null;
+      const b = await db.collection('books').doc(id).get().catch(() => null);
+      if (!b || !b.data) return null;
+      const member = await getMember(id, ctx.openid);
+      if (!member) return null;
+      return { bookId: id, data: b.data, member };
+    };
+    // 默认账本失效（被解散/被移出/已退出）→ 自动回退到成员表里的下一个有效账本，
+    // 并把修正结果落库；只有真的一个账本都没有了才返回 null（前端才进建账引导）
+    let hit = await tryBook(user.defaultBookId);
+    let fallback = false; // 原默认账本失效且回退成功：前端据此 toast 告知，避免「账本静默变了」
+    if (!hit) {
+      const m = await db.collection('members')
+        .where({ openid: ctx.openid, status: _.neq('removed') })
+        .limit(10).get().catch(() => ({ data: [] }));
+      for (const row of (m.data || [])) {
+        hit = await tryBook(row.bookId);
+        if (hit) break;
+      }
+      fallback = !!(hit && user.defaultBookId); // 首次使用（无默认）不算回退
+      const fixed = hit ? hit.bookId : '';
+      if (fixed !== (user.defaultBookId || '')) {
+        db.collection('users').doc(ctx.openid).update({ data: { defaultBookId: fixed } }).catch(() => {});
+      }
     }
-    if (!bookId) return null;
-    const b = await db.collection('books').doc(bookId).get().catch(() => null);
-    if (!b || !b.data) return null;
-    const member = await getMember(bookId, ctx.openid);
+    if (!hit) return null;
     return {
-      bookId, name: b.data.name, type: b.data.type, baseCurrency: b.data.baseCurrency,
-      displayCurrency: displayCurrencyOf(user, bookId, b.data.baseCurrency),
-      myRole: member && member.role,
+      bookId: hit.bookId, name: hit.data.name, type: hit.data.type, baseCurrency: hit.data.baseCurrency,
+      displayCurrency: displayCurrencyOf(user, hit.bookId, hit.data.baseCurrency),
+      myRole: hit.member.role,
+      fallback,
     };
   },
 
@@ -889,11 +909,96 @@ function relDate(offsetDays) {
   bj.setUTCDate(bj.getUTCDate() + (offsetDays || 0));
   return bj.toISOString().slice(0, 10);
 }
+// 中文数字 → 数值：三十五=35、一百二十三=123、两千=2000、一千五=1500（省略式）、两百零五=205
+function cnNumber(str) {
+  const D = { 零: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  let total = 0, section = 0, num = 0, lastUnit = 1, sawZero = false;
+  for (const ch of String(str || '')) {
+    if (D[ch] != null) { if (ch === '零') sawZero = true; else num = D[ch]; }
+    else if (ch === '十') { section += (num || 1) * 10; lastUnit = 10; num = 0; }
+    else if (ch === '百') { section += num * 100; lastUnit = 100; num = 0; }
+    else if (ch === '千') { section += num * 1000; lastUnit = 1000; num = 0; }
+    else if (ch === '万') { total += (section + num) * 10000; section = 0; num = 0; lastUnit = 10000; sawZero = false; }
+  }
+  if (num) {
+    // 省略式：一千五=1500、三百二=320（末位数字乘上一单位的 1/10）；出现「零」则按个位（两百零五=205）
+    if (!sawZero && lastUnit >= 100) section += num * (lastUnit / 10);
+    else section += num;
+  }
+  return total + section;
+}
+
+// 关键词解析（无模型的本地规则）：金额（阿拉伯/中文/块角）、收支、分类、日期、币种。
+// 顺序要点：先抽日期并从文本中挖掉（防「3号打车35」把 3 当金额），再抽币种，最后抽金额。
 function parseNL(text) {
   const t = text || '';
-  const m = t.match(/(\d+(\.\d+)?)/);
-  const amt = m ? parseFloat(m[1]) : 0;
-  // 收/支判定：命中收入关键词则为收入
+  let w = t; // 工作副本：日期片段会被挖掉
+
+  // —— 日期 ——（默认今天；只认过去/近未来的相对表达）
+  let date = null;
+  const today = relDate(0);
+  const todayD = new Date(today + 'T00:00:00Z');
+  const cut = (mm) => { w = w.replace(mm[0], ' '); };
+  let mm;
+  if ((mm = w.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*[号日](?!元|币)/))) {
+    // 7月3号 → 今年该日
+    const y = today.slice(0, 4);
+    date = `${y}-${String(mm[1]).padStart(2, '0')}-${String(mm[2]).padStart(2, '0')}`;
+    cut(mm);
+  } else if ((mm = w.match(/(?<![\d.])(\d{1,2})\s*[号日](?!元|币)/))) {
+    // 3号 → 本月 3 号；比今天晚则回退到上个月
+    const d = parseInt(mm[1], 10);
+    const base = new Date(todayD);
+    if (d > base.getUTCDate()) base.setUTCMonth(base.getUTCMonth() - 1);
+    base.setUTCDate(d);
+    date = base.toISOString().slice(0, 10);
+    cut(mm);
+  } else if ((mm = w.match(/(\d+)\s*天前/))) {
+    date = relDate(-parseInt(mm[1], 10)); cut(mm);
+  } else if ((mm = w.match(/(上+)?(?:周|星期|礼拜)([一二三四五六日天])/))) {
+    const W = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 0, 天: 0 };
+    const target = W[mm[2]];
+    const todayW = todayD.getUTCDay();
+    let back = (todayW - target + 7) % 7;           // 最近的那个周 X（今天即 0）
+    back += 7 * (mm[1] ? mm[1].length : 0);          // 每个「上」再往前推一周
+    date = relDate(-back); cut(mm);
+  } else if (/大前天/.test(w)) { date = relDate(-3); w = w.replace('大前天', ' '); }
+  else if (/前天/.test(w)) { date = relDate(-2); w = w.replace('前天', ' '); }
+  else if (/昨天|昨晚/.test(w)) { date = relDate(-1); w = w.replace(/昨天|昨晚/, ' '); }
+  else if (/后天/.test(w)) { date = relDate(2); w = w.replace('后天', ' '); }
+  else if (/明天/.test(w)) { date = relDate(1); w = w.replace('明天', ' '); }
+  if (!date) date = today;
+
+  // —— 币种 ——（不写则跟随账本基准币；「¥」人民币/日元歧义，不认符号只认词）
+  let cur = '';
+  const CURS = [
+    [/美元|美金|USD|\$/i, 'USD'], [/日元|日币|JPY/i, 'JPY'], [/欧元|EUR|€/i, 'EUR'],
+    [/英镑|GBP|£/i, 'GBP'], [/港币|港元|HKD/i, 'HKD'], [/韩元|韩币|KRW/i, 'KRW'],
+    [/泰铢|THB/i, 'THB'], [/新台币|台币|TWD/i, 'TWD'], [/澳元|AUD/i, 'AUD'],
+    [/加元|CAD/i, 'CAD'], [/新加坡元|新币|SGD/i, 'SGD'],
+  ];
+  for (const [re2, code] of CURS) { if (re2.test(w)) { cur = code; w = w.replace(re2, ' '); break; } }
+
+  // —— 金额 ——（顺序：X块Y → 阿拉伯数字 → 中文数字）
+  let amt = 0;
+  const D1 = { 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  if ((mm = w.match(/(\d+(?:\.\d+)?)\s*[块元]\s*([\d一二两三四五六七八九])?\s*[毛角]?/))) {
+    // 35块 / 35块5 / 35元3毛
+    amt = parseFloat(mm[1]) + (mm[2] ? (D1[mm[2]] || parseInt(mm[2], 10) || 0) / 10 : 0);
+  } else if ((mm = w.match(/([零一二两三四五六七八九十百千万]+)\s*[块元]\s*([\d一二两三四五六七八九])?\s*[毛角]?/))) {
+    // 三十五块 / 三块五 / 两千块
+    amt = cnNumber(mm[1]) + (mm[2] ? (D1[mm[2]] || parseInt(mm[2], 10) || 0) / 10 : 0);
+  } else if ((mm = w.match(/([\d一二两三四五六七八九])\s*[毛角]/))) {
+    // 五毛
+    amt = (D1[mm[1]] || parseInt(mm[1], 10) || 0) / 10;
+  } else if ((mm = w.match(/(\d+(?:\.\d+)?)/))) {
+    amt = parseFloat(mm[1]);
+  } else if ((mm = w.match(/([一二两三四五六七八九]?[十百千万][零一二两三四五六七八九十百千万]*)/))) {
+    // 纯中文数字：必须含十/百/千/万（防「三明治」的「三」被当金额）
+    amt = cnNumber(mm[1]);
+  }
+
+  // —— 收/支与分类 ——
   const isIncome = /工资|薪水|薪资|奖金|收入|红包|礼金|压岁钱|退款|报销|返现|理财|利息|分红|中奖|兼职|稿费|收租|收款|进账/.test(t);
   const type = isIncome ? 'income' : 'expense';
   let cat = isIncome ? '其他收入' : '其他';
@@ -937,9 +1042,7 @@ function parseNL(text) {
     else if (/房租|水电|物业|家具/.test(t)) cat = '居家';
     else if (/书|课程|文具|学费/.test(t)) cat = '教育';
   }
-  // 日期：相对今天（北京时间）
-  const date = relDate(/前天/.test(t) ? -2 : /昨天/.test(t) ? -1 : /明天/.test(t) ? 1 : 0);
-  return { amt, cat, date, type };
+  return { amt: round2(amt), cat, date, type, cur };
 }
 
 // 预填确认卡（自然语言 / 收据共用的卡片结构）
@@ -982,6 +1085,8 @@ function prevYm(ym) { const [y, m] = ym.split('-').map(Number); return new Date(
 // 未配置或 0 = 不限次且前端隐藏额度文案（当前默认）。之后额度扛不住时在控制台配 AI_FREE_QUOTA=50
 // 即时生效，无需改代码重新部署。用量始终计数（users.aiUsage），关着也能观察消耗决定何时开。
 const AI_FREE_QUOTA = Number(process.env.AI_FREE_QUOTA || 0);
+// 大模型总开关：审核期/个人主体阶段设 AI_ENABLED=false → 全部请求走本地关键词解析，零模型调用
+const AI_ENABLED = process.env.AI_ENABLED !== 'false';
 async function aiQuota(openid) {
   const u = await getUser(openid);
   const used = (u && u.aiUsage) || 0;
@@ -1081,7 +1186,7 @@ const ai = {
   // enabled=false（限额关闭）时前端整条额度文案隐藏
   async quota(p, ctx) {
     const q = await aiQuota(ctx.openid);
-    return { used: q.used, paid: q.paid, total: AI_FREE_QUOTA, enabled: AI_FREE_QUOTA > 0, left: isFinite(q.left) ? q.left : -1 };
+    return { used: q.used, paid: q.paid, total: AI_FREE_QUOTA, aiOn: AI_ENABLED, enabled: AI_ENABLED && AI_FREE_QUOTA > 0, left: isFinite(q.left) ? q.left : -1 };
   },
   // 统一入口：意图分流（记账句 → 预填卡 / 数据问答 → 基于数据包回答 / 跑题 → 拒绝）。
   // 数字只能来自 buildAiPack 的聚合结果——模型负责挑选与组织语言，不负责算术来源，杜绝编造。
@@ -1092,13 +1197,17 @@ const ai = {
     const canWrite = me.role !== 'ro';
     const mMap = await membersMap(p.bookId);
     const myName = (mMap[ctx.openid] && mMap[ctx.openid].name) || '我';
+    // 开关关闭：不触碰任何模型，纯关键词模板解析（非深度合成）
+    if (!AI_ENABLED) {
+      return ai._ruleFallback(p.bookId, text, canWrite, myName, '');
+    }
     if (!cloud.extend || !cloud.extend.AI) {
-      return ai._ruleFallback(p.bookId, text, canWrite, myName, '（AI 能力未开通，已按关键词解析。开通云开发 AI 后可直接提问账本数据。）');
+      return ai._ruleFallback(p.bookId, text, canWrite, myName, '（智能能力未开通，已按关键词解析）');
     }
     // 免费额度用尽：记账句仍走关键词解析兜底，问答给出明确提示
     const quota = await aiQuota(ctx.openid);
     if (quota.left <= 0) {
-      return ai._ruleFallback(p.bookId, text, canWrite, myName, `（免费 AI 额度 ${AI_FREE_QUOTA} 次已用完，基础记账解析仍可用）`);
+      return ai._ruleFallback(p.bookId, text, canWrite, myName, `（免费额度 ${AI_FREE_QUOTA} 次已用完，关键词记账仍可用）`);
     }
     let packInfo, cMap;
     try {
@@ -1137,7 +1246,7 @@ const ai = {
       aiCountUse(ctx.openid); // 只有真实模型调用成功才消耗额度
     } catch (e) {
       console.error('[ai.chat]', e);
-      return ai._ruleFallback(p.bookId, text, canWrite, myName, '（AI 服务暂时不可用，已按关键词解析）');
+      return ai._ruleFallback(p.bookId, text, canWrite, myName, '（服务暂时不可用，已按关键词解析）');
     }
     let obj = null;
     try { const mt = out.match(/\{[\s\S]*\}/); obj = mt ? JSON.parse(mt[0]) : null; } catch (e) { obj = null; }
@@ -1169,10 +1278,14 @@ const ai = {
     if (rec.amt > 0 && canWrite) {
       const b = await db.collection('books').doc(bookId).get().catch(() => null);
       const base = (b && b.data && b.data.baseCurrency) || 'CNY';
-      const draft = { type: rec.type, amount: rec.amt, currency: base, date: rec.date, categoryText: rec.cat, note: text };
+      const draft = { type: rec.type, amount: rec.amt, currency: rec.cur || base, date: rec.date, categoryText: rec.cat, note: text };
       return { card: draftCard('自然语言记账', draft, myName) };
     }
-    return { answer: (notice ? notice + ' ' : '') + '没识别到可记账的金额。也可以问我账本的收支统计，比如「本月支出多少」。' };
+    // 关键词模式答不了统计问题——提示语只承诺记账，不承诺问答（模型开着时问答走不到这里）
+    const tail = AI_ENABLED
+      ? '没识别到可记账的金额。也可以问我账本的收支统计，比如「本月支出多少」。'
+      : '没识别到可记账的金额，试试「昨天打车 35」这样的说法。';
+    return { answer: (notice ? notice + ' ' : '') + tail };
   },
   // 兼容旧入口：走规则兜底（前端已改用 chat）
   async parseText(p, ctx) {
@@ -1184,6 +1297,7 @@ const ai = {
   // 收据识别：上传的图片 → 云开发 AI 多模态大模型识别 → 生成「预填记录」（用户确认后才入账，AI 绝不直接写库）
   async parseReceipt(p, ctx) {
     const me = await requireMember(p.bookId, ctx.openid); requireRole(me, 'rw');
+    if (!AI_ENABLED) throw new AppError('AI_OFF', '收据识别暂未开放');
     if (!p.fileID) throw new AppError('INVALID_PARAM', '缺少收据图片');
     // 取图片临时链接供多模态模型读取
     const tmp = await cloud.getTempFileURL({ fileList: [p.fileID] });

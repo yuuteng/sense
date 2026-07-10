@@ -59,6 +59,7 @@
 }
 .inv-btn::after { border: none; }
 .inv-btn--h { background: rgba(0, 204, 249, 0.14); }
-.inv-btn__t { font-size: 30rpx; font-weight: 600; color: var(--fg); }
-.inv-btn__d { font-size: 24rpx; color: var(--muted); margin-top: 4rpx; }
+/* 标题/描述拉开层级：标题对齐 --text-base 刻度，间距 8rpx；描述保持 muted（再浅违反 AA） */
+.inv-btn__t { font-size: 32rpx; font-weight: 600; color: var(--fg); }
+.inv-btn__d { font-size: 24rpx; color: var(--muted); margin-top: 8rpx; }
 .inv-cancel { text-align: center; padding: 20rpx; color: var(--muted); font-size: 28rpx; }

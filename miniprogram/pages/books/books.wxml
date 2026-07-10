@@ -9,15 +9,13 @@
   <view wx:for="{{books}}" wx:key="bookId" class="group group--flat">
     <view class="li" style="align-items:flex-start;padding-top:32rpx;padding-bottom:32rpx" hover-class="pressed" hover-stay-time="80" data-id="{{item.bookId}}" bindtap="openBook">
       <view class="li__ic" style="width:76rpx;height:76rpx;background:{{item.iconBg}}"><image src="{{item.iconSrc}}" style="width:40rpx;height:40rpx"></image></view>
-      <view style="flex:1">
+      <view style="flex:1;min-width:0">
+        <!-- 层级：名字（主角）+ 默认徽章（唯一高亮）；类型/角色是低频 meta，纯文字不抢 -->
         <view style="font-weight:600;display:flex;align-items:center;gap:16rpx">
-          {{item.name}}
-          <text wx:if="{{item.isCurrent}}" class="pill pill--accent">当前 · 默认</text>
+          <text class="ellip" style="max-width:360rpx">{{item.name}}</text>
+          <text wx:if="{{item.isCurrent}}" class="pill pill--accent" style="flex-shrink:0">默认</text>
         </view>
-        <view style="display:flex;align-items:center;gap:16rpx;margin-top:12rpx">
-          <text class="book-type {{item.typeClass}}">{{item.typeLabel}}</text>
-          <text class="role {{item.myRole==='owner'?'role--owner':(item.myRole==='admin'?'role--admin':(item.myRole==='ro'?'role--ro':'role--rw'))}}">{{item.roleMine}}</text>
-        </view>
+        <view class="muted" style="font-size:24rpx;margin-top:8rpx">{{item.typeLabel}} · {{item.roleMine}}</view>
       </view>
       <image class="chevron" src="{{ic.chevron}}"></image>
     </view>

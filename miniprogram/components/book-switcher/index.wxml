@@ -13,7 +13,7 @@
         <view class="bs__ic" style="background:{{item.iconBg}}"><image src="{{item.iconSrc}}"></image></view>
         <view class="bs__info">
           <view class="bs__name">{{item.name}}</view>
-          <view class="bs__meta"><text class="book-type {{item.typeClass}}">{{item.typeLabel}}</text></view>
+          <view class="bs__meta muted" style="font-size:24rpx">{{item.typeLabel}}</view>
         </view>
         <image wx:if="{{currentId===item.bookId}}" class="bs__check" src="{{checkIcon}}"></image>
       </view>
