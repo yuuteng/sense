@@ -17,20 +17,20 @@
   <!-- 结算方案 -->
   <view class="section-label">结算方案 <text class="muted">{{remain}}</text></view>
   <view wx:if="{{allSettled}}" class="settle-banner">
-    <image src="{{ic.check}}"></image>全部结清，这趟旅行账目已平
+    <image src="{{ic.check}}"></image>全部结清，这本账已经两不相欠
   </view>
   <view wx:if="{{transfers.length}}" class="card--flush" style="border-top:1rpx solid var(--border);border-bottom:1rpx solid var(--border)">
-    <view wx:for="{{transfers}}" wx:key="transferId" wx:for-item="t" class="transfer {{t.settled?'settled':''}}">
+    <view wx:for="{{transfers}}" wx:key="key" wx:for-item="t" class="transfer {{t.settled?'settled':''}}">
       <view class="transfer__flow">
-        <view class="transfer__who"><avatar src="{{t.fromAvatar}}" initial="{{t.fromInitial}}" color="{{t.fromColor}}" size="40"></avatar>{{t.fromName}}</view>
+        <view class="transfer__who"><avatar src="{{t.fromAvatar}}" initial="{{t.fromInitial}}" color="{{t.fromColor}}" size="40"></avatar><text class="ellip" style="max-width:170rpx">{{t.fromName}}</text></view>
         <image class="transfer__arrow" src="{{ic.arrow}}"></image>
-        <view class="transfer__who"><avatar src="{{t.toAvatar}}" initial="{{t.toInitial}}" color="{{t.toColor}}" size="40"></avatar>{{t.toName}}</view>
+        <view class="transfer__who"><avatar src="{{t.toAvatar}}" initial="{{t.toInitial}}" color="{{t.toColor}}" size="40"></avatar><text class="ellip" style="max-width:170rpx">{{t.toName}}</text></view>
       </view>
       <text class="transfer__amt num">{{t.amountText}}</text>
       <view class="btn btn--mini {{t.settled?'btn--ghost':'btn--primary'}}" data-i="{{index}}" hover-class="pressed" hover-stay-time="80" bindtap="toggleSettle">{{t.settled?'已结清 · 撤销':'标记结清'}}</view>
     </view>
   </view>
-  <view class="ai-disclaimer left" style="padding-top:16rpx">系统按每笔的付款人与分摊自动算出「谁欠谁」，并合并为最少转账笔数。金额按各笔记账当日汇率固化换算。</view>
+  <view class="foot-note left" style="padding-top:16rpx">系统按每笔的付款人与分摊自动算出「谁欠谁」，并合并为最少转账笔数。金额按各笔记账当天的汇率换算，之后不再变动。</view>
 
   <!-- 成员维度统计 -->
   <view class="section-label">成员维度</view>

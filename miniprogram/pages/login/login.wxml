@@ -24,6 +24,6 @@
   <!-- 底部 -->
   <view class="login__foot">
     <view class="btn btn--primary btn--block btn--lg" hover-class="pressed" hover-stay-time="80" bindtap="submit">登录并进入</view>
-    <view class="ai-disclaimer" style="margin-top:20rpx">登录用于在账本里标识你，头像昵称之后可随时修改</view>
+    <view class="foot-note" style="margin-top:20rpx">登录用于在账本里标识你，头像昵称之后可随时修改</view>
   </view>
 </view>

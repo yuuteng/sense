@@ -44,7 +44,7 @@
         <image wx:if="{{canManage && !item.isMe && item.role!=='owner'}}" class="chevron" src="{{ic.chevron}}"></image>
       </view>
     </view>
-    <view wx:if="{{canManage}}" class="ai-disclaimer left">点成员可改权限或移除；邀请通过微信分享卡片，好友点开即加入。Admin 不能移除 Owner 或其他 Admin。</view>
+    <view wx:if="{{canManage}}" class="foot-note left">点成员可改权限或移除；邀请通过微信分享卡片，好友点开即加入。Admin 不能移除 Owner 或其他 Admin。</view>
 
     <!-- 操作 -->
     <block wx:if="{{isSplit || isOwner}}">
@@ -57,7 +57,7 @@
         </view>
         <view wx:if="{{isOwner}}" class="li" hover-class="pressed" hover-stay-time="80" bindtap="onDissolve">
           <view class="li__ic danger"><image src="{{ic.trash}}"></image></view>
-          <view class="li__label" style="color:var(--danger)">{{dissolveText}}</view>
+          <view class="li__label" style="color:var(--danger-ink)">解散账本</view>
         </view>
       </view>
     </block>

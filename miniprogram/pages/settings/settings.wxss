@@ -3,11 +3,12 @@
 /* 个人头副行：默认账本单独一行，过长省略 */
 .li__val--sub { margin-top: 2rpx; display: block; max-width: 420rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* 头像选择按钮：裸 button 重置，只留头像本身（open-type=chooseAvatar 触发微信头像选择） */
+/* 头像选择：头像用普通 view 排版；button（open-type=chooseAvatar）做绝对定位透明覆盖层。
+   原生 button 宽度不可控（参见 bookConfig .invite-btn 同类问题），放进 flex 流会挤坏行布局。 */
+.avatar-wrap { position: relative; width: 96rpx; height: 96rpx; flex-shrink: 0; }
 .avatar-choose {
-  margin: 0; padding: 0; background: transparent; line-height: normal;
-  width: 96rpx; height: 96rpx; border-radius: 50%; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  margin: 0; padding: 0; background: transparent; border: none; border-radius: 50%; line-height: normal;
 }
 .avatar-choose::after { border: none; }
 
@@ -41,7 +42,7 @@
 .imp-num { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6rpx; }
 .imp-num__v { font-size: 44rpx; font-weight: 700; font-variant-numeric: tabular-nums; }
 .imp-num__v.ok { color: var(--success-strong); }
-.imp-num__v.bad { color: var(--danger); }
+.imp-num__v.bad { color: var(--danger-ink); }
 .imp-num__k { font-size: var(--text-xs); color: var(--muted); }
 
 .imp-sec {
@@ -57,7 +58,7 @@
 .imp-row:last-child { border-bottom: none; }
 .imp-row__where { font-size: var(--text-sm); font-weight: 600; }
 .imp-row__sum { font-weight: 400; color: var(--muted); margin-left: 14rpx; font-size: var(--text-xs); }
-.imp-row__reason { font-size: var(--text-xs); color: var(--danger); margin-top: 6rpx; }
+.imp-row__reason { font-size: var(--text-xs); color: var(--danger-ink); margin-top: 6rpx; }
 
 .imp-foot-note { font-size: 22rpx; color: var(--muted); margin-top: 14rpx; }
 .imp-actions { display: flex; gap: 20rpx; margin-top: 32rpx; }

@@ -24,6 +24,9 @@ Page({
       dateTo: q.dateTo || '',
       categoryTopId: q.categoryTopId || '',
       type: q.type === 'income' || q.type === 'expense' ? q.type : '',
+      // 成员维度钻取（成员对比卡）：按付款人 / 记录人过滤
+      payerOpenid: q.payerOpenid || '',
+      recorderOpenid: q.recorderOpenid || '',
     };
     const catName = decodeURIComponent(q.catName || '');
     const monthText = decodeURIComponent(q.monthText || '');
@@ -63,6 +66,8 @@ Page({
       dateTo: this.filters.dateTo,
       categoryTopId: this.filters.categoryTopId,
       recordType: this.filters.type,
+      payerOpenid: this.filters.payerOpenid,
+      recorderOpenid: this.filters.recorderOpenid,
     });
   },
 
@@ -72,11 +77,11 @@ Page({
     try {
       const list = await this.fetch((this.page || 0) + 1);
       this.page = list.page;
-      this.setData({
-        groups: this.data.groups.concat(this.mapGroups(list.groups, this.cur)),
-        hasMore: !!list.hasMore,
-        loadingMore: false,
-      });
+      // 增量追加：path-syntax 只传新页数据（同 home 分页）
+      const patch = { hasMore: !!list.hasMore, loadingMore: false };
+      const base = this.data.groups.length;
+      this.mapGroups(list.groups, this.cur).forEach((g, i) => { patch[`groups[${base + i}]`] = g; });
+      this.setData(patch);
     } catch (e) { this.setData({ loadingMore: false }); api.toast(e); }
   },
 
@@ -86,7 +91,7 @@ Page({
       total: fmt.signedTotal(g.total, cur),
       items: (g.items || []).map((it) => ({
         id: it.recordId,
-        iconSrc: icons.get(it.icon, it.type === 'income' ? '#5c9a0e' : '#0089c0', 1.7),
+        iconSrc: icons.get(it.icon, it.type === 'income' ? '#4a7d0b' : '#0089c0', 1.7),
         title: it.title || it.categoryTopName || (it.type === 'income' ? '收入' : '支出'),
         who: it.recorderName,
         whoInitial: it.recorderInitial,

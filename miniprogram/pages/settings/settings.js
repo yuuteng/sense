@@ -208,7 +208,7 @@ Page({
     wx.showModal({
       title: '撤销本次导入',
       content: `将删除该批次导入的 ${r.success} 条记录（不影响其他数据）。确定撤销？`,
-      confirmColor: '#f62172',
+      confirmColor: '#c41e5a',
       success: (res) => {
         if (!res.confirm) return;
         wx.showLoading({ title: '撤销中…' });
@@ -242,7 +242,7 @@ Page({
       title: '注销账户',
       content: '注销后：你独享的账本将解散并删除全部数据；你在多人账本中的记录会保留，显示为「昵称（已注销）」；AI 会话、图表布局、反馈工单将删除。操作不可恢复，之后重新使用将从零开始。',
       confirmText: '继续',
-      confirmColor: '#f62172',
+      confirmColor: '#c41e5a',
       success: (res) => {
         if (!res.confirm) return;
         wx.showModal({
@@ -250,7 +250,7 @@ Page({
           editable: true,
           placeholderText: '输入「注销」两字确认',
           content: '',
-          confirmColor: '#f62172',
+          confirmColor: '#c41e5a',
           success: (r2) => {
             if (!r2.confirm) return;
             if ((r2.content || '').trim() !== '注销') {
@@ -281,24 +281,62 @@ Page({
     });
   },
 
+  // 原「APP_ENV=dev」服务端双闸已移除（只认 owner 身份），防误触职责转移到这里：
+  // 两段式确认 + 输入「清空」核对（与注销账户、解散账本同级守卫）
   resetData() {
     wx.showModal({
-      title: '清空所有数据',
-      content: '将删除全部账本/成员/记录/分类/会话、云存储图片与文件，以及所有用户登录信息，回到全新状态（需重新登录）。此操作不可恢复，确定继续？',
-      confirmColor: '#f62172',
+      title: '清空所有数据？',
+      content: '将删除全部账本/成员/记录/分类/会话、云存储图片与文件，以及所有用户登录信息，回到全新状态（需重新登录）。此操作不可恢复。',
+      confirmText: '继续',
       success: (res) => {
         if (!res.confirm) return;
-        wx.showLoading({ title: '清空中…' });
-        api.call('seed', 'reset').then((r) => {
+        wx.showModal({
+          title: '确认清空',
+          editable: true,
+          placeholderText: '输入「清空」二字确认',
+          confirmText: '清空',
+          confirmColor: '#c41e5a',
+          success: (c) => {
+            if (!c.confirm) return;
+            if ((c.content || '').trim() !== '清空') {
+              wx.showToast({ title: '确认词不一致，未执行', icon: 'none' });
+              return;
+            }
+            this._doReset();
+          },
+        });
+      },
+    });
+  },
+
+  _doReset() {
+    wx.showLoading({ title: '清空中…' });
+    api.call('seed', 'reset').then((r) => {
+      wx.hideLoading();
+      const left = Object.entries((r && r.result) || {}).filter(([, v]) => v.remaining > 0);
+      if (left.length) {
+        wx.showModal({ title: '部分未清空', showCancel: false, content: '仍有残留：' + left.map(([k, v]) => `${k}(${v.remaining})`).join('、') + '。请再点一次「清空所有数据」。' });
+        return;
+      }
+      try { wx.removeStorageSync(LAST_IMPORT_KEY); } catch (e) { /* 忽略 */ }
+      wx.showToast({ title: '已清空', icon: 'success' });
+      setTimeout(() => wx.reLaunch({ url: '/pages/login/login' }), 600);
+    }).catch((e) => { wx.hideLoading(); api.toast(e); });
+  },
+
+  // 按渠道清理测试数据：删开发版/体验版创建的账本与反馈（正式版数据、用户资料不受影响）
+  purgeTestData() {
+    wx.showModal({
+      title: '清理测试渠道数据',
+      content: '将删除所有由开发版/体验版创建的账本（含记录/成员/分类/图片）与反馈工单。正式版数据与用户资料不受影响。此操作不可恢复，确定继续？',
+      confirmColor: '#c41e5a',
+      success: (res) => {
+        if (!res.confirm) return;
+        wx.showLoading({ title: '清理中…' });
+        api.call('seed', 'purgeChannel', { channels: ['develop', 'trial'] }).then((r) => {
           wx.hideLoading();
-          const left = Object.entries((r && r.result) || {}).filter(([, v]) => v.remaining > 0);
-          if (left.length) {
-            wx.showModal({ title: '部分未清空', showCancel: false, content: '仍有残留：' + left.map(([k, v]) => `${k}(${v.remaining})`).join('、') + '。请再点一次「清空所有数据」。' });
-            return;
-          }
-          try { wx.removeStorageSync(LAST_IMPORT_KEY); } catch (e) { /* 忽略 */ }
-          wx.showToast({ title: '已清空', icon: 'success' });
-          setTimeout(() => wx.reLaunch({ url: '/pages/login/login' }), 600);
+          wx.showToast({ title: `已清理：账本 ${r.books}、反馈 ${r.feedbacks}`, icon: 'none' });
+          this.load();
         }).catch((e) => { wx.hideLoading(); api.toast(e); });
       },
     });

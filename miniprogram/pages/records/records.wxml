@@ -44,5 +44,5 @@
   </view>
 
   <view wx:if="{{groups.length && loadingMore}}" class="load-more"><view class="mini-spin"></view>正在加载更早的记录…</view>
-  <view wx:elif="{{groups.length && !hasMore}}" class="ai-disclaimer" style="padding-top:40rpx">已显示全部记录</view>
+  <view wx:elif="{{groups.length && !hasMore}}" class="foot-note" style="padding-top:40rpx">已显示全部记录</view>
 </view>

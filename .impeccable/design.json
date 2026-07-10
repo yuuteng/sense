@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-09T00:00:00+08:00",
+  "title": "Design System: 心数 / Sense",
+  "extensions": {
+    "colorMeta": {
+      "lake-cyan": { "role": "primary", "displayName": "湖心青", "canonical": "#00ccf9", "tonalRamp": ["#003340", "#00566b", "#007a99", "#00a3cc", "#00ccf9", "#4ddcfa", "#99ebfc", "#d6f8fe"] },
+      "deep-lake-blue": { "role": "primary", "displayName": "深湖蓝（青色墨水态，文字 ≥5:1）", "canonical": "#01749f", "tonalRamp": ["#001d28", "#003a50", "#015777", "#01749f", "#3490b2", "#67adc5", "#9ac9d9", "#cce6ec"] },
+      "lake-blue": { "role": "primary", "displayName": "湖蓝（中间调，仅图形/图表 ≥3:1）", "canonical": "#0089c0", "tonalRamp": ["#00222f", "#00445f", "#00668f", "#0089c0", "#33a5d1", "#66c1e1", "#99d8ec", "#ccecf6"] },
+      "deep-pool-blue": { "role": "primary", "displayName": "深潭蓝", "canonical": "#035599", "tonalRamp": ["#011526", "#022b4d", "#023f73", "#035599", "#3577ad", "#679ac2", "#9abdd6", "#cddeeb"] },
+      "sprout-green": { "role": "secondary", "displayName": "嫩芽绿", "canonical": "#9edf10", "tonalRamp": ["#283804", "#4f7008", "#77a70c", "#9edf10", "#b1e540", "#c5ec70", "#d8f29f", "#ecf9cf"] },
+      "leaf-green": { "role": "secondary", "displayName": "深叶绿（绿色墨水态，≥4.7:1）", "canonical": "#4a7d0b", "tonalRamp": ["#131f03", "#253f06", "#385e08", "#4a7d0b", "#6e973c", "#92b16d", "#b7cb9d", "#dbe5ce"] },
+      "sun-yellow": { "role": "tertiary", "displayName": "暖阳黄", "canonical": "#ffcd2f", "tonalRamp": ["#40330c", "#806718", "#bf9a23", "#ffcd2f", "#ffd759", "#ffe182", "#ffebac", "#fff5d5"] },
+      "amber-ink": { "role": "tertiary", "displayName": "琥珀墨（黄色墨水态，≥4.8:1）", "canonical": "#8a690a", "tonalRamp": ["#221a03", "#453505", "#684f08", "#8a690a", "#a1873b", "#b9a56c", "#d0c39d", "#e8e1ce"] },
+      "sunset-orange": { "role": "tertiary", "displayName": "落日橙", "canonical": "#ffa312", "tonalRamp": ["#402905", "#805209", "#bf7a0e", "#ffa312", "#ffb541", "#ffc871", "#ffdaa0", "#ffedd0"] },
+      "rose-red": { "role": "tertiary", "displayName": "蔷薇红（危险填充/红点）", "canonical": "#f62172", "tonalRamp": ["#3e081d", "#7b1139", "#b91956", "#f62172", "#f84d8e", "#fa7aaa", "#fca6c7", "#fdd3e3"] },
+      "rose-ink": { "role": "tertiary", "displayName": "蔷薇墨（危险文字墨水态，≥5.7:1）", "canonical": "#c41e5a", "tonalRamp": ["#310817", "#620f2d", "#931744", "#c41e5a", "#d04b7b", "#dc789c", "#e7a5bd", "#f3d2de"] },
+      "ink-grey": { "role": "neutral", "displayName": "墨灰（主文字）", "canonical": "#3e4550", "tonalRamp": ["#101114", "#1f2228", "#2f343c", "#3e4550", "#6e737c", "#9ea2a8", "#cfd1d3", "#e7e8e9"] },
+      "slate-ink": { "role": "neutral", "displayName": "石板墨（次要文字/占位，≥5:1）", "canonical": "#5f6c7d", "tonalRamp": ["#181b1f", "#30363f", "#47515e", "#5f6c7d", "#7f8997", "#9fa7b1", "#bfc4cb", "#dfe2e5"] },
+      "slate-grey": { "role": "neutral", "displayName": "板岩灰（图标/装饰，非文字）", "canonical": "#748294", "tonalRamp": ["#1d2125", "#3a414a", "#57626f", "#748294", "#909ba9", "#acb4bf", "#c7cdd4", "#e3e6ea"] },
+      "mist-grey": { "role": "neutral", "displayName": "雾灰（轴线/弱化）", "canonical": "#97a7b7", "tonalRamp": ["#262a2e", "#4c545c", "#717d89", "#97a7b7", "#acb9c5", "#c1cad4", "#d5dce2", "#eaedf1"] },
+      "border-grey": { "role": "neutral", "displayName": "界灰（分隔线）", "canonical": "#e4e7ec", "tonalRamp": ["#393a3b", "#727476", "#abadb1", "#e4e7ec", "#e9ecf0", "#eef0f3", "#f4f5f7", "#f9fafb"] },
+      "frost-white": { "role": "neutral", "displayName": "霜白（页面底色）", "canonical": "#f6f9fc", "tonalRamp": ["#3e3e3f", "#7b7d7e", "#b9bbbd", "#f6f9fc", "#f8fafc", "#fafbfd", "#fcfdfe", "#fefeff"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "金额大显示", "purpose": "仅录入页金额输入一处，104rpx。" },
+      "headline": { "displayName": "Headline", "purpose": "引导页 h1、概要条结余。" },
+      "title": { "displayName": "Title", "purpose": "appbar 标题、卡片主数字。" },
+      "body": { "displayName": "Body", "purpose": "正文与列表主文字。" },
+      "label": { "displayName": "Label", "purpose": "区块标签、图例、徽标文字。" },
+      "numeric": { "displayName": "等宽数字", "purpose": "一切金额/汇率/笔数，.num 类，tabular-nums。" }
+    },
+    "shadows": [
+      { "name": "soft", "value": "0 1px 3px rgba(52,65,78,0.05), 0 2px 7px rgba(151,167,183,0.16)", "purpose": "卡片/分组/输入框静置态（去硬边框后的唯一分层手段）。" },
+      { "name": "press", "value": "0 1px 2px rgba(52,65,78,0.05), 0 2px 6px rgba(151,167,183,0.20)", "purpose": "分段控件选中态。" },
+      { "name": "raised", "value": "0 2px 5px rgba(62,69,80,0.14)", "purpose": "编辑中的图表卡等浮起元素。" },
+      { "name": "primary-glow", "value": "0 5px 12px rgba(0,204,249,0.28)", "purpose": "湖心青按钮专属同色光晕。" },
+      { "name": "fab-glow", "value": "0 8px 18px rgba(0,204,249,0.36), 0 2px 6px rgba(0,204,249,0.24)", "purpose": "FAB 双层青晕。" },
+      { "name": "hero", "value": "0 9px 22px rgba(3,85,153,0.30)", "purpose": "概要条唯一使用的深潭蓝晕。" }
+    ],
+    "motion": [
+      { "name": "motion-fast", "value": "160ms", "purpose": "背景色/描边等即时反馈。" },
+      { "name": "motion-base", "value": "240ms", "purpose": "位移/开关/缩放。" },
+      { "name": "ease-standard", "value": "cubic-bezier(0.22, 0.61, 0.36, 1)", "purpose": "默认缓出。" },
+      { "name": "ease-spring", "value": "cubic-bezier(0.34, 1.4, 0.64, 1)", "purpose": "按压回弹（transform 专用），「会呼吸」的核心手感。" }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "主按钮",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "湖心青胶囊 + 同色光晕 + 弹性按压；主要行动唯一样式。",
+      "html": "<button class=\"ds-btn-primary\">保存</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; background: #00ccf9; color: #ffffff; min-height: 48px; padding: 13px 18px; border: none; border-radius: 9999px; font-size: 16px; font-weight: 600; font-family: Inter, -apple-system, system-ui, 'PingFang SC', sans-serif; box-shadow: 0 5px 12px rgba(0,204,249,0.28); transition: transform 240ms cubic-bezier(0.34,1.4,0.64,1), background 160ms, box-shadow 160ms; cursor: pointer; } .ds-btn-primary:hover { background: #00c4f0; } .ds-btn-primary:active { background: #00b8e0; transform: scale(0.96); box-shadow: 0 2px 6px rgba(0,204,249,0.22); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0,137,192,0.35); }"
+    },
+    {
+      "name": "次按钮（Ghost）",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "白底描边胶囊，次要动作。",
+      "html": "<button class=\"ds-btn-ghost\">取消</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; background: #ffffff; color: #3e4550; min-height: 48px; padding: 13px 18px; border: 1px solid #e4e7ec; border-radius: 9999px; font-size: 16px; font-weight: 600; font-family: Inter, -apple-system, system-ui, 'PingFang SC', sans-serif; box-shadow: 0 1px 3px rgba(52,65,78,0.05), 0 2px 7px rgba(151,167,183,0.16); transition: transform 240ms cubic-bezier(0.34,1.4,0.64,1), background 160ms; cursor: pointer; } .ds-btn-ghost:hover { background: #f5f2f2; } .ds-btn-ghost:active { background: #ededed; transform: scale(0.96); }"
+    },
+    {
+      "name": "分类 Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "二级分类选择胶囊，选中态转湖蓝描边 + 8% 青底。",
+      "html": "<span class=\"ds-chip\">早午晚餐</span> <span class=\"ds-chip ds-chip--selected\">咖啡奶茶</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; min-height: 36px; padding: 7px 14px; border: 1px solid #e4e7ec; border-radius: 9999px; background: #ffffff; color: #3e4550; font-size: 14px; font-family: Inter, -apple-system, system-ui, 'PingFang SC', sans-serif; transition: transform 240ms cubic-bezier(0.34,1.4,0.64,1), background 160ms; cursor: pointer; } .ds-chip:active { transform: scale(0.96); } .ds-chip--selected { border-color: #01749f; background: rgba(0,204,249,0.08); color: #01749f; font-weight: 600; box-shadow: 0 3px 8px rgba(0,204,249,0.16); }"
+    },
+    {
+      "name": "文本输入",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "48px 高白底输入，聚焦描边变湖蓝，占位文字云灰。",
+      "html": "<input class=\"ds-input\" placeholder=\"给账本起个名字\" />",
+      "css": ".ds-input { width: 100%; box-sizing: border-box; height: 48px; padding: 0 16px; font-size: 16px; font-family: Inter, -apple-system, system-ui, 'PingFang SC', sans-serif; border: 1px solid #e4e7ec; border-radius: 10px; background: #ffffff; color: #3e4550; box-shadow: 0 1px 3px rgba(52,65,78,0.05), 0 2px 7px rgba(151,167,183,0.16); transition: border-color 160ms; } .ds-input::placeholder { color: #5f6c7d; } .ds-input:focus { outline: none; border-color: #01749f; }"
+    },
+    {
+      "name": "iOS 开关",
+      "kind": "custom",
+      "refersTo": "switch",
+      "description": "iOS 式开关，on 态嫩芽绿。",
+      "html": "<span class=\"ds-switch\"></span> <span class=\"ds-switch ds-switch--on\"></span>",
+      "css": ".ds-switch { display: inline-block; width: 51px; height: 31px; border-radius: 9999px; background: #e4e7ec; position: relative; transition: background 240ms cubic-bezier(0.22,0.61,0.36,1); cursor: pointer; } .ds-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #ffffff; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: transform 240ms cubic-bezier(0.22,0.61,0.36,1); } .ds-switch--on { background: #9edf10; } .ds-switch--on::after { transform: translateX(20px); }"
+    },
+    {
+      "name": "交易行",
+      "kind": "card",
+      "refersTo": "txn",
+      "description": "签名组件：分类图标 + 标题/meta + 右侧等宽金额（收入深叶绿带 +，支出墨灰）。",
+      "html": "<div class=\"ds-txn\"><span class=\"ds-txn-ic\">🍜</span><span class=\"ds-txn-body\"><span class=\"ds-txn-title\">午餐 · 兰州拉面</span><span class=\"ds-txn-meta\">餐饮 · Teng 记</span></span><span class=\"ds-txn-amt\"><span class=\"ds-txn-main\">-38.00</span><span class=\"ds-txn-sub\">CNY</span></span></div><div class=\"ds-txn\"><span class=\"ds-txn-ic ds-txn-ic--in\">💼</span><span class=\"ds-txn-body\"><span class=\"ds-txn-title\">工资</span><span class=\"ds-txn-meta\">收入 · 本人</span></span><span class=\"ds-txn-amt\"><span class=\"ds-txn-main ds-txn-main--in\">+12,000.00</span><span class=\"ds-txn-sub\">CNY</span></span></div>",
+      "css": ".ds-txn { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: #ffffff; font-family: Inter, -apple-system, system-ui, 'PingFang SC', sans-serif; transition: background 160ms; cursor: pointer; } .ds-txn + .ds-txn { border-top: 1px solid #e4e7ec; } .ds-txn:active { background: rgba(62,69,80,0.04); } .ds-txn-ic { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: rgba(0,204,249,0.14); font-size: 20px; } .ds-txn-ic--in { background: rgba(158,223,16,0.20); } .ds-txn-body { flex: 1; min-width: 0; display: flex; flex-direction: column; } .ds-txn-title { font-size: 16px; font-weight: 500; color: #3e4550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-txn-meta { font-size: 12px; color: #5f6c7d; margin-top: 1px; } .ds-txn-amt { text-align: right; flex-shrink: 0; display: flex; flex-direction: column; } .ds-txn-main { font-size: 16px; font-weight: 600; color: #3e4550; font-family: ui-monospace, 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; } .ds-txn-main--in { color: #4a7d0b; } .ds-txn-sub { font-size: 11px; color: #5f6c7d; margin-top: 1px; }"
+    },
+    {
+      "name": "FAB 记一笔",
+      "kind": "button",
+      "refersTo": "fab",
+      "description": "扩展胶囊 FAB（图标 + 标签），湖心青双层青晕，按压 scale(0.9)。主行动必须带标签。",
+      "html": "<button class=\"ds-fab\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\"><path d=\"M12 5v14M5 12h14\"/></svg>记一笔</button>",
+      "css": ".ds-fab { height: 54px; padding: 0 20px 0 16px; border-radius: 9999px; background: #00ccf9; color: #ffffff; border: none; display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 15px; font-weight: 600; font-family: Inter, -apple-system, system-ui, 'PingFang SC', sans-serif; box-shadow: 0 8px 18px rgba(0,204,249,0.36), 0 2px 6px rgba(0,204,249,0.24); transition: transform 240ms cubic-bezier(0.34,1.4,0.64,1), box-shadow 240ms; cursor: pointer; } .ds-fab:active { transform: scale(0.9); }"
+    },
+    {
+      "name": "AI 确认卡",
+      "kind": "card",
+      "refersTo": "confirm-card",
+      "description": "签名组件：AI 预填记录必经确认卡，湖心青描边 + 青晕，双按钮。",
+      "html": "<div class=\"ds-confirm\"><div class=\"ds-confirm-head\">✨ AI 预填 · 请核对后入账</div><div class=\"ds-confirm-body\"><div class=\"ds-confirm-row\"><span class=\"ds-k\">金额</span><span class=\"ds-v\">-35.00 CNY</span></div><div class=\"ds-confirm-row\"><span class=\"ds-k\">分类</span><span class=\"ds-v\">交通 · 打车</span></div><div class=\"ds-confirm-row\"><span class=\"ds-k\">日期</span><span class=\"ds-v\">昨天</span></div></div><div class=\"ds-confirm-foot\"><button class=\"ds-confirm-ghost\">放弃</button><button class=\"ds-confirm-ok\">确认入账</button></div></div>",
+      "css": ".ds-confirm { background: #ffffff; border: 1px solid #00ccf9; border-radius: 14px; overflow: hidden; box-shadow: 0 8px 20px rgba(0,204,249,0.16); font-family: Inter, -apple-system, system-ui, 'PingFang SC', sans-serif; max-width: 360px; } .ds-confirm-head { padding: 10px 16px; background: rgba(0,204,249,0.07); font-size: 12px; font-weight: 600; color: #01749f; } .ds-confirm-body { padding: 12px 16px; } .ds-confirm-row { display: flex; justify-content: space-between; padding: 7px 0; font-size: 14px; border-bottom: 1px solid #e4e7ec; } .ds-confirm-row:last-child { border-bottom: none; } .ds-k { color: #5f6c7d; } .ds-v { font-weight: 600; color: #3e4550; font-variant-numeric: tabular-nums; } .ds-confirm-foot { display: flex; gap: 8px; padding: 12px 16px 16px; } .ds-confirm-ok, .ds-confirm-ghost { flex: 1; min-height: 42px; border-radius: 9999px; font-size: 14px; font-weight: 600; border: none; cursor: pointer; transition: transform 240ms cubic-bezier(0.34,1.4,0.64,1); } .ds-confirm-ok { background: #00ccf9; color: #ffffff; box-shadow: 0 5px 12px rgba(0,204,249,0.28); } .ds-confirm-ghost { background: #ffffff; color: #3e4550; border: 1px solid #e4e7ec; } .ds-confirm-ok:active, .ds-confirm-ghost:active { transform: scale(0.96); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "会呼吸的计算器",
+    "overview": "心数是一台会呼吸的计算器：内核是工具的准确——等宽数字、口径一致、汇率固化、≤100ms 反馈；外表是生物的柔软——胶囊按钮、弹性按压、去硬边框的柔光阴影。冷灰湖水底色让数字清澈见底，湖心青只在用户要行动的地方亮起。记账是几秒钟的小动作，界面在你按下时轻轻回弹，在你等待时安静让路，绝不制造记账焦虑。",
+    "keyCharacteristics": [
+      "冷灰湖水底（#f6f9fc）+ 纯白卡片，湖心青（#00ccf9）只做行动信号",
+      "亮色填充 / 深色文字的双层用色纪律（严格 WCAG AA）",
+      "等宽 tabular 数字，金额永远是页面主角",
+      "胶囊 + 圆角 + 柔光阴影 + 弹性按压",
+      "密度克制：一屏一件事，空态给出路"
+    ],
+    "rules": [
+      { "name": "双层墨水规则（The Ink Rule）", "body": "每个亮色都有一个同族深色墨水态：湖心青→湖蓝、嫩芽绿→深叶绿、暖阳黄→琥珀墨。亮色只做填充与底色，文字与图标永远用墨水态。违反即违反 WCAG AA，禁止。", "section": "colors" },
+      { "name": "一处湖心规则", "body": "任一屏幕上湖心青的覆盖面 ≤10%。它的稀缺就是它的信号强度。", "section": "colors" },
+      { "name": "收支不靠色规则", "body": "收入/支出除颜色外必须有文字或符号标识（+/-、图例文字），色盲用户不靠红绿区分。", "section": "colors" },
+      { "name": "等宽数字规则（The Tabular Rule）", "body": "任何金额、汇率、笔数必须走 .num（等宽 + tabular-nums），列表数字右对齐成列。", "section": "typography" },
+      { "name": "层级靠字重规则", "body": "相邻层级字号比 ≤1.25；对比不够时加字重，不加字号。", "section": "typography" },
+      { "name": "同色光晕规则", "body": "彩色阴影只允许是元素自身颜色的半透明投影。中性元素禁止彩色阴影，彩色元素禁止黑灰阴影。", "section": "elevation" }
+    ],
+    "dos": [
+      "Do 遵守双层墨水规则：文字用湖蓝/深叶绿/琥珀墨，填充才用湖心青/嫩芽绿/暖阳黄；对比度正文 ≥4.5:1、大字 ≥3:1、占位文字同样达标",
+      "Do 所有金额走 .num（等宽 + tabular-nums），列表数字右对齐成列",
+      "Do 可点元素给弹性按压反馈，写操作乐观更新 ≤100ms 呈现，待同步行 opacity 0.55",
+      "Do 触控目标 ≥88rpx（44pt），底部固定元素加 env(safe-area-inset-bottom)",
+      "Do 空态给出路，录入页数据未就绪时整页遮罩禁交互",
+      "Do 新页面直接复用 app.wxss 既有组件类，不另造轮子"
+    ],
+    "donts": [
+      "Don't 随手记式密集堆砌：任何一屏不塞广告位、金融推销、功能矩阵",
+      "Don't 营销页花哨感：不用渐变文字、装饰性插画堆砌；概要条是唯一渐变面，一屏一块",
+      "Don't 修改 design/ 目录任何文件，不改设计令牌的值，不新增色卡外的颜色",
+      "Don't 把原型 iPhone 画框 chrome 带进小程序",
+      "Don't 用亮色直接写文字，用板岩灰在彩底上写字",
+      "Don't 用蔷薇红渲染「超支」吓用户：红色只属于破坏性操作与错误",
+      "Don't 侧边彩条、嵌套卡片、装饰性毛玻璃（backdrop-filter 只用于 action-bar/composer）"
+    ]
+  }
+}

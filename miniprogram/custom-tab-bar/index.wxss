@@ -14,8 +14,9 @@
 .tabbar__item {
   display: flex; flex-direction: column; align-items: center; gap: 6rpx;
   padding-top: 12rpx;
-  color: #748294; font-size: 20rpx; font-weight: 600;
+  color: #5f6c7d; font-size: 22rpx; font-weight: 600;
   transition: color 160ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
-.tabbar__item.selected { color: #00ccf9; }
+/* 选中态用深湖蓝墨水（亮青 #00ccf9 文字仅 2:1，违反双层墨水规则）；图标同步 index.js ACTIVE */
+.tabbar__item.selected { color: #01749f; }
 .tabbar__icon { width: 52rpx; height: 52rpx; }

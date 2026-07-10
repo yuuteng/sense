@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"console.log('Learning.md check: if the previous exchange diagnosed a bug root cause, a pitfall, a wrong API usage, a counterintuitive finding, or an optimization lesson, append an entry to Learning.md (newest first, follow its header format) before continuing. Lessons only; progress belongs in .claude/devlog.md.')\""
+          }
+        ]
+      }
+    ]
+  }
+}

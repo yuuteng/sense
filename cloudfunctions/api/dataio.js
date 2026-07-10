@@ -129,7 +129,14 @@ function normDate(v) {
   return `${y}-${p2(mo)}-${p2(d)}`;
 }
 
-const CUR_NAME = { 人民币: 'CNY', 美元: 'USD', 欧元: 'EUR', 日元: 'JPY', 港币: 'HKD', 英镑: 'GBP', 韩元: 'KRW' };
+const CUR_NAME = {
+  人民币: 'CNY', 美元: 'USD', 欧元: 'EUR', 日元: 'JPY', 港币: 'HKD', 英镑: 'GBP', 韩元: 'KRW',
+  瑞士法郎: 'CHF', 冰岛克朗: 'ISK', 瑞典克朗: 'SEK', 挪威克朗: 'NOK', 丹麦克朗: 'DKK',
+  波兰兹罗提: 'PLN', 捷克克朗: 'CZK', 匈牙利福林: 'HUF', 罗马尼亚列伊: 'RON', 保加利亚列弗: 'BGN',
+  土耳其里拉: 'TRY', 俄罗斯卢布: 'RUB',
+  澳元: 'AUD', 加元: 'CAD', 新西兰元: 'NZD', 新加坡元: 'SGD', 新台币: 'TWD', 泰铢: 'THB',
+  马来西亚林吉特: 'MYR', 越南盾: 'VND', 印尼盾: 'IDR', 印度卢比: 'INR', 阿联酋迪拉姆: 'AED',
+};
 function normCurrency(v) {
   const s = String(v == null ? '' : v).trim();
   if (!s) return '';
@@ -215,10 +222,17 @@ function parseImportContent(format, content, contentBase64) {
 // ============ PDF 报表 ============
 // 中文渲染依赖内嵌字体 assets/wqy-microhei.ttc（文泉驿微米黑，Apache 许可）。
 // rows 为 exportRows 的中文键行；meta = { bookName, baseCurrency, rangeText, exportedAt }
-const PDF_SYM = { CNY: '¥', USD: '$', EUR: '€', JPY: '¥', KRW: '₩', HKD: 'HK$', GBP: '£', AUD: 'A$', CAD: 'C$', SGD: 'S$', TWD: 'NT$', THB: '฿' };
+// 仅列内嵌字体（文泉驿微米黑，2010 年前字库）确定有字形的符号；
+// 较新的货币符号（₺ ₽ ₹ ₫ د.إ 等）字体缺字形，回退用币种码前缀，避免 PDF 出现方块。
+const PDF_SYM = {
+  CNY: '¥', USD: '$', EUR: '€', JPY: '¥', KRW: '₩', HKD: 'HK$', GBP: '£',
+  CHF: 'Fr', ISK: 'kr', SEK: 'kr', NOK: 'kr', DKK: 'kr',
+  PLN: 'zł', CZK: 'Kč', HUF: 'Ft', RON: 'lei', BGN: 'лв',
+  AUD: 'A$', CAD: 'C$', NZD: 'NZ$', SGD: 'S$', TWD: 'NT$', THB: '฿', MYR: 'RM', IDR: 'Rp',
+};
 function pdfMoney(n, code) {
   const s = (Math.round((n || 0) * 100) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return `${PDF_SYM[code] || ''}${s}`;
+  return `${PDF_SYM[code] || (code ? code + ' ' : '')}${s}`;
 }
 function buildPdf(meta, rows) {
   const PDFDocument = require('pdfkit');

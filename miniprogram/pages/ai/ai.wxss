@@ -1,5 +1,22 @@
 /* ai 页面样式继承自 app.wxss；以下为语音输入 */
 
+/* 空会话起手引导 */
+.ai-starter {
+  align-self: stretch; margin: 8rpx 24rpx 0;
+  background: var(--surface); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft); padding: 28rpx 32rpx 12rpx;
+}
+.ai-starter__title { font-size: var(--text-xs); font-weight: 600; color: var(--muted); margin-bottom: 8rpx; }
+.ai-starter__row {
+  display: flex; align-items: baseline; gap: 16rpx;
+  padding: 20rpx 0; border-top: 1rpx solid var(--border);
+  font-size: var(--text-sm);
+}
+.ai-starter__row:first-of-type { border-top: none; }
+.ai-starter__hint { color: var(--muted); flex-shrink: 0; }
+.ai-starter__q { color: var(--accent-ink); font-weight: 500; }
+.ai-starter__row--static .ai-starter__q { color: var(--fg); font-weight: 400; }
+
 /* 输入框容器：麦克风按钮绝对定位在框内右侧（微信风格） */
 .composer__field { flex: 1; min-width: 0; position: relative; display: flex; }
 .composer__field .composer__input { flex: 1; width: 100%; }
@@ -30,7 +47,7 @@
 
 /* 声浪：5 根柱子错峰伸缩 */
 .rec-wave { display: flex; align-items: center; gap: 8rpx; height: 44rpx; }
-.rw { width: 8rpx; height: 16rpx; border-radius: 4rpx; background: #7fe6ff; animation: rec-bounce 0.9s ease-in-out infinite; }
+.rw { width: 8rpx; height: 16rpx; border-radius: 4rpx; background: #00ccf9; animation: rec-bounce 0.9s ease-in-out infinite; }
 .rw:nth-child(2) { animation-delay: 0.15s; }
 .rw:nth-child(3) { animation-delay: 0.3s; }
 .rw:nth-child(4) { animation-delay: 0.45s; }

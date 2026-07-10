@@ -49,7 +49,7 @@ Page({
     this.setData({
       ic: {
         book: icons.get('book', '#0089c0', 1.7),
-        bookSplit: icons.get('bookSplit', '#a47d06', 1.7),
+        bookSplit: icons.get('bookSplit', '#8a690a', 1.7),
         calendar: icons.get('calendar', '#748294', 1.7),
         download: icons.get('download', '#0089c0', 1.7),
         mail: icons.get('mail', '#0089c0', 1.7),

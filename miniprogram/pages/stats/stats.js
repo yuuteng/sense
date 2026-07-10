@@ -4,7 +4,7 @@ const fmt = require('../../utils/format');
 const tabbar = require('../../utils/tabbar');
 const theme = require('../../utils/chart-theme');
 
-const GREEN = '#9edf10', BLUE = '#00ccf9', TRACK = '#e4e7ec', AXIS = '#97a7b7';
+const GREEN = '#9edf10', BLUE = '#00ccf9', TRACK = '#e4e7ec', AXIS = '#5f6c7d';
 function enc(svg) { return 'data:image/svg+xml,' + encodeURIComponent(svg); }
 function genId() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
@@ -72,6 +72,7 @@ const TYPES = {
   yearPie: { title: '年度收支', desc: '自然年（可切年份）或近一年的收支占比', kind: 'pie' },
   totalPie: { title: '累计收支', desc: '账本自建立以来收支占比', kind: 'pie' },
   yearInOut: { title: '收支对比', desc: '近 N 月收入 vs 支出并排柱状', kind: 'paired', defRange: 6 },
+  memberBars: { title: '成员对比', desc: '某月各成员支出/收入对比，可钻取明细', kind: 'members' },
   trendBars: { title: '收支柱状', desc: '支出 / 收入 / 结余，按日或按月，柱状', kind: 'bars' },
   trendLine: { title: '收支趋势', desc: '支出 / 收入 / 结余，按日或按月，折线', kind: 'line' },
 };
@@ -131,6 +132,21 @@ function lineSvg(values, color) {
   return enc(s);
 }
 
+// 横向条形示意图（成员对比缩略图）
+function hbarsSvg(values, color) {
+  const W = 320, H = 156, left = 8, gap = 14;
+  const max = Math.max(1, ...values);
+  const bh = (H - gap * (values.length + 1)) / values.length;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  values.forEach((v, i) => {
+    const y = gap + i * (bh + gap);
+    const w = Math.max(10, (v / max) * (W - left * 2));
+    s += `<rect x="${left}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${bh.toFixed(1)}" rx="6" fill="${color}"/>`;
+  });
+  s += `</svg>`;
+  return enc(s);
+}
+
 // 「添加图表」弹层用的示意缩略图：套用真实图表的画法 + 一组样例数据，纯展示、不含真实金额
 const PREVIEW = {
   monthPie: donutSvg(62, 38),
@@ -139,6 +155,7 @@ const PREVIEW = {
   catBreakdown: catPreviewSvg([38, 26, 18, 12, 6], theme.CAT_COLORS.slice(0, 5)),
   trendLine: lineSvg([30, 46, 38, 64, 50, 72, 58, 80], BLUE),
   trendBars: barsSvg([30, 52, 40, 68, 45, 60, 74], ['', '', '', '', '', '', '']),
+  memberBars: hbarsSvg([86, 58, 34], BLUE),
   yearInOut: pairedSvg([
     { income: 70, expense: 52, label: '' }, { income: 60, expense: 66, label: '' },
     { income: 82, expense: 48, label: '' }, { income: 55, expense: 62, label: '' },
@@ -148,7 +165,7 @@ const PREVIEW = {
 // 面板按图形形态分组：先环形、再柱状、后折线，同形态集中展示
 const PICKER_SECTIONS = [
   { name: '环形图 · 占比', ids: ['monthPie', 'catBreakdown', 'yearPie', 'totalPie'] },
-  { name: '柱状图 · 对比', ids: ['yearInOut', 'trendBars'] },
+  { name: '柱状图 · 对比', ids: ['yearInOut', 'trendBars', 'memberBars'] },
   { name: '折线图 · 趋势', ids: ['trendLine'] },
 ].map((sec) => ({
   name: sec.name,
@@ -174,6 +191,10 @@ function normalizeLayout(order) {
     const inst = { iid: it.iid || genId(), type: it.type, range: it.range || TYPES[it.type].defRange };
     if (/^\d{4}-\d{2}$/.test(it.month || '')) inst.month = it.month;
     if (it.type === 'catBreakdown') inst.catKind = it.catKind === 'income' ? 'income' : 'expense';
+    if (it.type === 'memberBars') {
+      inst.mKind = it.mKind === 'income' ? 'income' : 'expense';
+      inst.scope = it.scope === 'share' ? 'share' : 'paid';
+    }
     if (it.type === 'yearPie') {
       inst.yearMode = it.yearMode === 'rolling' ? 'rolling' : 'year';
       const y = Number(it.year);
@@ -226,12 +247,12 @@ Page({
     this._winH = wi.windowHeight; // 拖拽时自动滚动的边缘判定
     this._scrollTop = 0;
     this.setData({
-      chevronDown: icons.get('chevronDown', '#748294', 2.2),
-      addIcon: icons.get('plus', '#0089c0', 2),
-      barsIcon: icons.get('bars', '#97a7b7', 1.4),
-      dragIcon: icons.get('dragHandle', '#97a7b7', 2),
-      bookIcon: icons.get('book', '#0089c0', 1.7),
-      splitIcon: icons.get('bookSplit', '#a47d06', 1.7),
+      chevronDown: icons.get('chevronDown', '#5f6c7d', 2.2),
+      addIcon: icons.get('plus', '#01749f', 2),
+      barsIcon: icons.get('bars', '#748294', 1.4),
+      dragIcon: icons.get('dragHandle', '#748294', 2),
+      bookIcon: icons.get('book', '#01749f', 1.7),
+      splitIcon: icons.get('bookSplit', '#8a690a', 1.7),
     });
   },
 
@@ -246,8 +267,9 @@ Page({
     try {
       const book = await api.call('book', 'getCurrent');
       if (!book) { this.setData({ needInit: true, loading: false }); return; }
-      if (this.bookId !== book.bookId) this._catCache = {}; // 切账本清分类聚合缓存
+      if (this.bookId !== book.bookId) { this._catCache = {}; this._memberCache = {}; } // 切账本清聚合缓存
       this.bookId = book.bookId;
+      this.isSplit = book.type === 'split'; // 成员卡：分账账本才有「垫付/应摊」切换
       this.cur = book.displayCurrency || 'CNY';
       this.setData({ bookName: book.name, currentBookId: book.bookId, curCode: this.cur, curSym: fmt.symbolOf(this.cur), needInit: false });
       const [raw, layout] = await Promise.all([
@@ -255,9 +277,9 @@ Page({
         api.call('layout', 'get', { bookId: book.bookId }),
       ]);
       this.raw = raw;
-      this._catCache = {}; // 数据可能已变（新记账/改展示币种），聚合重新拉
+      this._catCache = {}; this._memberCache = {}; // 数据可能已变（新记账/改展示币种），聚合重新拉
       this.layout = normalizeLayout(layout.order);
-      await this.ensureCatData();
+      await Promise.all([this.ensureCatData(), this.ensureMemberData()]);
       this.rebuild();
       this.setData({ loading: false });
     } catch (e) { this.setData({ loading: false }); api.toast(e); }
@@ -275,8 +297,31 @@ Page({
     missing.forEach((ym, i) => { if (results[i]) this._catCache[ym] = results[i]; });
   },
 
+  // 确保布局中所有成员卡所需聚合已就位（按 月×口径×范围 去重并发拉）
+  async ensureMemberData() {
+    const curYm = (this.raw && this.raw.curMonth) || localYm();
+    const keys = [...new Set(this.layout.filter((x) => x.type === 'memberBars')
+      .map((x) => `${x.month || curYm}|${x.mKind || 'expense'}|${x.scope || 'paid'}`))];
+    this._memberCache = this._memberCache || {};
+    const missing = keys.filter((k) => !this._memberCache[k]);
+    if (!missing.length) return;
+    const results = await Promise.all(missing.map((k) => {
+      const [month, kind, scope] = k.split('|');
+      return api.call('stats', 'getMemberData', { bookId: this.bookId, month, kind, scope }).catch(() => null);
+    }));
+    missing.forEach((k, i) => { if (results[i]) this._memberCache[k] = results[i]; });
+  },
+
   rebuild() {
     this.setData({ cards: this.layout.map((inst) => this.buildCard(inst)), canAdd: true });
+  },
+
+  // 单卡刷新：卡内开关（指标/区间/月份/收支维度）只 path-patch 这一张，
+  // 避免整组 setData → 每个 ECharts 实例全量 setOption 重渲染
+  rebuildOne(iid) {
+    const i = this.layout.findIndex((x) => x.iid === iid);
+    if (i < 0) return this.rebuild();
+    this.setData({ [`cards[${i}]`]: this.buildCard(this.layout[i]) });
   },
 
   buildCard(inst) {
@@ -416,6 +461,41 @@ Page({
         totalCount: rows.length,
         moreCount: rows.length - shown.length,
         expanded,
+        empty: !rows.length,
+      };
+    }
+    if (inst.type === 'memberBars') {
+      // 成员对比：某月 × 口径（支出=付款人/应摊，收入=记录人），CSS 比例条列表（不占 ECharts 实例）
+      const curYm = raw.curMonth || localYm();
+      const firstYm = raw.firstMonth || curYm;
+      const ym = inst.month || curYm;
+      const isCur = ym === curYm;
+      const kind = inst.mKind || 'expense';
+      const scope = inst.scope || 'paid';
+      const cache = (this._memberCache || {})[`${ym}|${kind}|${scope}`];
+      const data = cache || { total: 0, members: [] };
+      const [yy, mm] = ym.split('-');
+      const mNum = parseInt(mm, 10);
+      const maxV = data.members.length ? data.members[0].total : 0;
+      const rows = data.members.map((m) => ({
+        openid: m.openid, name: m.isMe ? `${m.name}（我）` : m.name, isMe: m.isMe,
+        initial: m.initial, color: m.color, avatarFileID: m.avatarFileID,
+        total: fmt.money(m.total, cur), percent: m.percent + '%', count: m.count,
+        barW: maxV > 0 ? Math.max(2, Math.round((m.total / maxV) * 100)) : 0,
+      }));
+      const scopeLabel = kind === 'income' ? '按记录人' : (scope === 'share' ? '按应摊' : '按付款人');
+      return {
+        iid: inst.iid, type: inst.type, kind: 'members',
+        title: `${isCur ? '本月' : `${yy}年${mNum}月`}成员${kind === 'income' ? '收入' : '支出'}对比`,
+        sub: `${yy} 年 ${mNum} 月 · ${scopeLabel}`,
+        month: {
+          ym, text: `${yy}年${mNum}月${isCur ? ' · 本月' : ''}`,
+          first: firstYm, last: curYm,
+          prevOk: ym > firstYm, nextOk: ym < curYm,
+        },
+        mKind: kind, scope, isSplit: !!this.isSplit,
+        totalText: fmt.money(data.total, cur),
+        rows,
         empty: !rows.length,
       };
     }
@@ -559,12 +639,14 @@ Page({
     if (!type || !TYPES[type]) return;
     const inst = { iid: genId(), type, range: TYPES[type].defRange };
     if (type === 'catBreakdown') inst.catKind = 'expense';
+    if (type === 'memberBars') { inst.mKind = 'expense'; inst.scope = 'paid'; }
     if (type === 'yearPie') inst.yearMode = 'year'; // 默认自然年、跟随当前年
     if (type === 'trendLine') { inst.metric = 'expense'; inst.span = 'd30'; }
     if (type === 'trendBars') { inst.metric = 'expense'; inst.span = 'd7'; }
     this.layout = this.layout.concat([inst]);
     this.closePicker();
     if (type === 'catBreakdown') await this.ensureCatData();
+    if (type === 'memberBars') await this.ensureMemberData();
     this.rebuild();
     this.saveLayout();
     wx.showToast({ title: `已添加「${TYPES[type].title}」`, icon: 'none' });
@@ -575,13 +657,13 @@ Page({
     const { iid, m } = e.currentTarget.dataset;
     if (!METRICS[m]) return;
     this.layout = this.layout.map((x) => (x.iid === iid ? { ...x, metric: m } : x));
-    this.rebuild(); this.saveLayout();
+    this.rebuildOne(iid); this.saveLayout();
   },
   setSpan(e) {
     const { iid, s } = e.currentTarget.dataset;
     if (!/^[dm]\d+$/.test(s || '')) return;
     this.layout = this.layout.map((x) => (x.iid === iid ? { ...x, span: s } : x));
-    this.rebuild(); this.saveLayout();
+    this.rebuildOne(iid); this.saveLayout();
   },
 
   // —— 年度收支卡：年份切换 / 自然年↔近一年 ——
@@ -598,12 +680,12 @@ Page({
       if (y === curYear) delete next.year; else next.year = y; // 当前年 = 跟随，不固化
       return next;
     });
-    this.rebuild(); this.saveLayout();
+    this.rebuildOne(iid); this.saveLayout();
   },
   setYearMode(e) {
     const { iid, m } = e.currentTarget.dataset;
     this.layout = this.layout.map((x) => (x.iid === iid ? { ...x, yearMode: m === 'rolling' ? 'rolling' : 'year' } : x));
-    this.rebuild(); this.saveLayout();
+    this.rebuildOne(iid); this.saveLayout();
   },
 
   removeCard(e) {
@@ -615,7 +697,7 @@ Page({
   setRange(e) {
     const iid = e.currentTarget.dataset.iid; const r = Number(e.currentTarget.dataset.r);
     this.layout = this.layout.map((x) => (x.iid === iid ? { ...x, range: r } : x));
-    this.rebuild(); this.saveLayout();
+    this.rebuildOne(iid); this.saveLayout();
   },
 
   // —— 月度类卡片：月份切换（箭头逐月 / 原生月份 picker）——
@@ -632,8 +714,8 @@ Page({
       if (ym === curYm) delete next.month; else next.month = ym;
       return next;
     });
-    await this.ensureCatData(); // 分类占比卡切月需拉对应月聚合
-    this.rebuild(); this.saveLayout();
+    await Promise.all([this.ensureCatData(), this.ensureMemberData()]); // 分类/成员卡切月需拉对应月聚合
+    this.rebuildOne(iid); this.saveLayout();
   },
   monthShift(e) {
     const { iid, dir } = e.currentTarget.dataset;
@@ -650,13 +732,44 @@ Page({
   setCatKind(e) {
     const { iid, kind } = e.currentTarget.dataset;
     this.layout = this.layout.map((x) => (x.iid === iid ? { ...x, catKind: kind === 'income' ? 'income' : 'expense' } : x));
-    this.rebuild(); this.saveLayout();
+    this.rebuildOne(iid); this.saveLayout();
   },
+  // —— 成员对比卡：口径切换（支出/收入 × 垫付/应摊）与钻取 ——
+  async setMemberKind(e) {
+    const { iid, kind } = e.currentTarget.dataset;
+    this.layout = this.layout.map((x) => (x.iid === iid ? { ...x, mKind: kind === 'income' ? 'income' : 'expense' } : x));
+    await this.ensureMemberData();
+    this.rebuildOne(iid); this.saveLayout();
+  },
+  async setMemberScope(e) {
+    const { iid, scope } = e.currentTarget.dataset;
+    this.layout = this.layout.map((x) => (x.iid === iid ? { ...x, scope: scope === 'share' ? 'share' : 'paid' } : x));
+    await this.ensureMemberData();
+    this.rebuildOne(iid); this.saveLayout();
+  },
+  // 点成员行 → 该月 × 该成员 × 该类型明细（应摊无逐笔对应，明细按付款人口径呈现）
+  memberDrill(e) {
+    const { iid, openid, name } = e.currentTarget.dataset;
+    const inst = this.layout.find((x) => x.iid === iid);
+    if (!inst || !openid) return;
+    const curYm = (this.raw && this.raw.curMonth) || localYm();
+    const ym = inst.month || curYm;
+    const kind = inst.mKind || 'expense';
+    const [yy, mm] = ym.split('-');
+    const params = {
+      bookId: this.bookId,
+      dateFrom: `${ym}-01`, dateTo: `${ym}-31`, type: kind,
+      monthText: `${yy}年${parseInt(mm, 10)}月`, catName: name || '',
+    };
+    if (kind === 'income') params.recorderOpenid = openid; else params.payerOpenid = openid;
+    this.goRecords(params);
+  },
+
   toggleCatAll(e) {
     const iid = e.currentTarget.dataset.iid;
     this._catExpand = this._catExpand || {};
     this._catExpand[iid] = !this._catExpand[iid];
-    this.rebuild();
+    this.rebuildOne(iid);
   },
 
   // —— 点击钻取：跳记录筛选列表页 ——
@@ -790,7 +903,7 @@ Page({
     if (!card || !name || name === '暂无') return;
     this._catExpand = this._catExpand || {};
     if (name === '其他' || !card.rows.some((r) => r.name === name)) {
-      if (!this._catExpand[iid]) { this._catExpand[iid] = true; this.rebuild(); }
+      if (!this._catExpand[iid]) { this._catExpand[iid] = true; this.rebuildOne(iid); }
       return;
     }
     const hlName = card.hlName === name ? '' : name; // 再点同一扇区 = 取消
@@ -861,7 +974,7 @@ Page({
     const prev = { curCode: this.data.curCode, curSym: this.data.curSym };
     // 胶囊即时切换 + 即刻加载态；图表数值必须等服务器重算，失败回滚胶囊
     this.setData({ curCode: code, curSym: fmt.symbolOf(code), loading: true });
-    api.call('settings', 'update', { displayCurrency: code })
+    api.call('settings', 'update', { displayCurrency: code, bookId: this.bookId })
       .then(() => this.load())
       .catch((err) => { this.setData({ ...prev, loading: false }); api.toast(err); });
   },

@@ -4,6 +4,7 @@
     "loading": "/components/loading/index",
     "book-switcher": "/components/book-switcher/index",
     "currency-picker": "/components/currency-picker/index",
-    "chart": "/components/chart/index"
+    "chart": "/components/chart/index",
+    "avatar": "/components/avatar/index"
   }
 }

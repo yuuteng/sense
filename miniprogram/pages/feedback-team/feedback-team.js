@@ -48,7 +48,7 @@ Page({
     wx.showModal({
       title: '移除客服',
       content: `移除「${name}」的客服身份？其已回复的工单内容保留。`,
-      confirmColor: '#f62172',
+      confirmColor: '#c41e5a',
       success: (res) => {
         if (!res.confirm) return;
         api.call('feedback', 'removeAdmin', { openid })

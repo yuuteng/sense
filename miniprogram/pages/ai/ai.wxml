@@ -18,7 +18,20 @@
     <!-- 拆两行：避免长句在「50 次 AI 调用」中间被折行；包一层避免吃 .chat 的 flex gap -->
     <view class="ai-disclaimer">
       <view>AI 分析基于你的账本数据进行 · 会话完整保留</view>
-      <view>免费额度 50 次 AI 调用</view>
+      <view wx:if="{{quotaText}}">{{quotaText}}</view>
+    </view>
+
+    <!-- 空会话起手引导：三能力说清 + 可点示例（点击只填输入框，不自动发送/入账） -->
+    <view wx:if="{{!loading && !messages.length}}" class="ai-starter">
+      <view class="ai-starter__title">可以这样开始</view>
+      <view class="ai-starter__row" wx:for="{{starters}}" wx:key="q" hover-class="pressed" hover-stay-time="80" data-q="{{item.q}}" bindtap="onStarter">
+        <text class="ai-starter__hint">{{item.hint}}</text>
+        <text class="ai-starter__q">「{{item.q}}」</text>
+      </view>
+      <view class="ai-starter__row ai-starter__row--static">
+        <text class="ai-starter__hint">拍收据</text>
+        <text class="ai-starter__q">点左下角 📷 上传小票，自动识别成一笔待确认的账</text>
+      </view>
     </view>
 
     <block wx:for="{{messages}}" wx:key="index" wx:for-item="m">
@@ -72,6 +85,7 @@
     <input
       class="composer__input composer__input--mic"
       placeholder="{{placeholder}}"
+      placeholder-class="input-ph"
       value="{{input}}"
       bindinput="onInput"
       confirm-type="send"

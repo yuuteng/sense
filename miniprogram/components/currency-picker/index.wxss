@@ -19,7 +19,8 @@
 
 .cp__grab { width: 72rpx; height: 8rpx; border-radius: 999rpx; background: var(--border); margin: 16rpx auto 0; flex-shrink: 0; }
 .cp__title { text-align: center; font-size: var(--text-lg); font-weight: 600; padding: 20rpx 32rpx 24rpx; flex-shrink: 0; }
-.cp__list { flex: 1; }
+/* scroll-view 要「确定高度」才滚（flex 压出的高度部分基础库失效，见 stats.wxss 教训）*/
+.cp__list { max-height: 60vh; }
 .cp__row { display: flex; align-items: center; gap: 24rpx; padding: 30rpx 40rpx; font-size: 34rpx; }
 .cp__row + .cp__row { border-top: 1rpx solid var(--border); }
 .cp__row:active { background: rgba(62, 69, 80, 0.05); }

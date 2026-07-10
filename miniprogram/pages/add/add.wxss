@@ -1,8 +1,8 @@
-/* 收入模式：主色切换为绿色 */
+/* 收入模式：主色切换为绿色（对齐墨水层 green-700，88rpx 大字 ≥4.7:1） */
 .mode-income {
-  --accent: #5c9a0e;
-  --accent-hover: #4f8a0c;
-  --accent-active: #437609;
+  --accent: #4a7d0b;
+  --accent-hover: #3f6a09;
+  --accent-active: #365c08;
 }
 .mode-income .amount-input,
 .mode-income .cur { color: var(--accent); }
@@ -13,6 +13,7 @@
 .amount-input {
   flex: 1; min-width: 0; margin-left: 8rpx;
   font-size: 88rpx; font-weight: 600; letter-spacing: -0.02em;
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums; /* 等宽数字规则：旗舰数字不例外 */
   text-align: center; line-height: 1.15; color: var(--fg); height: 116rpx;
 }
 
@@ -27,6 +28,15 @@
 /* 分类「添加」按钮 */
 .cat__ic--add { background: transparent; border: 2rpx dashed var(--border); }
 .chip--add { border-style: dashed; color: var(--muted); }
+
+/* 「长按可停用」一次性提示 */
+.cat-hint {
+  display: flex; align-items: center; justify-content: space-between; gap: 24rpx;
+  margin: 0 40rpx 8rpx; padding: 16rpx 24rpx;
+  border-radius: var(--radius-sm); background: rgba(62,69,80,0.04);
+  font-size: 24rpx; color: var(--muted);
+}
+.cat-hint__ok { color: var(--accent-ink); font-weight: 600; padding: 26rpx 24rpx; margin: -26rpx -8rpx; flex-shrink: 0; }
 
 /* 新增一级分类弹层 */
 .addcat-mask { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 300; background: rgba(62,69,80,0.45); display: flex; align-items: center; justify-content: center; }

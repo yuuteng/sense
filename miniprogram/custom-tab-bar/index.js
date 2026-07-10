@@ -1,6 +1,6 @@
 const icons = require('../utils/icons');
-const MUTED = '#748294';
-const ACTIVE = '#00ccf9';
+const MUTED = '#5f6c7d';
+const ACTIVE = '#01749f';
 
 const BASE = [
   { path: '/pages/home/home', text: '首页', key: 'tabHome' },

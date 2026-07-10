@@ -68,11 +68,17 @@ const PATHS = {
   tabMe: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/>',
 };
 
+// 结果缓存：列表页每行都要一个 iconSrc，同名同色的 data-URL 反复编码纯属浪费。
+// 图标 × 颜色组合有限（几十个），缓存无上限风险。
+const CACHE = Object.create(null);
+
 function get(name, color, width) {
+  const key = name + '|' + color + '|' + width;
+  if (CACHE[key]) return CACHE[key];
   const inner = (PATHS[name] || '').replace(/CFILL/g, color || '#3e4550');
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="'
     + (color || '#3e4550') + '" stroke-width="' + (width || 1.7) + '">' + inner + '</svg>';
-  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+  return (CACHE[key] = 'data:image/svg+xml,' + encodeURIComponent(svg));
 }
 
 module.exports = { get, PATHS };

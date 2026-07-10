@@ -14,8 +14,6 @@ Page({
     isSplit: false,
     roleLabel: '',
     ic: {},
-    dissolveText: '解散账本',
-    dissolveConfirm: false,
     inviteVisible: false,
     loading: true,
   },
@@ -157,16 +155,37 @@ Page({
       .catch((e) => { this.setData({ members: prevList }); api.toast(e); });
   },
 
+  // 解散 = 全产品最高风险操作：两段式确认（说明后果 → 输入账本名核对），对齐「注销账户」守卫级别。
+  // 旧实现是 2.5s 内双击，误触即毁掉整个共享账本，已废弃。
   onDissolve() {
     if (!this.data.isOwner) return;
-    if (this.data.dissolveConfirm) {
-      api.call('book', 'dissolve', { bookId: this.bookId }).then(() => {
-        wx.showToast({ title: '已解散', icon: 'success' });
-        setTimeout(() => wx.navigateBack({ delta: 1, fail() { wx.switchTab({ url: '/pages/home/home' }); } }), 500);
-      }).catch(api.toast);
-      return;
-    }
-    this.setData({ dissolveConfirm: true, dissolveText: '此操作不可恢复 · 再次点击确认' });
-    setTimeout(() => { if (this.data.dissolveConfirm) this.setData({ dissolveConfirm: false, dissolveText: '解散账本' }); }, 2500);
+    const name = (this.data.book && this.data.book.name) || '';
+    wx.showModal({
+      title: '解散账本？',
+      content: `「${name}」及其全部记录将对所有成员消失，且无法恢复。`,
+      confirmText: '继续',
+      cancelText: '取消',
+      success: (r) => {
+        if (!r.confirm) return;
+        wx.showModal({
+          title: '确认解散',
+          editable: true,
+          placeholderText: `输入账本名「${name}」确认`,
+          confirmText: '解散',
+          confirmColor: '#c41e5a',
+          success: (c) => {
+            if (!c.confirm) return;
+            if ((c.content || '').trim() !== name) {
+              wx.showToast({ title: '账本名不一致，未解散', icon: 'none' });
+              return;
+            }
+            api.call('book', 'dissolve', { bookId: this.bookId }).then(() => {
+              wx.showToast({ title: '已解散', icon: 'success' });
+              setTimeout(() => wx.navigateBack({ delta: 1, fail() { wx.switchTab({ url: '/pages/home/home' }); } }), 500);
+            }).catch(api.toast);
+          },
+        });
+      },
+    });
   },
 });

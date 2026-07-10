@@ -1,4 +1,4 @@
-<view wx:if="{{render}}" class="cp-mask {{anim ? 'cp-mask--show' : ''}}" bindtap="close">
+<view wx:if="{{render}}" class="cp-mask {{anim ? 'cp-mask--show' : ''}}" bindtap="close" catchtouchmove="stop">
   <view class="cp {{anim ? 'cp--up' : ''}}" catchtap="stop">
     <view class="cp__grab"></view>
     <view class="cp__title">选择币种</view>

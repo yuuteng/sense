@@ -27,13 +27,14 @@ Page({
         title: r.title,
         category: r.category,
         type: r.typeLabel,
+        isIn: r.type === 'income',
         isForeign: r.isForeign,
         isSplit: r.isSplit,
         displayAmount: fmt.signed(r.amountConverted, r.type, disp),
         originalAmount: fmt.symbolOf(r.currency) + fmt.fmt(r.amount),
         rate: `1 ${r.currency} ≈ ${fmt.money(r.rate, disp)}`,
         convertedAmount: fmt.money(r.amountConverted, disp),
-        fixNote: `此笔按记账当日（${fmt.cnMonthDay(r.date)}）的「${r.currency} → ${disp}」汇率换算；换其他展示币种会用当日对应汇率，历史金额不随今日汇率变动。`,
+        fixNote: `这笔账按记账当天（${fmt.cnMonthDay(r.date)}）的「${r.currency} → ${disp}」汇率换算，结果保存后不再变：以后汇率涨跌，这笔的金额也不会跟着变。`,
         date: r.date,
         note: r.note || '—',
         images: r.images || [],
@@ -50,6 +51,13 @@ Page({
 
   onEdit() {
     wx.navigateTo({ url: '/pages/add/add?id=' + this.recordId });
+  },
+
+  // 图片附件全屏预览（与反馈详情页同能力）
+  previewImage(e) {
+    const src = e.currentTarget.dataset.src;
+    if (!src) return;
+    wx.previewImage({ current: src, urls: this.data.d.images });
   },
 
   async onDelete() {

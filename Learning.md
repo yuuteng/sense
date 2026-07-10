@@ -1,0 +1,97 @@
+# Learning.md · 教训沉淀
+
+> 记录 **bug 复盘、踩坑、错误用法、反直觉结论、优化经验**。只记教训,不记进度(进度归 `.claude/devlog.md`)。
+> 新条目加在最上面。格式:`## 日期 · 一句话标题`,正文写 现象 / 根因 / 教训(正确做法)。修完 bug 或发现坑时立即补记。
+
+---
+
+## 2026-07-10 · 「标记状态」挂在实时重算的衍生结果上必错位,持久化要挂到事实本身
+
+- 现象:分账结算的「标记结清」只存了 transferId(t1/t2 序号),而转账方案每次进页全量重算——新记一笔账后方案整体重排,旧标记即使落库也对不上新方案;且标记≠还款事实,已转的钱下次重算照样算成欠款。
+- 根因:把「状态」钉在衍生视图(计算出的方案)的临时坐标上,而不是钉在事实(谁已付给谁多少)上。
+- 教训:对"实时计算 + 可标记"类需求,落库的应是**事实型抵扣**(from/to/amount 的 settlements 文档,重算时冲抵净额),不是视图行的勾选态。抵扣模型天然支持"结清一部分→继续记账→只算增量",不需要周期/快照;撤销 = 删抵扣文档。序号型 id(t1/t2)永远不要当持久化外键,要么内容寻址要么落成独立文档。
+
+## 2026-07-10 · 换色要按「管道」清点,CSS 变量到不了的边界全是漏点
+
+- 现象:墨水层迁移自认全量完成,audit 复查发现 CSS 内 ~95% 干净,但漏了 5 类边界:JS 传入的图标色(icons.get)、wx.showModal 的 confirmColor(8 处旧红)、wxml 内联 style(2 处 var(--danger))、JS 常量(stats.js AXIS)、以及 5 个 input 根本没挂 placeholder-class(微信默认 #999 占位 ≈2.8:1)。
+- 根因:修复按「页面/表面」推进,而颜色实际流经多条管道:WXSS 变量、内联 style、JS 参数、原生组件参数、组件默认值。只扫 WXSS 就只修了一条管道。
+- 教训:全局换色/换 token 时按管道列清单逐条 grep:①wxss color/background ②wxml style= ③JS 色值字符串(含 showModal/showActionSheet/图标工厂)④组件 properties 默认值 ⑤placeholder-class 挂载情况。修完以「值」反查(旧 hex 全局 grep 应为 0),不以「文件」自查。
+
+## 2026-07-09 · 设计评审的前提要对照代码核实,别照单全收
+
+- 现象:全页面 critique 报「误触币种胶囊 = 整页口径切换」(P 级红旗)、「图表编辑只能长按发现」。核对代码:胶囊误触只弹选择面板,真正切换要在面板里再点币种(home.js onCurPick);统计页本就有可见的「编辑」链接(stats.wxml sec-actions)。两个前提都不成立,真问题其实是"黄胶囊视觉太抢"与"无标注 FAB"。
+- 教训:LLM 评审(包括子代理)对交互后果的推断可能基于表面 UI 想象。据评审改代码前,先把涉及的事件链读一遍;修"想象出来的问题"会引入真回归。
+
+## 2026-07-09 · sed 批量换色会误伤 JSON 的 canonical 值与 ramp
+
+- 现象:对 design.json 跑 `sed s/#0089c0/#01749f/` 想只改组件 CSS 片段,结果把 lake-blue 自身的 canonical 和 tonalRamp 也改了,两个色板条目变成同一个值。
+- 教训:结构化文件(JSON/YAML)里同一 hex 承担多重身份(定义 vs 引用),全文替换必误伤。要么按字段精确 Edit,要么替换后 diff 复查每处命中。
+
+## 2026-07-09 · WCAG 大字判定:16px 加粗不算「大字」
+
+- 现象:想当然把 32rpx(≈16px)/600 的按钮文字按「大字 3:1」豁免。查标准:大字 = ≥24px 常规或 ≥18.66px 加粗,16px bold 不够,仍需 4.5:1。
+- 教训:「加粗就算大字」是常见误记;判定用 18.66px bold / 24px regular 两条硬线。白字压亮青(1.9:1)连 3:1 都不过,只能作为登记在案的品牌例外,不能靠"它是大字"糊弄。
+
+## 2026-07-09 · 云函数 -504003 = 执行超时,循环 await 数据库调用是主因
+
+- 现象:reset 数据后创建账本必报 `cloud.callFunction:fail errCode: -504003`,卡死在建账本页。
+- 根因:云函数默认超时 3 秒。`book.create` 串行跑 11 次 `createCollection` + 68 条默认分类逐条 `add`,全新环境下必超。之前集合已存在、createCollection 秒失败,所以没暴露。
+- 教训:云函数里任何 `for + await` 的数据库调用都是雷。独立调用用 `Promise.all` 并行;批量写用数组插入(`collection.add({ data: [/* 多条 */] })`,服务端 SDK 支持,返回 `_ids` 按插入顺序)。`config.json` 可设 `"timeout": 20` 兜底,但先修代码。
+
+## 2026-07-09 · 原生 button 宽度/display 不可控,会撑坏 flex 行
+
+- 现象:凡把 `<button>` 放进 flex 布局,设置 width 常被忽略,button 撑满剩余宽度,同行内容被挤变形(两次踩坑:bookConfig 邀请胶囊悬在中间;settings 头像行昵称被挤到右侧换行)。
+- 教训:需要 `open-type` 能力(share/chooseAvatar)时,button 只做触发器,不承担视觉与布局。两个可靠模式:①button 自身当 flex 容器,视觉胶囊放内层 view(invite-btn);②视觉用普通 view 排版,button 绝对定位透明覆盖其上(avatar-choose)。
+
+## 2026-07-09 · seed 数据用固定 _id = 多用户共享单例,互相覆盖
+
+- 现象:A、B 各自「载入演示数据」后账本"被合并";B 加入 A 账本被判"已是成员";清除演示数据删掉对方的。
+- 根因:演示文档 id 写死(`seed-book-share`),所有用户写的是数据库里同一条文档。
+- 教训:任何用户可触发的固定 id 写入都是共享单例。多用户隔离 = id 带调用者后缀 + 每条文档记 `seedBy` 归属,清理只按归属删。
+
+## 2026-07-09 · 微信分享必须用户直点 open-type=share,参数走 dataset
+
+- 现象:想"点邀请→选权限→再分享",不能程序化拉起分享。
+- 教训:分享只能由用户点击 `<button open-type="share">` 触发。需要带不同参数时,放多个 share button 各挂 `data-*`,在 `onShareAppMessage(res)` 里读 `res.target.dataset` 拼 path。
+
+## 2026-07-09 · iOS 数字键盘的小数点可能是逗号/句号
+
+- 现象:iOS 部分地区 `type="digit"` 键盘出 `,` 或 `。`,金额解析失败。
+- 教训:金额输入统一归一化 `.replace(/[,，。]/g, '.')` 再解析。
+
+## 2026-07-08 · canvas 同层渲染:开发者工具模拟器不可信,真机才是事实
+
+- 现象:开发者工具里图表穿透 tabBar/弹层、或不渲染;真机完全正常。
+- 根因:模拟器对 canvas 2d 同层渲染支持不完整;且**热重载会破坏同层渲染**(已在 project.private.config.json 关掉 `compileHotReLoad`)。
+- 教训:canvas 层级/渲染问题先上真机验证,别在模拟器里空转排查代码。
+
+## 2026-07-08 · 组件 properties observer 不会为初始值触发
+
+- 现象:图表组件首次 setData 的 option 永远不渲染,只有后续变更才画。
+- 根因:observer 只在属性**变更**时触发,初始值在 attached 前已就位,不算变更。
+- 教训:组件 `ready()` 里必须 fallback 读 `this.data.xxx` 处理初始值,observer 只管后续更新。
+
+## 2026-07-08 · setData / 属性传递会剥离函数
+
+- 现象:把 echarts 实例经 property 传给 ec-canvas,组件里拿到的对象没有方法,报 `xxx is not a function`。
+- 教训:跨组件传的数据都会被序列化,函数/类实例全丢。库实例在使用它的组件内部 `require`,不走属性。
+
+## 2026-07-08 · ECharts 按需构建缺模块 = 静默空白,不报错
+
+- 现象:折线图空白无任何报错。根因:自定义 bundle 没打进 LineChart,`series.line` 未注册时 ECharts 静默忽略。
+- 教训:按需构建后必须验证:`grep 'series.line"' echarts.js` 确认用到的 series/component 已注册,再交付。
+
+## 2026-07-08 · API 信封字段与业务字段共用命名空间会互相覆盖
+
+- 现象:筛选传 `type:'income'` 覆盖了路由字段 `type`,报「未知接口 record.income」。
+- 教训:`{...params, resource, type}` 让路由键 spread 在**最后**,payload 永远盖不掉;且业务字段避开信封字段名(改 `recordType`)。信封与业务字段从设计上分命名空间。
+
+## 2026-07-08 · scroll-view 不滚 = 高度链断了;弹层要挡穿透
+
+- 现象:半屏弹层里 scroll-view 滚不动,手势落到底层页面上。
+- 教训:scroll-view 必须有**确定高度**——从固定高容器(如 `height: 78vh`)一路 `flex:1; height:0` 传下来,任一环节缺就不滚。遮罩层加 `catchtouchmove` 阻止滚动穿透。
+
+## 2026-07-05 · color-mix()/oklab 低版本基础库不支持
+
+- 现象:设计令牌里的 `color-mix()`/`oklab` 颜色在部分机型上失效。
+- 教训:移植设计令牌时把 color-mix 结果**预换算成固定色值**写进 wxss,视觉结果逐字对齐原型。

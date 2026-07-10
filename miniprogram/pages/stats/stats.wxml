@@ -14,9 +14,9 @@
     </nav-bar>
   </view>
 
-  <view wx:if="{{needInit}}" style="text-align:center;padding:120rpx 60rpx">
-    <view style="font-size:32rpx;font-weight:600">还没有账本</view>
-    <view class="muted" style="font-size:28rpx;margin-top:12rpx">创建账本并记账后，这里会显示统计图表。</view>
+  <view wx:if="{{needInit}}" class="empty">
+    <view class="empty__title">还没有账本</view>
+    <view class="empty__sub">创建账本并记上几笔，这里会自动生成收支图表。</view>
   </view>
 
   <view wx:else>
@@ -27,7 +27,7 @@
       </view>
     </view>
 
-    <view wx:if="{{editing}}" class="ai-disclaimer" style="padding-top:0">拖住卡片头部整张移动排序 · 点 ✕ 删除 · 改动自动保存</view>
+    <view wx:if="{{editing}}" class="foot-note" style="padding-top:0">拖住卡片头部整张移动排序 · 点 ✕ 删除 · 改动自动保存</view>
 
     <view
       wx:for="{{cards}}"
@@ -129,7 +129,7 @@
             <view class="v num">{{card.centerLabel.v}}</view>
           </view>
         </view>
-        <view wx:if="{{card.empty}}" class="ai-disclaimer">该月暂无{{card.catKind==='income'?'收入':'支出'}}记录</view>
+        <view wx:if="{{card.empty}}" class="foot-note">该月暂无{{card.catKind==='income'?'收入':'支出'}}记录</view>
         <view wx:else class="cat-rank">
           <view
             wx:for="{{card.rows}}"
@@ -155,6 +155,46 @@
           <view wx:if="{{card.moreCount>0 || card.expanded}}" class="cat-more" hover-class="pressed" hover-stay-time="80" data-iid="{{card.iid}}" bindtap="toggleCatAll">
             {{card.expanded ? '收起' : '全部 ' + (card.totalCount) + ' 个分类 ›'}}
           </view>
+        </view>
+      </block>
+
+      <!-- 成员对比（CSS 比例条列表，不占 ECharts 实例） -->
+      <block wx:elif="{{card.kind==='members'}}">
+        <view class="range-chips">
+          <text class="rchip {{card.mKind==='expense'?'on':''}}" data-iid="{{card.iid}}" data-kind="expense" bindtap="setMemberKind">支出</text>
+          <text class="rchip {{card.mKind==='income'?'on':''}}" data-iid="{{card.iid}}" data-kind="income" bindtap="setMemberKind">收入</text>
+          <block wx:if="{{card.isSplit && card.mKind==='expense'}}">
+            <text class="rchip {{card.scope==='paid'?'on':''}}" data-iid="{{card.iid}}" data-scope="paid" bindtap="setMemberScope">垫付</text>
+            <text class="rchip {{card.scope==='share'?'on':''}}" data-iid="{{card.iid}}" data-scope="share" bindtap="setMemberScope">应摊</text>
+          </block>
+        </view>
+        <view wx:if="{{card.empty}}" class="foot-note">该月暂无{{card.mKind==='income'?'收入':'支出'}}记录</view>
+        <view wx:else class="mb-list">
+          <view
+            wx:for="{{card.rows}}"
+            wx:key="openid"
+            wx:for-item="m"
+            class="mb-row"
+            hover-class="pressed"
+            hover-stay-time="80"
+            data-iid="{{card.iid}}"
+            data-openid="{{m.openid}}"
+            data-name="{{m.name}}"
+            bindtap="memberDrill"
+          >
+            <avatar src="{{m.avatarFileID}}" initial="{{m.initial}}" color="{{m.color}}" size="52"></avatar>
+            <view class="mb-row__main">
+              <view class="mb-row__top">
+                <text class="mb-row__name ellip {{m.isMe?'mb-row__name--me':''}}">{{m.name}}</text>
+                <text class="mb-row__count">{{m.count}} 笔</text>
+                <text class="mb-row__amt num">{{m.total}}</text>
+                <text class="mb-row__pct num">{{m.percent}}</text>
+                <text class="pl-go">›</text>
+              </view>
+              <view class="mb-bar"><view class="mb-bar__fill {{m.isMe?'mb-bar__fill--me':''}}" style="width:{{m.barW}}%"></view></view>
+            </view>
+          </view>
+          <view class="mb-total">合计 <text class="num">{{card.totalText}}</text></view>
         </view>
       </block>
 

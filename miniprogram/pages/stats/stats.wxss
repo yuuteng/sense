@@ -2,11 +2,13 @@
 
 /* 月份切换（月度类卡片）：‹ 2026年7月 › */
 .month-nav { display: inline-flex; align-items: center; gap: 4rpx; margin-bottom: var(--space-3); }
+/* 可见圆 56rpx，透明 border 把命中区扩到 88rpx（≥44pt） */
 .mnav__btn {
-  width: 56rpx; height: 56rpx; border-radius: var(--radius-pill);
+  width: 88rpx; height: 88rpx; border: 16rpx solid transparent; background-clip: padding-box;
+  border-radius: var(--radius-pill);
   display: flex; align-items: center; justify-content: center;
   font-size: 40rpx; line-height: 1; color: var(--accent-ink);
-  background: rgba(0,204,249,0.10);
+  background-color: rgba(0,204,249,0.10);
 }
 .mnav__btn.off { color: var(--muted); background: rgba(62,69,80,0.04); opacity: 0.5; }
 .mnav__btn--press { background: rgba(0,204,249,0.20); }
@@ -21,7 +23,7 @@
 /* 区间选择 chips */
 .range-chips { display: flex; gap: 12rpx; margin-bottom: var(--space-3); flex-wrap: wrap; }
 .rchip {
-  padding: 8rpx 22rpx; border-radius: var(--radius-pill);
+  padding: 14rpx 22rpx; border-radius: var(--radius-pill); /* 加高命中区（双排紧邻，不用透明 border 防串行误触） */
   font-size: 24rpx; font-weight: 600; color: var(--muted);
   background: rgba(62,69,80,0.05);
 }
@@ -82,7 +84,8 @@
   pointer-events: none;
 }
 .cat-donut__center .k { font-size: 22rpx; color: var(--muted); }
-.cat-donut__center .v { font-size: 30rpx; font-weight: 700; margin-top: 4rpx; }
+/* 巨额月份不许溢出环外 */
+.cat-donut__center .v { font-size: 30rpx; font-weight: 700; margin-top: 4rpx; max-width: 220rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cat-rank { margin-top: var(--space-3); }
 .cat-row { display: flex; align-items: center; gap: 14rpx; padding: 18rpx 8rpx; }
 .cat-row + .cat-row { border-top: 1rpx solid var(--border); }
@@ -95,6 +98,23 @@
 .cat-row__pct { color: var(--muted); font-size: 22rpx; width: 84rpx; text-align: right; flex-shrink: 0; }
 .cat-more { text-align: center; padding: 20rpx; color: var(--accent-ink); font-size: 26rpx; font-weight: 600; }
 .cat-more.pressed { opacity: 0.7; }
+
+/* 成员对比卡：头像 + 名字 + 比例条（CVD 安全：成员靠头像/名字区分，不靠色相；「我」加深） */
+.mb-list { margin-top: 4rpx; }
+.mb-row { display: flex; align-items: center; gap: 16rpx; padding: 16rpx 8rpx; }
+.mb-row + .mb-row { border-top: 1rpx solid var(--border); }
+.mb-row.pressed { background: rgba(62,69,80,0.04); }
+.mb-row__main { flex: 1; min-width: 0; }
+.mb-row__top { display: flex; align-items: baseline; gap: 12rpx; }
+.mb-row__name { font-size: 28rpx; font-weight: 500; max-width: 220rpx; }
+.mb-row__name--me { font-weight: 600; }
+.mb-row__count { color: var(--muted); font-size: 22rpx; flex-shrink: 0; }
+.mb-row__amt { margin-left: auto; font-weight: 600; font-size: 28rpx; flex-shrink: 0; }
+.mb-row__pct { color: var(--muted); font-size: 22rpx; width: 84rpx; text-align: right; flex-shrink: 0; }
+.mb-bar { margin-top: 10rpx; height: 14rpx; border-radius: 999rpx; background: rgba(62,69,80,0.05); overflow: hidden; }
+.mb-bar__fill { height: 100%; border-radius: 999rpx; background: rgba(0,204,249,0.45); transition: width 240ms cubic-bezier(0.22,0.61,0.36,1); }
+.mb-bar__fill--me { background: var(--blue-600); }
+.mb-total { text-align: right; padding: 16rpx 8rpx 4rpx; font-size: 24rpx; color: var(--muted); }
 
 /* 分区标题右侧动作组：＋添加 / 编辑 */
 .sec-actions { display: flex; align-items: center; gap: 32rpx; }
@@ -113,11 +133,12 @@
   box-shadow: 0 20rpx 48rpx rgba(0,137,192,0.25);
 }
 .chart-card__grip { width: 44rpx; height: 44rpx; flex-shrink: 0; }
-/* 删除角标 */
+/* 删除角标：可见圆 52rpx，透明 border 扩命中区到 88rpx（≥44pt） */
 .card-x {
-  position: absolute; top: -14rpx; right: -14rpx; z-index: 7;
-  width: 52rpx; height: 52rpx; border-radius: 50%;
-  background: var(--danger); color: #ffffff;
+  position: absolute; top: -32rpx; right: -32rpx; z-index: 7;
+  width: 88rpx; height: 88rpx; border: 18rpx solid transparent; background-clip: padding-box;
+  border-radius: 50%;
+  background-color: var(--danger); color: #ffffff;
   display: flex; align-items: center; justify-content: center;
   font-size: 28rpx; font-weight: 600;
   box-shadow: 0 8rpx 20rpx rgba(246,33,114,0.35);

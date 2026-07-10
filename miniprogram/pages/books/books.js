@@ -13,7 +13,7 @@ Page({
     this.setData({
       ic: {
         bookAccent: icons.get('book', '#0089c0', 1.7),
-        bookSplit: icons.get('bookSplit', '#a47d06', 1.7),
+        bookSplit: icons.get('bookSplit', '#8a690a', 1.7),
         chevron: icons.get('chevron', '#748294', 2),
         plus: icons.get('plus', '#3e4550', 2.2),
       },

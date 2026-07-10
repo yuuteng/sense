@@ -6,7 +6,7 @@
   <view class="group group--flat">
     <view wx:for="{{owners}}" wx:key="openid" class="li">
       <view class="li__label">{{item.name}}{{item.isMe ? '（我）' : ''}}</view>
-      <text class="fb-status fb-status--processing">owner</text>
+      <text class="role role--owner">owner</text>
     </view>
   </view>
 
@@ -19,7 +19,7 @@
     </view>
   </view>
 
-  <view class="ai-disclaimer left">邀请码 24 小时有效、一次性使用；客服可查看与回复全部工单、修改处理状态，但不能邀请或移除其他客服。</view>
+  <view class="foot-note left">邀请码 24 小时有效、一次性使用；客服可查看与回复全部工单、修改处理状态，但不能邀请或移除其他客服。</view>
 
   <view style="padding:40rpx 40rpx calc(60rpx + env(safe-area-inset-bottom))">
     <view class="btn btn--primary btn--block btn--lg" hover-class="pressed" hover-stay-time="80" bindtap="invite">生成邀请码</view>

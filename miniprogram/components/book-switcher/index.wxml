@@ -1,8 +1,8 @@
-<view wx:if="{{render}}" class="bs-mask {{anim ? 'bs-mask--show' : ''}}" bindtap="close">
+<view wx:if="{{render}}" class="bs-mask {{anim ? 'bs-mask--show' : ''}}" bindtap="close" catchtouchmove="stop">
   <view class="bs {{anim ? 'bs--up' : ''}}" catchtap="stop">
     <view class="bs__grab"></view>
     <view class="bs__title">{{title}}</view>
-    <view class="bs__list">
+    <scroll-view scroll-y class="bs__list">
       <view
         wx:for="{{books}}"
         wx:key="bookId"
@@ -17,7 +17,7 @@
         </view>
         <image wx:if="{{currentId===item.bookId}}" class="bs__check" src="{{checkIcon}}"></image>
       </view>
-    </view>
+    </scroll-view>
     <view wx:if="{{showManage}}" class="bs__manage" hover-class="bs__manage--press" hover-stay-time="80" bindtap="manage">
       <text>管理账本</text>
       <image src="{{chevron}}"></image>

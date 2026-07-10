@@ -10,8 +10,14 @@ const _ = db.command;
 const APP_ENV = process.env.APP_ENV || 'prod';
 const IS_DEV = APP_ENV === 'dev';
 
-// 币种符号（前后端一致）
-const CUR_SYMBOL = { CNY: '¥', EUR: '€', USD: '$', JPY: '¥' };
+// 币种符号（前后端一致，与 miniprogram/utils/currency.js 同步维护）
+const CUR_SYMBOL = {
+  CNY: '¥', USD: '$', EUR: '€', GBP: '£', JPY: '¥', HKD: 'HK$',
+  CHF: 'Fr', ISK: 'kr', SEK: 'kr', NOK: 'kr', DKK: 'kr',
+  PLN: 'zł', CZK: 'Kč', HUF: 'Ft', RON: 'lei', BGN: 'лв', TRY: '₺', RUB: '₽',
+  KRW: '₩', AUD: 'A$', CAD: 'C$', NZD: 'NZ$', SGD: 'S$', TWD: 'NT$',
+  THB: '฿', MYR: 'RM', VND: '₫', IDR: 'Rp', INR: '₹', AED: 'د.إ',
+};
 
 class AppError extends Error {
   constructor(code, msg) {

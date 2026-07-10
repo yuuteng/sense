@@ -22,20 +22,31 @@ async function getUser(openid) {
   const r = await db.collection('users').doc(openid).get().catch(() => null);
   return r && r.data ? r.data : null;
 }
-async function ensureUser(openid) {
+async function ensureUser(openid, channel) {
   let u = await getUser(openid);
   if (!u) {
     // data 里不能带 _id（set 会整单失败），且失败必须抛出——静默吞错会导致用户文档
     // 永远建不起来，登录后被 getProfile 判为未注册而死循环弹回登录页
-    u = { openid, nickname: '我', avatarColor: '#00ccf9', avatarInitial: '我', avatarFileID: '', registered: false, defaultBookId: '', settings: { displayCurrency: 'CNY', aiMessageLimit: 50 }, createdAt: db.serverDate() };
+    // channel = 首次进入时的渠道（develop/trial/release），仅统计用；同一 openid 各渠道是同一人，清理时绝不按此删用户
+    u = { openid, nickname: '我', avatarColor: '#00ccf9', avatarInitial: '我', avatarFileID: '', registered: false, defaultBookId: '', settings: { displayCurrency: 'CNY', aiMessageLimit: 50 }, channel: channel || 'unknown', createdAt: db.serverDate() };
     await db.collection('users').doc(openid).set({ data: u });
     u._id = openid;
   }
   return u;
 }
-const COLLECTIONS = ['users', 'books', 'members', 'categories', 'records', 'rates', 'chartLayouts', 'aiMessages', 'feedbacks', 'admins', 'files'];
+
+// 展示币种解析（PRD 待定 5 已拍板：每账本各设一个，全局给默认）：
+// 优先级 = 该用户在该账本的覆盖值 > 用户全局默认 > 账本基准币种。
+// 覆盖值存 users.settings.bookCurrency[bookId]，跟随「账本 × 用户」，与图表布局同一归属模型。
+function displayCurrencyOf(u, bookId, base) {
+  const s = (u && u.settings) || {};
+  const byBook = s.bookCurrency || {};
+  return (bookId && byBook[bookId]) || s.displayCurrency || base || 'CNY';
+}
+const COLLECTIONS = ['users', 'books', 'members', 'categories', 'records', 'rates', 'chartLayouts', 'aiMessages', 'feedbacks', 'admins', 'files', 'settlements'];
 async function ensureCollections() {
-  for (const c of COLLECTIONS) { await db.createCollection(c).catch(() => {}); }
+  // 并行建集合：串行 11 次在全新环境下会顶到云函数 3 秒默认超时（-504003）
+  await Promise.all(COLLECTIONS.map((c) => db.createCollection(c).catch(() => {})));
 }
 // 彻底清空一个集合：循环批量删除，直到删空。
 // 云函数端 where().remove() 单次有批量上限，只调一次会残留；这里循环直到无可删。
@@ -84,7 +95,7 @@ async function collectBookImageFileIDs(bookId) {
 async function dissolveBook(bookId) {
   const imgs = await collectBookImageFileIDs(bookId).catch(() => []);
   await deleteFiles(imgs);
-  for (const c of ['records', 'members', 'categories', 'chartLayouts', 'aiMessages']) {
+  for (const c of ['records', 'members', 'categories', 'chartLayouts', 'aiMessages', 'settlements']) {
     await removeAllWhere(c, { bookId });
   }
   await db.collection('books').doc(bookId).remove().catch(() => {});
@@ -114,16 +125,20 @@ const DEFAULT_CATS = {
   ],
 };
 async function seedDefaultCategories(bookId) {
-  for (const kind of ['expense', 'income']) {
-    let order = 1;
-    for (const c of DEFAULT_CATS[kind]) {
-      const p = await db.collection('categories').add({ data: { bookId, kind, parentId: null, name: c.name, icon: c.icon, order: order++, disabled: false } });
-      let so = 1;
-      for (const s of c.subs) {
-        await db.collection('categories').add({ data: { bookId, kind, parentId: p._id, name: s, icon: null, order: so++, disabled: false } });
-      }
-    }
-  }
+  // 批量插入（服务端 add 支持数组）：原先约 68 次串行 add 会把 book.create 顶过 3 秒超时
+  await Promise.all(['expense', 'income'].map(async (kind) => {
+    const cats = DEFAULT_CATS[kind];
+    const parentDocs = cats.map((c, i) => ({ bookId, kind, parentId: null, name: c.name, icon: c.icon, order: i + 1, disabled: false }));
+    const pr = await db.collection('categories').add({ data: parentDocs });
+    const pids = pr._ids || (pr._id ? [pr._id] : []);
+    const subDocs = [];
+    cats.forEach((c, i) => {
+      c.subs.forEach((s, j) => {
+        subDocs.push({ bookId, kind, parentId: pids[i], name: s, icon: null, order: j + 1, disabled: false });
+      });
+    });
+    if (subDocs.length) await db.collection('categories').add({ data: subDocs });
+  }));
 }
 async function fetchBookRecords(bookId) {
   const r = await db.collection('records').where({ bookId }).orderBy('date', 'desc').orderBy('createdAt', 'desc').limit(1000).get();
@@ -255,7 +270,7 @@ const book = {
   },
 
   async getCurrent(_p, ctx) {
-    const user = await ensureUser(ctx.openid);
+    const user = await ensureUser(ctx.openid, ctx.channel);
     let bookId = user.defaultBookId;
     if (!bookId) {
       const m = await db.collection('members').where({ openid: ctx.openid }).limit(1).get();
@@ -267,7 +282,7 @@ const book = {
     const member = await getMember(bookId, ctx.openid);
     return {
       bookId, name: b.data.name, type: b.data.type, baseCurrency: b.data.baseCurrency,
-      displayCurrency: (user.settings && user.settings.displayCurrency) || b.data.baseCurrency,
+      displayCurrency: displayCurrencyOf(user, bookId, b.data.baseCurrency),
       myRole: member && member.role,
     };
   },
@@ -278,10 +293,12 @@ const book = {
     if (!p.name || !p.baseCurrency) throw new AppError('INVALID_PARAM', '缺少账本参数');
     await ensureCollections();
     const add = await db.collection('books').add({ data: {
-      name: p.name, type: bookType, baseCurrency: p.baseCurrency, ownerOpenid: ctx.openid, memberCount: 1, createdAt: db.serverDate(),
+      name: p.name, type: bookType, baseCurrency: p.baseCurrency, ownerOpenid: ctx.openid, memberCount: 1,
+      channel: ctx.channel, // 创建渠道（develop/trial/release）：账本级打标，整棵数据树随 bookId 可追溯、可清理
+      createdAt: db.serverDate(),
     } });
     const bookId = add._id;
-    const user = await ensureUser(ctx.openid);
+    const user = await ensureUser(ctx.openid, ctx.channel);
     await db.collection('members').add({ data: {
       bookId, openid: ctx.openid, avatarColor: user.avatarColor,
       role: 'owner', joinedAt: db.serverDate(), status: 'active',
@@ -337,7 +354,7 @@ const member = {
   async join(p, ctx) {
     const b = await db.collection('books').doc(p.bookId).get().catch(() => null);
     if (!b || !b.data) throw new AppError('NOT_FOUND', '账本不存在或已解散');
-    const u = await ensureUser(ctx.openid);
+    const u = await ensureUser(ctx.openid, ctx.channel);
     const existing = await getMember(p.bookId, ctx.openid);
     if (!existing) {
       const role = p.role === 'ro' ? 'ro' : 'rw';
@@ -430,6 +447,9 @@ const record = {
     else if (p.dateTo) match.date = _.lte(p.dateTo);
     // 收支筛选走独立字段 recordType（p.type 是路由字段，不能复用）
     if (p.recordType === 'income' || p.recordType === 'expense') match.type = p.recordType;
+    // 成员维度钻取：按付款人 / 记录人过滤
+    if (p.payerOpenid) match.payerOpenid = p.payerOpenid;
+    if (p.recorderOpenid) match.recorderOpenid = p.recorderOpenid;
     if (p.categoryTopId) {
       if (p.categoryTopId === '_none') {
         match.categoryId = null; // 「未分类」聚合桶：categoryId 为空的记录
@@ -515,7 +535,7 @@ const record = {
       getUser(ctx.openid), loadRateIndex(),
     ]);
     const base = (bk && bk.data && bk.data.baseCurrency) || rec.baseCurrency || 'CNY';
-    const display = (u && u.settings && u.settings.displayCurrency) || base;
+    const display = displayCurrencyOf(u, rec.bookId, base);
     const q = quotesAt(rateIndex, rec.date);
     const converted = recToDisplay(rec, display, q);
     // 记录当日的「原币 → 展示币」汇率：1 原币 = ? 展示币
@@ -639,9 +659,9 @@ const rate = {
     const { date, quotes } = await fetchAndStoreCnyQuotes();
     return { date, count: Object.keys(quotes).length };
   },
-  // 手动刷新（dev 模式，设置页按钮）
-  async refresh(_p) {
-    if (!IS_DEV) throw new AppError('NO_PERMISSION', '非 dev 模式禁止刷新汇率');
+  // 手动刷新（dev 工具，设置页按钮）
+  async refresh(_p, ctx) {
+    if (!isDevUser(ctx.openid)) throw new AppError('NO_PERMISSION', '非开发者禁止刷新汇率');
     return rate._refresh();
   },
 };
@@ -677,7 +697,7 @@ const stats = {
       ctx ? getUser(ctx.openid) : Promise.resolve(null), loadRateIndex(),
     ]);
     const base = b.data.baseCurrency;
-    const display = (u && u.settings && u.settings.displayCurrency) || base;
+    const display = displayCurrencyOf(u, bookId, base);
     const curMonth = relDate(0).slice(0, 7); // 本月（北京时间）
     let mIncome = 0, mExpense = 0, tIncome = 0, tExpense = 0;
     daily.forEach((row) => {
@@ -709,7 +729,7 @@ const stats = {
       aggregateDaily(p.bookId), db.collection('books').doc(p.bookId).get(), getUser(ctx.openid), loadRateIndex(),
     ]);
     const base = b.data.baseCurrency;
-    const display = (u && u.settings && u.settings.displayCurrency) || base;
+    const display = displayCurrencyOf(u, p.bookId, base);
     const curMonth = relDate(0).slice(0, 7);
     const days = []; for (let i = 29; i >= 0; i--) days.push(relDate(-i)); // 近 30 日
     const dMap = {}; days.forEach((d) => { dMap[d] = { date: d, income: 0, expense: 0 }; });
@@ -750,7 +770,7 @@ const stats = {
       db.collection('books').doc(p.bookId).get(), getUser(ctx.openid), categoriesMap(p.bookId), loadRateIndex(),
     ]);
     const base = b.data.baseCurrency;
-    const display = (u && u.settings && u.settings.displayCurrency) || base;
+    const display = displayCurrencyOf(u, p.bookId, base);
     const $ = _.aggregate;
     const rows = [];
     const step = 1000;
@@ -791,6 +811,55 @@ const stats = {
       })).sort((a, b2) => b2.total - a.total),
     });
     return { displayCurrency: display, month, expense: pack('expense'), income: pack('income') };
+  },
+
+  // 某月按「成员」聚合（成员维度统计卡，PRD P2）。
+  // kind=expense 按付款人（scope=paid）或按应摊（scope=share，分账账本）；kind=income 恒按记录人。
+  // 口径与其他图表一致：逐笔按记录当日汇率换算到该用户该账本的展示币种；应摊走 splitShares（与 settle 同源）。
+  async getMemberData(p, ctx) {
+    await requireMember(p.bookId, ctx.openid);
+    const month = /^\d{4}-\d{2}$/.test(p.month || '') ? p.month : relDate(0).slice(0, 7);
+    const kind = p.kind === 'income' ? 'income' : 'expense';
+    const scope = kind === 'expense' && p.scope === 'share' ? 'share' : 'paid';
+    const [b, u, mMap, rateIndex] = await Promise.all([
+      db.collection('books').doc(p.bookId).get(), getUser(ctx.openid), membersMap(p.bookId), loadRateIndex(),
+    ]);
+    const base = b.data.baseCurrency;
+    const display = displayCurrencyOf(u, p.bookId, base);
+    // 该月该类型全量记录（月内条数有限，分页取全；share 需要 split 数组，无法走聚合 group）
+    const recs = [];
+    for (let skip = 0; skip < 100000; skip += 1000) {
+      const r = await db.collection('records')
+        .where({ bookId: p.bookId, type: kind, date: _.gte(`${month}-01`).and(_.lte(`${month}-31`)) })
+        .field({ amountConverted: 1, date: 1, payerOpenid: 1, recorderOpenid: 1, split: 1 })
+        .skip(skip).limit(1000).get();
+      recs.push(...(r.data || []));
+      if ((r.data || []).length < 1000) break;
+    }
+    const sums = {}, counts = {};
+    const add = (o, v) => { if (!o) return; sums[o] = (sums[o] || 0) + v; counts[o] = (counts[o] || 0) + 1; };
+    let total = 0;
+    recs.forEach((r0) => {
+      const f = dayFactor(rateIndex, r0.date, base, display);
+      if (kind === 'income') { const v = r0.amountConverted * f; add(r0.recorderOpenid, v); total += v; return; }
+      if (scope === 'paid') { const v = r0.amountConverted * f; add(r0.payerOpenid, v); total += v; return; }
+      const sh = splitShares(r0);
+      Object.keys(sh).forEach((o) => { const v = sh[o] * f; add(o, v); total += v; });
+    });
+    const members = Object.keys(sums).map((o) => {
+      const m = mMap[o];
+      return {
+        openid: o,
+        name: m ? m.name : '已退出成员',
+        initial: m ? m.initial : '退',
+        color: m ? m.color : '#97a7b7',
+        avatarFileID: (m && m.avatarFileID) || '',
+        isMe: o === ctx.openid,
+        total: round2(sums[o]), count: counts[o],
+        percent: total > 0 ? Math.round((sums[o] / total) * 1000) / 10 : 0,
+      };
+    }).sort((a, b2) => b2.total - a.total);
+    return { displayCurrency: display, month, kind, scope, total: round2(total), members };
   },
 };
 
@@ -909,14 +978,16 @@ function categoryTreeText(cMap, kind) {
 }
 function prevYm(ym) { const [y, m] = ym.split('-').map(Number); return new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7); }
 
-// AI 用量额度：免费用户共 AI_FREE_QUOTA（默认 50）次真实模型调用（问答/解析/收据识别），
-// 会话记录本身全部保留。aiPaid 用户不受限（付费体系后续接入）。
-const AI_FREE_QUOTA = Number(process.env.AI_FREE_QUOTA || 50);
+// AI 用量额度开关：云函数环境变量 AI_FREE_QUOTA > 0 时启用「免费 N 次真实模型调用」限额；
+// 未配置或 0 = 不限次且前端隐藏额度文案（当前默认）。之后额度扛不住时在控制台配 AI_FREE_QUOTA=50
+// 即时生效，无需改代码重新部署。用量始终计数（users.aiUsage），关着也能观察消耗决定何时开。
+const AI_FREE_QUOTA = Number(process.env.AI_FREE_QUOTA || 0);
 async function aiQuota(openid) {
   const u = await getUser(openid);
   const used = (u && u.aiUsage) || 0;
   const paid = !!(u && u.aiPaid);
-  return { used, paid, left: paid ? Infinity : Math.max(0, AI_FREE_QUOTA - used) };
+  const unlimited = paid || AI_FREE_QUOTA <= 0;
+  return { used, paid, left: unlimited ? Infinity : Math.max(0, AI_FREE_QUOTA - used) };
 }
 function aiCountUse(openid) {
   return db.collection('users').doc(openid).update({ data: { aiUsage: _.inc(1) } }).catch(() => {});
@@ -930,7 +1001,7 @@ async function buildAiPack(bookId, ctx) {
     getUser(ctx.openid), loadRateIndex(), membersMap(bookId),
   ]);
   const base = b.data.baseCurrency;
-  const display = (u && u.settings && u.settings.displayCurrency) || base;
+  const display = displayCurrencyOf(u, bookId, base);
   const curYm = relDate(0).slice(0, 7);
   // 逐月 + 累计
   const mAgg = {}; let tIn = 0, tEx = 0;
@@ -1005,6 +1076,12 @@ const ai = {
     await requireMember(p.bookId, ctx.openid);
     const r = await db.collection('aiMessages').where({ bookId: p.bookId, openid: ctx.openid }).orderBy('createdAt', 'asc').limit(200).get();
     return r.data;
+  },
+  // 额度查询（AI 页顶部显示剩余次数；Infinity 无法过 JSON，不限一律 left:-1）
+  // enabled=false（限额关闭）时前端整条额度文案隐藏
+  async quota(p, ctx) {
+    const q = await aiQuota(ctx.openid);
+    return { used: q.used, paid: q.paid, total: AI_FREE_QUOTA, enabled: AI_FREE_QUOTA > 0, left: isFinite(q.left) ? q.left : -1 };
   },
   // 统一入口：意图分流（记账句 → 预填卡 / 数据问答 → 基于数据包回答 / 跑题 → 拒绝）。
   // 数字只能来自 buildAiPack 的聚合结果——模型负责挑选与组织语言，不负责算术来源，杜绝编造。
@@ -1227,11 +1304,19 @@ const ai = {
 // ============================== settings / user ==============================
 const settings = {
   async get(_p, ctx) {
-    const u = await ensureUser(ctx.openid);
+    const u = await ensureUser(ctx.openid, ctx.channel);
     return { displayCurrency: u.settings.displayCurrency, aiMessageLimit: u.settings.aiMessageLimit };
   },
   async update(p, ctx) {
-    const u = await ensureUser(ctx.openid);
+    const u = await ensureUser(ctx.openid, ctx.channel);
+    // 带 bookId = 设置该账本的展示币种（每账本一个，PRD 待定 5）；不带 = 改全局默认
+    if (p.displayCurrency && p.bookId) {
+      await requireMember(p.bookId, ctx.openid);
+      await db.collection('users').doc(ctx.openid).update({
+        data: { ['settings.bookCurrency.' + p.bookId]: p.displayCurrency },
+      });
+      return { ok: true };
+    }
     const s = { ...u.settings };
     if (p.displayCurrency) s.displayCurrency = p.displayCurrency;
     if (p.aiMessageLimit) s.aiMessageLimit = p.aiMessageLimit;
@@ -1241,7 +1326,7 @@ const settings = {
 };
 const user = {
   async getProfile(_p, ctx) {
-    const u = await ensureUser(ctx.openid);
+    const u = await ensureUser(ctx.openid, ctx.channel);
     // 账本数 = 我参与的、且仍存在的账本去重计数（避免残留/重复成员记录导致虚高）
     const ms = await db.collection('members').where({ openid: ctx.openid, status: _.neq('removed') }).get();
     const bookIds = [...new Set(ms.data.map((m) => m.bookId))];
@@ -1257,7 +1342,10 @@ const user = {
     }
     return {
       nickname: u.nickname, avatarInitial: u.avatarInitial, avatarColor: u.avatarColor,
-      avatarFileID: u.avatarFileID || '', registered: !!u.registered, isDev: IS_DEV,
+      avatarFileID: u.avatarFileID || '',
+      registered: !!u.registered,
+      isDev: isDevUser(ctx.openid),                    // dev 工具区块显隐（owner 常驻可见）
+      canReset: isDevUser(ctx.openid),                 // 「清空所有数据」：只认 owner 身份
       bookCount, defaultBookName, defaultBookId: u.defaultBookId || '',
     };
   },
@@ -1266,7 +1354,7 @@ const user = {
   // 名字/头像各处实时取自 users，改这里即全站更新，无需再逐账本同步。
   async login(p, ctx) {
     await ensureCollections();
-    await ensureUser(ctx.openid);
+    await ensureUser(ctx.openid, ctx.channel);
     const nickname = (p.nickname || '').trim().slice(0, 20) || '微信用户';
     const data = { nickname, avatarInitial: nickname.slice(0, 1), registered: true };
     if (p.avatarFileID) data.avatarFileID = p.avatarFileID;
@@ -1598,10 +1686,51 @@ const data = {
 };
 
 // ============================== settle（P2）==============================
+// 单笔支出的成员应摊（基准币口径）。settle 与成员统计共用此口径，两处必须一致。
+// 历史数据可能已带 share（seed/导入）则直用；没带按 mode 现算：
+// treat = 仅付款人承担全额；even/其他 = 选中成员均摊；无分摊信息（共享账本/旧数据）= 付款人承担。
+function splitShares(rec) {
+  const out = {};
+  const total = rec.amountConverted || 0;
+  const sp = rec.split || null;
+  const members = (sp && sp.members) || [];
+  if (!sp || sp.mode === 'treat' || !members.length) {
+    out[rec.payerOpenid] = (out[rec.payerOpenid] || 0) + total;
+    return out;
+  }
+  if (members.some((m) => typeof m.share === 'number')) {
+    members.forEach((m) => { out[m.openid] = (out[m.openid] || 0) + (m.share || 0); });
+    return out;
+  }
+  const per = total / members.length;
+  members.forEach((m) => { out[m.openid] = (out[m.openid] || 0) + per; });
+  return out;
+}
+
+// 全量取某账本的结清抵扣（settlements 集合，条数少，分页取全）
+async function fetchSettlements(bookId) {
+  const out = [];
+  for (let skip = 0; ; skip += 100) {
+    const r = await db.collection('settlements').where({ bookId }).skip(skip).limit(100).get().catch(() => ({ data: [] }));
+    out.push(...(r.data || []));
+    if ((r.data || []).length < 100) break;
+  }
+  return out;
+}
+
+// 结算语义（抵扣模型，无周期/快照）：「标记结清」= 往 settlements 插一笔抵扣
+// （from 已把 amount 付给 to，基准币种口径）；重算时先按全量记录算净额，再用抵扣冲抵，
+// 剩余部分生成最少转账方案。结清后继续记账，方案只会体现增量欠款；撤销结清 = 删抵扣文档。
 const settle = {
   async get(p, ctx) {
     await requireMember(p.bookId, ctx.openid);
-    const [records, mMap] = await Promise.all([fetchBookRecords(p.bookId), membersMap(p.bookId)]);
+    const [records, mMap, bk, stl] = await Promise.all([
+      fetchBookRecords(p.bookId), membersMap(p.bookId),
+      db.collection('books').doc(p.bookId).get(),
+      fetchSettlements(p.bookId),
+    ]);
+    const base = (bk.data && bk.data.baseCurrency) || 'CNY';
+    const sym = CUR_SYMBOL[base] || base + ' ';
     const paid = {}, share = {};
     Object.keys(mMap).forEach((o) => { paid[o] = 0; share[o] = 0; });
     let totalExpense = 0;
@@ -1609,31 +1738,53 @@ const settle = {
       if (r.type !== 'expense') return;
       totalExpense += r.amountConverted;
       paid[r.payerOpenid] = (paid[r.payerOpenid] || 0) + r.amountConverted;
-      (r.split && r.split.members ? r.split.members : []).forEach((sm) => { share[sm.openid] = (share[sm.openid] || 0) + (sm.share || 0); });
+      const sh = splitShares(r); // 与成员统计同口径；旧数据无 share 字段时按 mode 现算，修掉「均摊应摊恒为 0」的隐性坑
+      Object.keys(sh).forEach((o) => { share[o] = (share[o] || 0) + sh[o]; });
     });
     const net = {};
     Object.keys(mMap).forEach((o) => { net[o] = round2((paid[o] || 0) - (share[o] || 0)); });
-    // 最少转账
+    // 抵扣：已结清的转账视同「from 已付给 to」，双方净额向 0 冲抵。
+    // 全部结清后各净额归零，之后的新记录只产生增量欠款。
+    stl.forEach((s) => {
+      net[s.from] = round2((net[s.from] || 0) + s.amount);
+      net[s.to] = round2((net[s.to] || 0) - s.amount);
+    });
+    // 最少转账（基于冲抵后的剩余净额）
     const creditors = Object.keys(net).filter((o) => net[o] > 0).map((o) => ({ o, v: net[o] })).sort((a, b) => b.v - a.v);
     const debtors = Object.keys(net).filter((o) => net[o] < 0).map((o) => ({ o, v: -net[o] })).sort((a, b) => b.v - a.v);
+    const who = (o) => {
+      const m = mMap[o] || {};
+      return { name: m.name || '成员', initial: m.initial || '?', color: m.color || '#999', avatar: m.avatarFileID || '' };
+    };
     const transfers = []; let i = 0, j = 0, tid = 1;
     while (i < debtors.length && j < creditors.length) {
       const amt = round2(Math.min(debtors[i].v, creditors[j].v));
       if (amt > 0.001) {
-        transfers.push({ transferId: 't' + (tid++), from: mMap[debtors[i].o].name, to: mMap[creditors[j].o].name,
-          fromInitial: mMap[debtors[i].o].initial, fromColor: mMap[debtors[i].o].color, fromAvatar: mMap[debtors[i].o].avatarFileID || '',
-          toInitial: mMap[creditors[j].o].initial, toColor: mMap[creditors[j].o].color, toAvatar: mMap[creditors[j].o].avatarFileID || '', amount: amt, settled: false });
+        const f = who(debtors[i].o), t = who(creditors[j].o);
+        transfers.push({ transferId: 't' + (tid++),
+          fromOpenid: debtors[i].o, toOpenid: creditors[j].o, // 标记结清时回传，服务端据此落抵扣
+          from: f.name, fromInitial: f.initial, fromColor: f.color, fromAvatar: f.avatar,
+          to: t.name, toInitial: t.initial, toColor: t.color, toAvatar: t.avatar,
+          amount: amt, settled: false });
       }
       debtors[i].v -= amt; creditors[j].v -= amt;
       if (debtors[i].v < 0.001) i++; if (creditors[j].v < 0.001) j++;
     }
+    // 已结清列表（可撤销），新结清的在前
+    const settled = stl.map((s) => {
+      const f = who(s.from), t = who(s.to);
+      return { settlementId: s._id,
+        from: f.name, fromInitial: f.initial, fromColor: f.color, fromAvatar: f.avatar,
+        to: t.name, toInitial: t.initial, toColor: t.color, toAvatar: t.avatar,
+        amount: s.amount, settledAt: s.settledAt };
+    }).reverse();
     const me = ctx.openid;
     const splits = records.filter((r) => r.type === 'expense').map((r) => {
       const sp = r.split || { mode: 'even', members: [] };
       const n = sp.members.length || 1;
       let detail;
       if (sp.mode === 'treat') detail = `仅${(mMap[r.payerOpenid] || {}).name || ''}承担`;
-      else if (sp.mode === 'even') detail = `${n} 人均摊 · 各 ¥${round2(r.amountConverted / n)}`;
+      else if (sp.mode === 'even') detail = `${n} 人均摊 · 各 ${sym}${round2(r.amountConverted / n)}`;
       else detail = `${n} 人分摊`;
       return {
         title: r.title || r.categoryPath, amount: r.amountConverted,
@@ -1643,15 +1794,43 @@ const settle = {
       };
     });
     return {
-      summary: { myNet: net[me] || 0, totalExpense: round2(totalExpense), myPaid: round2(paid[me] || 0), myShare: round2(share[me] || 0) },
-      transfers,
+      // myNet / 成员净额均为「冲抵后的剩余口径」：全部结清则归零，关心的是还差多少而非历史总账
+      summary: { myNet: net[me] || 0, totalExpense: round2(totalExpense), myPaid: round2(paid[me] || 0), myShare: round2(share[me] || 0), currency: base },
+      transfers, settled,
       members: Object.keys(mMap).map((o) => ({ name: mMap[o].name + (o === me ? '（我）' : ''), initial: mMap[o].initial, color: mMap[o].color, avatarFileID: mMap[o].avatarFileID || '', paid: round2(paid[o] || 0), share: round2(share[o] || 0), net: net[o] || 0 })),
       splits, splitCount: splits.length,
     };
   },
+
+  // 标记结清：落一笔抵扣。写权限 rw 起（只读成员不产生入账类操作）
+  async mark(p, ctx) {
+    const m = await requireMember(p.bookId, ctx.openid); requireRole(m, 'rw');
+    const amount = round2(Number(p.amount));
+    if (!(amount > 0) || amount > 1e9) throw new AppError('INVALID_PARAM', '结清金额不合法');
+    if (!p.from || !p.to || p.from === p.to) throw new AppError('INVALID_PARAM', '结清双方不合法');
+    const mm = await membersMap(p.bookId); // 双方须是本账本成员（含已移除：历史欠款可能涉及）
+    if (!mm[p.from] || !mm[p.to]) throw new AppError('INVALID_PARAM', '结清双方不是账本成员');
+    await db.createCollection('settlements').catch(() => {});
+    const add = await db.collection('settlements').add({ data: {
+      bookId: p.bookId, from: p.from, to: p.to, amount,
+      settledBy: ctx.openid, settledAt: db.serverDate(),
+    } });
+    return { settlementId: add._id };
+  },
+
+  // 撤销结清：删抵扣文档，欠款回到方案里
+  async unmark(p, ctx) {
+    const m = await requireMember(p.bookId, ctx.openid); requireRole(m, 'rw');
+    const r = await db.collection('settlements').doc(p.settlementId).get().catch(() => null);
+    if (!r || !r.data || r.data.bookId !== p.bookId) throw new AppError('NOT_FOUND', '结清记录不存在');
+    await db.collection('settlements').doc(p.settlementId).remove();
+    return { ok: true };
+  },
+
+  // 旧版客户端兼容：历史体验版仍会调 markTransfer，保持成功返回但不落库（新逻辑走 mark/unmark）
   async markTransfer(p, ctx) {
     await requireMember(p.bookId, ctx.openid);
-    return { ok: true }; // 结清方案为实时计算，标记状态由前端本地保留（P2 可落库）
+    return { ok: true };
   },
 };
 
@@ -1665,6 +1844,14 @@ function feedbackOwnerIds() {
   return (process.env.FEEDBACK_OWNER || '').split(',').map((s) => s.trim()).filter(Boolean);
 }
 function isFeedbackOwner(openid) { return feedbackOwnerIds().includes(openid); }
+// 开发者判定（dev 工具显隐与执行的统一权限源）：配了 FEEDBACK_OWNER 就只认身份（服务端 openid，
+// 不可伪造）；没配（早期开发/新环境）才退回 APP_ENV=dev 兜底。上线后改 APP_ENV 不会把 dev
+// 工具暴露给普通用户。seed.reset 同样只认此身份（原「且 APP_ENV=dev」双闸已按 owner 决策移除）。
+function isDevUser(openid) {
+  const owners = feedbackOwnerIds();
+  if (owners.length) return owners.includes(openid);
+  return IS_DEV;
+}
 async function isFeedbackAdmin(openid) {
   if (isFeedbackOwner(openid)) return true;
   const r = await db.collection('admins').where({ kind: 'admin', openid }).count().catch(() => ({ total: 0 }));
@@ -1689,6 +1876,7 @@ const feedback = {
     const add = await db.collection('feedbacks').add({ data: {
       openid: ctx.openid, title: title.slice(0, 50), content: content.slice(0, 1000),
       images, contactEmail: email.slice(0, 100),
+      channel: ctx.channel,
       status: 'pending', replies: [],
       unreadForUser: false, unreadForAdmin: true,
       createdAt: db.serverDate(), updatedAt: db.serverDate(),
@@ -1947,7 +2135,7 @@ async function clearSeedData(openid) {
   // 用户在演示账本里手动记的账/会话/自建分类没有 seed 标记——按演示账本 id 清孤儿
   // （含旧版固定 id 的两个账本）
   const bookIds = SEED.seedBookIds(openid).concat(['seed-book-share', 'seed-book-split']);
-  for (const c of ['records', 'aiMessages', 'categories', 'chartLayouts', 'members']) {
+  for (const c of ['records', 'aiMessages', 'categories', 'chartLayouts', 'members', 'settlements']) {
     await db.createCollection(c).catch(() => {});
     result[c] = (result[c] || 0) + await wipe(c, { bookId: _.in(bookIds) });
   }
@@ -1956,8 +2144,8 @@ async function clearSeedData(openid) {
 const seed = {
   // 载入演示数据：先清掉旧演示数据再插入。不改用户资料、不碰真实账本。
   async run(_p, ctx) {
-    if (!IS_DEV) {
-      throw new AppError('NO_PERMISSION', '当前非 dev 模式，禁止初始化。请在云开发控制台把云函数 api 的环境变量 APP_ENV 设为 dev 后重试。');
+    if (!isDevUser(ctx.openid)) {
+      throw new AppError('NO_PERMISSION', '非开发者禁止初始化演示数据');
     }
     await clearSeedData(ctx.openid);
     const data = SEED.build(ctx.openid);
@@ -1982,15 +2170,45 @@ const seed = {
 
   // 清除演示数据（只删自己的 seed 数据，他人与真实数据不受影响）
   async clear(_p, ctx) {
-    if (!IS_DEV) throw new AppError('NO_PERMISSION', '非 dev 模式禁止操作');
+    if (!isDevUser(ctx.openid)) throw new AppError('NO_PERMISSION', '非开发者禁止操作');
     const result = await clearSeedData(ctx.openid);
     return { ok: true, result };
   },
 
-  // 清空全部数据（含用户，需重新登录），回到干净测试状态（dev）。
+  // 按渠道清理测试数据：删除开发版/体验版创建的账本（级联记录/成员/分类/布局/AI 会话/图片）与反馈工单。
+  // 只允许 develop/trial，release 永远删不到；users 不删——同一 openid 在各渠道是同一个人，按渠道删用户会误伤真实账号。
+  async purgeChannel(p, ctx) {
+    if (!isDevUser(ctx.openid)) throw new AppError('NO_PERMISSION', '非开发者禁止操作');
+    const channels = (Array.isArray(p.channels) ? p.channels : [p.channels])
+      .filter((c) => ['develop', 'trial'].includes(c));
+    if (!channels.length) throw new AppError('INVALID_PARAM', '仅允许清理 develop / trial 渠道');
+    const result = { books: 0, feedbacks: 0 };
+    // 账本：逐本级联解散（dissolveBook 连图片一起删），循环取批直到无匹配
+    for (let guard = 0; guard < 200; guard++) {
+      const r = await db.collection('books').where({ channel: _.in(channels) }).limit(20).get().catch(() => ({ data: [] }));
+      if (!r.data.length) break;
+      for (const b of r.data) { await dissolveBook(b._id); result.books++; }
+    }
+    // 反馈工单：先删截图文件再删文档（删完文档就找不到 fileID 了）
+    for (let guard = 0; guard < 200; guard++) {
+      const r = await db.collection('feedbacks').where({ channel: _.in(channels) }).limit(50).get().catch(() => ({ data: [] }));
+      if (!r.data.length) break;
+      const imgs = [];
+      r.data.forEach((f) => (f.images || []).forEach((x) => imgs.push(x)));
+      await deleteFiles(imgs);
+      await db.collection('feedbacks').where({ _id: _.in(r.data.map((f) => f._id)) }).remove().catch(() => {});
+      result.feedbacks += r.data.length;
+    }
+    return result;
+  },
+
+  // 清空全部数据（含用户，需重新登录），回到干净测试状态。
   // 云存储一并清：先趁数据还在，把各集合引用的 fileID 全收集起来（删完库就找不到了）。
   async reset(_p, ctx) {
-    if (!IS_DEV) throw new AppError('NO_PERMISSION', '非 dev 模式禁止清空数据');
+    // 单闸：只认 owner 身份（服务端 openid，不可伪造）。前端另有两段式确认兜误触。
+    if (!isDevUser(ctx.openid)) {
+      throw new AppError('NO_PERMISSION', '仅 owner 本人可清空全库');
+    }
     const fileIDs = [];
     const collect = async (coll, pick) => {
       for (let skip = 0; ; skip += 1000) {

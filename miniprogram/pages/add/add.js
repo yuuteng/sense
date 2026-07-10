@@ -47,10 +47,17 @@ Page({
     // 新增一级分类弹层
     addCat: { visible: false, name: '', iconIndex: 0 },
     iconOptions: [],
+    catHint: false, // 「长按分类可停用」一次性提示
+  },
+
+  dismissCatHint() {
+    wx.setStorageSync('hintCatLongpress', 1);
+    this.setData({ catHint: false });
   },
 
   async onLoad(query) {
     this.editId = query.id || '';
+    this.setData({ catHint: !wx.getStorageSync('hintCatLongpress') });
     this.aiMsgId = query.m || ''; // 来自 AI 预填卡时带上消息 id，保存后回写卡片状态
     try { this.draft = query.d ? JSON.parse(decodeURIComponent(query.d)) : null; } catch (e) { this.draft = null; }
     const t = today();
@@ -64,12 +71,12 @@ Page({
         photoAdd: icons.get('photoAdd', '#748294', 1.7),
         plus: icons.get('plus', '#748294', 2),
       },
+      // 只留与收支场景相关的图标（mail/privacy/share/refresh/bars 等系统图标与记账无关，已剔除）
       iconOptions: [
         'dining', 'coffee', 'bag', 'train', 'car', 'house',
         'medical', 'medicine', 'edu', 'book', 'play', 'ticket',
         'gift', 'heart', 'star', 'phone', 'camera', 'income',
-        'currency', 'mail', 'calendar', 'clock', 'note', 'receipt',
-        'privacy', 'share', 'refresh', 'bars', 'list', 'dots',
+        'currency', 'receipt', 'clock', 'note', 'list', 'dots',
       ].map((n) => ({
         name: n, off: icons.get(n, '#3e4550', 1.6), on: icons.get(n, '#ffffff', 1.6),
       })),
@@ -219,7 +226,20 @@ Page({
     if (parts.length > 1) out += '.' + parts[1].slice(0, 2);
     this.setData({ amount: out });
     this.updateComputed();
+    this.syncUnloadGuard();
     return out;
+  },
+
+  // 未保存离开守卫：填了内容（金额/备注/图片）且未保存时，返回/手势离开先确认，防误滑丢输入
+  syncUnloadGuard() {
+    const dirty = !this._saved && (this.data.amount || this.data.note || this.data.photos.length);
+    if (dirty === this._guardOn) return;
+    this._guardOn = dirty;
+    if (dirty && wx.enableAlertBeforeUnload) {
+      wx.enableAlertBeforeUnload({ message: '这笔账还没保存，确定离开？' });
+    } else if (!dirty && wx.disableAlertBeforeUnload) {
+      wx.disableAlertBeforeUnload();
+    }
   },
 
   switchType(e) {
@@ -249,7 +269,7 @@ Page({
     this.setData({ [`splitMembers[${i}].selected`]: !this.data.splitMembers[i].selected });
     this.updateComputed();
   },
-  onNoteInput(e) { this.setData({ note: e.detail.value }); },
+  onNoteInput(e) { this.setData({ note: e.detail.value }); this.syncUnloadGuard(); },
   noop() {},
 
   // 日期：日历
@@ -306,7 +326,7 @@ Page({
     if (!cat) return;
     const kind = this.data.type === 'in' ? 'income' : 'expense';
     wx.showModal({
-      title: '停用分类', content: `停用「${cat.key}」？其下二级分类一并隐藏，历史记录仍保留原分类名。`, confirmColor: '#f62172',
+      title: '停用分类', content: `停用「${cat.key}」？其下二级分类一并隐藏，历史记录仍保留原分类名。`, confirmColor: '#c41e5a',
       success: (res) => {
         if (!res.confirm) return;
         // 乐观移除：本地立即从九宫格消失，云端失败再拉回真实列表
@@ -327,7 +347,7 @@ Page({
     if (!sub) return;
     const kind = this.data.type === 'in' ? 'income' : 'expense';
     wx.showModal({
-      title: '停用分类', content: `停用「${sub.name}」？历史记录仍保留原分类名。`, confirmColor: '#f62172',
+      title: '停用分类', content: `停用「${sub.name}」？历史记录仍保留原分类名。`, confirmColor: '#c41e5a',
       success: (res) => {
         if (!res.confirm) return;
         // 乐观移除二级：本地立即消失，失败拉回真实列表
@@ -350,10 +370,10 @@ Page({
     if (left <= 0) { wx.showToast({ title: '最多 9 张', icon: 'none' }); return; }
     wx.chooseMedia({
       count: left, mediaType: ['image'], sizeType: ['compressed'],
-      success: (res) => this.setData({ photos: this.data.photos.concat(res.tempFiles.map((f) => f.tempFilePath)) }),
+      success: (res) => { this.setData({ photos: this.data.photos.concat(res.tempFiles.map((f) => f.tempFilePath)) }); this.syncUnloadGuard(); },
     });
   },
-  removePhoto(e) { const arr = this.data.photos.slice(); arr.splice(e.currentTarget.dataset.i, 1); this.setData({ photos: arr }); },
+  removePhoto(e) { const arr = this.data.photos.slice(); arr.splice(e.currentTarget.dataset.i, 1); this.setData({ photos: arr }); this.syncUnloadGuard(); },
   async uploadPhotos() {
     const ids = [];
     for (const p of this.data.photos) {
@@ -407,6 +427,8 @@ Page({
           amountConverted: Math.round(amount * (c.rate || 1) * 100) / 100,
         };
       }
+      this._saved = true;
+      this.syncUnloadGuard(); // 已保存，解除离开确认
       wx.hideLoading();
       wx.showToast({ title: this.editId ? '已更新' : '已保存', icon: 'success' });
       setTimeout(() => wx.navigateBack({ delta: 1, fail() { wx.switchTab({ url: '/pages/home/home' }); } }), 600);

@@ -248,7 +248,7 @@ wx.cloud.callFunction({
 - 数字只来自服务端聚合的**紧凑数据包**（本月/累计/近12月/近30日/本月分类含子类/上月分类/本月成员，全部按展示币种、记录当日汇率口径），模型只能引用不能编造；
 - **域限制**：只处理本账本记账与统计，其他话题（股票/百科/闲聊等）礼貌拒绝；
 - 环境变量 `AI_PROVIDER`（默认 hunyuan-open）/ `AI_TEXT_MODEL`（默认 hunyuan-lite）；AI 未开通或调用失败时自动降级 parseNL 关键词解析。
-- **用量额度**：免费用户累计 `AI_FREE_QUOTA`（默认 50）次真实模型调用（chat / parseReceipt 各计 1，成功才计）；用尽后 chat 降级关键词解析、收据识别提示额度用完；`users.aiPaid=true` 不受限。会话记录不再滚动删除。
+- **用量额度（开关制）**：环境变量 `AI_FREE_QUOTA > 0` 时启用——免费用户累计 N 次真实模型调用（chat / parseReceipt 各计 1，成功才计），用尽后 chat 降级关键词解析、收据识别提示额度用完，`users.aiPaid=true` 不受限；**缺省/0 = 不限次数（当前默认），`ai.quota` 返回 `enabled:false`，前端隐藏额度文案**。无论开关，用量都在 `users.aiUsage` 累计。会话记录不再滚动删除。改 `AI_FREE_QUOTA` 即时生效，无需重新部署。
 **ai.parseReceipt** 入参 `{ bookId, fileID }` → `{ card }`（`AI_VISION_MODEL` 默认 hunyuan-vision）。
 **ai.confirmDraft** 入参 `{ bookId, draft, msgId? }` → `{ recordId }`。分类按「父 / 子」全路径→末级→一级匹配，匹配不到置空（不自动建分类）。
 **ai.setCardState** 入参 `{ bookId, msgId, state: pending|done|dropped }`。

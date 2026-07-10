@@ -20,6 +20,7 @@
   margin: 0; padding: 0;
   background: transparent; line-height: normal;
   flex: 1; display: flex; justify-content: flex-end;
+  align-items: center; min-height: 88rpx; /* 命中区 ≥44pt；胶囊视觉 56rpx 不变 */
 }
 .invite-btn::after { border: none; }
 .invite-pill {

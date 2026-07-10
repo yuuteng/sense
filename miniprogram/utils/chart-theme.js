@@ -4,7 +4,7 @@ const COLOR = {
   income: '#9edf10',   // --success
   expense: '#00ccf9',  // --accent
   track: '#e4e7ec',    // --border（空环/基线）
-  axis: '#97a7b7',     // 轴文字
+  axis: '#5f6c7d',     // 轴文字（grey-600：97a7b7 仅 2.8:1，轴标签也是文字，按 AA 提深）
   surface: '#ffffff',  // 卡片底（分段间隙色）
 };
 

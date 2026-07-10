@@ -1,4 +1,4 @@
-<view wx:if="{{visible}}" class="cal-mask" bindtap="close">
+<view wx:if="{{visible}}" class="cal-mask" bindtap="close" catchtouchmove="stop">
   <view class="cal" catchtap="stop">
     <view class="cal__head">
       <view class="cal__nav" hover-class="cal__nav--h" bindtap="prev">‹</view>

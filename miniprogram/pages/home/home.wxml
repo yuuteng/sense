@@ -15,17 +15,17 @@
   </view>
 
   <!-- 未初始化数据提示 -->
-  <view wx:if="{{needInit}}" style="text-align:center;padding:120rpx 60rpx">
-    <view style="font-size:32rpx;font-weight:600">还没有账本数据</view>
-    <view class="muted" style="font-size:28rpx;margin-top:12rpx">前往「我的 → 初始化测试数据」一键载入演示数据</view>
-    <view class="btn btn--primary" style="display:inline-flex;margin-top:36rpx" hover-class="pressed" hover-stay-time="80" bindtap="goSettings">去初始化</view>
+  <view wx:if="{{needInit}}" class="empty">
+    <view class="empty__title">还没有账本数据</view>
+    <view class="empty__sub">想先看看效果？到「我的」页点「载入演示数据」，一键生成一个演示账本。</view>
+    <view class="btn btn--primary" style="display:inline-flex;margin-top:36rpx" hover-class="pressed" hover-stay-time="80" bindtap="goSettings">去载入演示数据</view>
   </view>
 
   <!-- 本月概要 -->
   <view wx:if="{{!needInit}}" class="summary">
     <view class="summary__glow"></view>
     <view class="summary__label">{{summary.monthLabel}}</view>
-    <view class="summary__balance num">{{summary.balance}}</view>
+    <view class="summary__balance num {{summary.compact ? 'compact' : ''}}">{{summary.balance}}</view>
     <view class="summary__row">
       <view class="summary__cell">
         <view class="k"><text class="dot dot--in"></text>收入</view>
@@ -35,6 +35,15 @@
         <view class="k"><text class="dot dot--out"></text>支出</view>
         <view class="v num">{{summary.expense}}</view>
       </view>
+    </view>
+  </view>
+
+  <!-- 分账账本：结算直达入口（账本配置页里的入口保留，两处同去 settle） -->
+  <view wx:if="{{!needInit && isSplit}}" class="group group--flat" style="margin-bottom:16rpx">
+    <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="goSettle">
+      <view class="li__ic" style="background:rgba(255,205,47,0.16)"><image src="{{settleIcon}}"></image></view>
+      <view class="li__label">分账结算</view>
+      <view class="li__val">谁欠谁，一目了然 <image class="chevron" src="{{chevronIcon}}"></image></view>
     </view>
   </view>
 
@@ -71,11 +80,22 @@
     </view>
   </block>
 
+  <!-- 零记录空态：给出路（PRD「空态给出路」）；只读成员无记账入口，文案区分 -->
+  <view wx:if="{{!needInit && !loading && !groups.length}}" class="empty">
+    <view class="empty__title">这个账本还没有记录</view>
+    <block wx:if="{{canAdd}}">
+      <view class="empty__sub">点右下角 ＋ 记第一笔，金额、分类、保存，3 步就好。</view>
+      <view class="empty__sub" style="margin-top:4rpx">也可以去「AI 助手」说一句「昨天打车 35」试试。</view>
+      <navigator class="btn btn--primary" style="display:inline-flex;margin-top:36rpx" url="/pages/add/add" hover-class="pressed" hover-stay-time="80">记第一笔</navigator>
+    </block>
+    <view wx:else class="empty__sub">你是只读成员：等其他成员记上第一笔，这里就会出现记录。</view>
+  </view>
+
   <view wx:if="{{!needInit && groups.length && loadingMore}}" class="load-more"><view class="mini-spin"></view>正在加载更早的记录…</view>
-  <view wx:elif="{{!needInit && groups.length && !hasMore}}" class="ai-disclaimer" style="padding-top:40rpx">已显示全部记录</view>
+  <view wx:elif="{{!needInit && groups.length && !hasMore}}" class="foot-note" style="padding-top:40rpx">已显示全部记录</view>
 
   <navigator wx:if="{{canAdd}}" class="fab" url="/pages/add/add" hover-class="pressed" hover-stay-time="80">
-    <image src="{{plusIcon}}"></image>
+    <image src="{{plusIcon}}"></image><text>记一笔</text>
   </navigator>
 
   <book-switcher

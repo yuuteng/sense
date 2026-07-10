@@ -31,7 +31,9 @@ Page({
       chevronDown: icons.get('chevronDown', '#748294', 2.2),
       plusIcon: icons.get('plus', '#ffffff', 2.4),
       bookIcon: icons.get('book', '#0089c0', 1.7),
-      splitIcon: icons.get('bookSplit', '#a47d06', 1.7),
+      splitIcon: icons.get('bookSplit', '#8a690a', 1.7),
+      settleIcon: icons.get('arrowRight', '#8a690a', 1.9),
+      chevronIcon: icons.get('chevron', '#748294', 2),
     });
   },
 
@@ -74,7 +76,7 @@ Page({
     const row = {
       id: 'pending-' + Date.now(),
       pending: true,
-      iconSrc: icons.get(j.icon || 'dots', j.type === 'income' ? '#5c9a0e' : '#0089c0', 1.7),
+      iconSrc: icons.get(j.icon || 'dots', j.type === 'income' ? '#4a7d0b' : '#0089c0', 1.7),
       title: j.title || (j.type === 'income' ? '收入' : '支出'),
       who: '我', whoInitial: '我', whoColor: '#00ccf9', whoAvatar: '',
       amount: fmt.signed(amt, j.type, cur),
@@ -111,17 +113,22 @@ Page({
         needInit: false,
         currentBookId: book.bookId,
         bookName: book.name,
+        isSplit: book.type === 'split', // 分账账本：概要卡下出「分账结算」直达入口
         canAdd: book.myRole !== 'ro', // 只读成员无「记一笔」入口（服务端另有强制校验）
         curCode: cur,
         curSym: sym,
         hasMore: !!list.hasMore,
         loadingMore: false,
-        summary: {
-          monthLabel: `${summary.monthLabel} · 本月结余`,
-          balance: fmt.signedTotal(summary.balance, cur),
-          income: fmt.money(summary.income, cur),
-          expense: fmt.money(summary.expense, cur),
-        },
+        summary: (() => {
+          const balance = fmt.signedTotal(summary.balance, cur);
+          return {
+            monthLabel: `${summary.monthLabel} · 本月结余`,
+            balance,
+            compact: balance.length > 14, // 巨额结余降一号字，防顶到 hero 卡边
+            income: fmt.money(summary.income, cur),
+            expense: fmt.money(summary.expense, cur),
+          };
+        })(),
         groups: this.mapGroups(list.groups, cur),
       });
     } catch (e) {
@@ -148,18 +155,18 @@ Page({
         bookId: this.data.currentBookId, currency: cur, page: (this.page || 0) + 1,
       });
       this.page = list.page;
-      this.setData({
-        groups: this.data.groups.concat(this.mapGroups(list.groups, cur)),
-        hasMore: !!list.hasMore,
-        loadingMore: false,
-      });
+      // 增量追加：path-syntax 只传新页数据，避免每翻一页都全量重传已加载列表
+      const patch = { hasMore: !!list.hasMore, loadingMore: false };
+      const base = this.data.groups.length;
+      this.mapGroups(list.groups, cur).forEach((g, i) => { patch[`groups[${base + i}]`] = g; });
+      this.setData(patch);
     } catch (e) { this.setData({ loadingMore: false }); api.toast(e); }
   },
 
   mapItem(it, cur) {
     return {
       id: it.recordId,
-      iconSrc: icons.get(it.icon, it.type === 'income' ? '#5c9a0e' : '#0089c0', 1.7),
+      iconSrc: icons.get(it.icon, it.type === 'income' ? '#4a7d0b' : '#0089c0', 1.7),
       title: it.title || it.categoryTopName || (it.type === 'income' ? '收入' : '支出'),
       who: it.recorderName,
       whoInitial: it.recorderInitial,
@@ -215,6 +222,8 @@ Page({
 
   onSwitcherClose() { this.setData({ switcherVisible: false }); },
 
+  goSettle() { wx.navigateTo({ url: '/pages/settle/settle?bookId=' + this.data.currentBookId }); },
+
   goManageBooks() {
     this.setData({ switcherVisible: false });
     wx.navigateTo({ url: '/pages/books/books' });
@@ -230,7 +239,8 @@ Page({
     const prev = { curCode: this.data.curCode, curSym: this.data.curSym };
     // 胶囊即时切换 + 即刻进入加载态；金额换算必须等服务器（口径在服务端），失败回滚胶囊
     this.setData({ curCode: code, curSym: fmt.symbolOf(code), loading: true });
-    api.call('settings', 'update', { displayCurrency: code })
+    // 带 bookId：只改当前账本的展示币种（每账本各一套，PRD 待定 5 拍板）
+    api.call('settings', 'update', { displayCurrency: code, bookId: this.data.currentBookId })
       .then(() => this.load())
       .catch((err) => { this.setData({ ...prev, loading: false }); api.toast(err); });
   },

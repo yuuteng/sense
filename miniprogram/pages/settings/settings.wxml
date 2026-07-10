@@ -4,10 +4,11 @@
 
   <!-- 个人头：点头像换头像（微信头像选择），点其余区域改昵称 -->
   <view class="li" style="margin:0 40rpx 40rpx;border-radius:var(--radius-md);padding:32rpx" hover-class="pressed" hover-stay-time="80" bindtap="editProfile">
-    <button class="avatar-choose" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar" catchtap="noop">
+    <view class="avatar-wrap">
       <image wx:if="{{profile.avatarFileID}}" src="{{profile.avatarFileID}}" style="width:96rpx;height:96rpx;border-radius:50%" mode="aspectFill"></image>
-      <text wx:else class="avatar" style="background:{{profile.avatarColor}};width:96rpx;height:96rpx;font-size:36rpx">{{profile.avatarInitial}}</text>
-    </button>
+      <avatar wx:else initial="{{profile.avatarInitial}}" color="{{profile.avatarColor}}" size="96"></avatar>
+      <button class="avatar-choose" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar" catchtap="noop"></button>
+    </view>
     <view class="li__label">{{profile.nickname || '未登录'}}
       <view class="li__val">已加入 {{profile.bookCount}} 个账本</view>
       <view class="li__val li__val--sub" wx:if="{{profile.defaultBookName}}">默认「{{profile.defaultBookName}}」</view>
@@ -19,7 +20,9 @@
   <view class="group group--flat">
     <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="openCur">
       <view class="li__ic"><image src="{{ic.currency}}"></image></view>
-      <view class="li__label">展示币种</view>
+      <view class="li__label">默认展示币种
+        <view class="li__val">新账本的初始口径；各账本可在顶栏胶囊单独设</view>
+      </view>
       <view class="li__val">{{curLabel}} <image class="chevron" src="{{ic.chevron}}"></image></view>
     </view>
   </view>
@@ -63,9 +66,15 @@
       <view class="li__label">清除演示数据</view>
       <view class="li__val">不影响真实数据 <image class="chevron" src="{{ic.chevron}}"></image></view>
     </view>
-    <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="resetData">
+    <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="purgeTestData">
+      <view class="li__ic"><image src="{{ic.wipe}}"></image></view>
+      <view class="li__label">清理测试渠道数据</view>
+      <view class="li__val">开发版/体验版 <image class="chevron" src="{{ic.chevron}}"></image></view>
+    </view>
+    <!-- 核弹：仅 owner 本人可见可执行（canReset = 服务端 openid 判定）；前端两段式 + 输入「清空」确认 -->
+    <view wx:if="{{profile.canReset}}" class="li" hover-class="pressed" hover-stay-time="80" bindtap="resetData">
       <view class="li__ic danger"><image src="{{ic.wipe}}"></image></view>
-      <view class="li__label" style="color:var(--danger)">清空所有数据</view>
+      <view class="li__label" style="color:var(--danger-ink)">清空所有数据</view>
     </view>
   </view>
   </block>
@@ -88,7 +97,7 @@
   <view class="group group--flat">
     <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="deleteAccount">
       <view class="li__ic danger"><image src="{{ic.wipe}}"></image></view>
-      <view class="li__label" style="color:var(--danger)">注销账户</view>
+      <view class="li__label" style="color:var(--danger-ink)">注销账户</view>
       <view class="li__val">不可恢复 <image class="chevron" src="{{ic.chevron}}"></image></view>
     </view>
   </view>

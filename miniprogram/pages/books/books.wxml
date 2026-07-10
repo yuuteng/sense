@@ -16,12 +16,12 @@
         </view>
         <view style="display:flex;align-items:center;gap:16rpx;margin-top:12rpx">
           <text class="book-type {{item.typeClass}}">{{item.typeLabel}}</text>
-          <text class="role {{item.myRole==='owner'?'role--owner':(item.myRole==='admin'?'role--admin':'role--rw')}}">{{item.roleMine}}</text>
+          <text class="role {{item.myRole==='owner'?'role--owner':(item.myRole==='admin'?'role--admin':(item.myRole==='ro'?'role--ro':'role--rw'))}}">{{item.roleMine}}</text>
         </view>
       </view>
       <image class="chevron" src="{{ic.chevron}}"></image>
     </view>
   </view>
 
-  <view class="ai-disclaimer left">点任意账本进入设置：管理成员、编辑信息、改我的名字、解散账本等。</view>
+  <view class="foot-note left">点任意账本进入设置：管理成员、编辑信息、改我的名字、解散账本等。</view>
 </view>

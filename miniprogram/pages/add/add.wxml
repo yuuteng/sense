@@ -14,7 +14,7 @@
   <view class="amount-display">
     <view class="amount-line">
       <text class="cur">{{curs[curIndex].symbol}}</text>
-      <input class="amount-input" type="digit" value="{{amount}}" placeholder="0" bindinput="onAmountInput" focus="{{amountFocus}}" />
+      <input class="amount-input" type="digit" value="{{amount}}" placeholder="0" placeholder-class="input-ph" bindinput="onAmountInput" focus="{{amountFocus}}" />
     </view>
     <view class="fx-hint">{{fxHint}}</view>
     <view class="cur-pick" hover-class="pressed" hover-stay-time="80" bindtap="openCur">{{curLabel}} <image class="chevron" src="{{ic.chevron}}"></image></view>
@@ -38,6 +38,12 @@
     <view class="chip chip--add" bindtap="onAddSub">＋ 添加</view>
   </view>
 
+  <!-- 一次性提示：长按手势不可见，首次进入明说（PRD 6「识别而非回忆」）-->
+  <view wx:if="{{catHint}}" class="cat-hint">
+    <text>长按分类可停用（历史记录不受影响）</text>
+    <text class="cat-hint__ok" bindtap="dismissCatHint">知道了</text>
+  </view>
+
   <!-- 付款人（仅分账账本）-->
   <block wx:if="{{isSplit}}">
   <view class="section-label" style="padding-bottom:16rpx">付款人 <text class="muted" style="font-weight:400">谁先垫付了这笔</text></view>
@@ -58,14 +64,14 @@
       <avatar src="{{item.avatarFileID}}" initial="{{item.initial}}" color="{{item.color}}" size="52"></avatar><text class="ellip">{{item.name}}</text>
     </view>
   </view>
-  <view class="ai-disclaimer left" style="padding-top:0;padding-bottom:8rpx">{{splitHint}}</view>
+  <view class="foot-note left" style="padding-top:0;padding-bottom:8rpx">{{splitHint}}</view>
   </block>
 
   <!-- 备注 / 日期 -->
   <view class="card--flush" style="margin:0 40rpx">
     <view class="field-row">
       <view class="field-row__label"><image src="{{ic.note}}"></image>备注</view>
-      <view class="field-row__val"><input placeholder="添加备注…" value="{{note}}" bindinput="onNoteInput" /></view>
+      <view class="field-row__val"><input placeholder="添加备注…" placeholder-class="input-ph" value="{{note}}" bindinput="onNoteInput" /></view>
     </view>
     <view class="field-row" hover-class="pressed" hover-stay-time="80" bindtap="openCalendar">
       <view class="field-row__label"><image src="{{ic.calendar}}"></image>日期</view>
@@ -93,7 +99,7 @@
   <view wx:if="{{addCat.visible}}" class="addcat-mask" bindtap="cancelAddCat">
     <view class="addcat" catchtap="noop">
       <view class="addcat__title">新增一级分类</view>
-      <input class="text-input" placeholder="分类名称" value="{{addCat.name}}" bindinput="onAddCatName" focus />
+      <input class="text-input" placeholder="分类名称" placeholder-class="input-ph" value="{{addCat.name}}" bindinput="onAddCatName" focus />
       <view class="addcat__label">选择图标</view>
       <view class="addcat__icons">
         <view

@@ -19,8 +19,9 @@
 
 .bs__grab { width: 72rpx; height: 8rpx; border-radius: 999rpx; background: var(--border); margin: 16rpx auto 0; flex-shrink: 0; }
 .bs__title { text-align: center; font-size: var(--text-lg); font-weight: 600; padding: 20rpx 32rpx 24rpx; flex-shrink: 0; }
-/* 普通 view：高度随账本数自适应、完整显示；账本很多时才滚动 */
-.bs__list { overflow-y: auto; }
+/* scroll-view + max-height：账本少时自适应，多时可滚。
+   view 的 overflow-y:auto 在真机不可滚（见 stats.wxss 同款教训），必须 scroll-view */
+.bs__list { max-height: 56vh; }
 
 .bs__row { display: flex; align-items: center; gap: 24rpx; padding: 24rpx 40rpx; }
 .bs__row + .bs__row { border-top: 1rpx solid var(--border); }

@@ -31,6 +31,12 @@ Page({
     chevronDown: '',
     loading: true,
     placeholder: '问一句，或说「昨天打车 35」记一笔…',
+    // 空会话起手示例：点击只填入输入框（与语音一致，不自动发送）
+    starters: [
+      { hint: '查数据', q: '这个月吃饭花了多少？' },
+      { hint: '一句话记账', q: '昨天打车 35' },
+    ],
+    quotaText: '', // 由 ai.quota 下发；限额关闭时保持空 = 整行隐藏
     // 语音输入：按住说话（recording）→ 松开识别（recognizing）；上滑取消（recCancel）
     recording: false,
     recognizing: false,
@@ -45,16 +51,16 @@ Page({
     this.setData({
       chevronDown: icons.get('chevronDown', '#748294', 2.2),
       bookIcon: icons.get('book', '#0089c0', 1.7),
-      splitIcon: icons.get('bookSplit', '#a47d06', 1.7),
+      splitIcon: icons.get('bookSplit', '#8a690a', 1.7),
       ic: {
         camera: icons.get('camera', '#748294', 1.8),
         mic: icons.get('mic', '#748294', 1.8),
-        micBig: icons.get('mic', '#7fe6ff', 1.8),
+        micBig: icons.get('mic', '#00ccf9', 1.8),
         micCancel: icons.get('trash', '#ffffff', 1.8),
         send: icons.get('send', '#ffffff', 2),
         checkbox: icons.get('checkbox', '#0089c0', 2),
         clock: icons.get('clock', '#0089c0', 2),
-        checkDone: icons.get('check', '#5c9a0e', 2.4),
+        checkDone: icons.get('check', '#4a7d0b', 2.4),
       },
     });
   },
@@ -66,6 +72,16 @@ Page({
     this.load();
   },
 
+  // 剩余额度显示（静态「50 次」会让第一次被拒显得莫名其妙）；失败静默，不打扰主流程
+  refreshQuota() {
+    api.call('ai', 'quota').then((q) => {
+      this.setData({
+        // 限额关闭 → 不显示；开着 → 付费不限 / 剩余次数
+        quotaText: !q.enabled ? '' : (q.left < 0 ? '已解锁 · 不限次数' : `免费额度剩余 ${q.left}/${q.total} 次`),
+      });
+    }).catch(() => {});
+  },
+
   async load() {
     try {
       const book = await api.call('book', 'getCurrent');
@@ -73,6 +89,7 @@ Page({
       this.bookId = book.bookId;
       this.canWrite = book.myRole !== 'ro'; // 只读成员：可问答，不产生入账
       const cur = book.displayCurrency || 'CNY';
+      this.refreshQuota();
       const msgs = await api.call('ai', 'listMessages', { bookId: book.bookId });
       this.setData({
         currentBookId: book.bookId,
@@ -125,7 +142,7 @@ Page({
     if (!code || code === this.data.curCode) return;
     const prev = { curCode: this.data.curCode, curSym: this.data.curSym };
     this.setData({ curCode: code, curSym: fmt.symbolOf(code) });
-    api.call('settings', 'update', { displayCurrency: code })
+    api.call('settings', 'update', { displayCurrency: code, bookId: this.data.currentBookId })
       .catch((err) => { this.setData(prev); api.toast(err); });
   },
   goManageBooks() {
@@ -138,6 +155,9 @@ Page({
   },
 
   onInput(e) { this.setData({ input: e.detail.value }); },
+
+  // 起手示例：只填入输入框，用户自己按发送（与语音识别同一原则，不代用户发起）
+  onStarter(e) { this.setData({ input: e.currentTarget.dataset.q || '' }); },
 
   push(msg) {
     this.setData({ messages: this.data.messages.concat([msg]) });
@@ -183,8 +203,9 @@ Page({
     try {
       const res = await api.call('ai', 'chat', { bookId: this.bookId, text: t });
       await this.pushAiResult(res);
+      this.refreshQuota();
     } catch (e) {
-      this.replaceLastTyping({ role: 'ai', html: '出错了，请稍后再试。' });
+      this.replaceLastTyping({ role: 'ai', html: '刚才没答上来，多半是网络波动——把这句重新发送试试。若一直失败，稍后再来，你的会话都在。' });
       api.toast(e);
     }
   },
@@ -213,9 +234,11 @@ Page({
       this.persist({ role: 'me', receipt: true, fileID: up.fileID });
       this.push({ role: 'ai', typing: true });
       api.call('ai', 'parseReceipt', { bookId: this.bookId, fileID: up.fileID })
-        .then((res) => this.pushAiResult(res, '识别到一张收据，已生成<span style="font-weight:700">预填记录</span>，确认无误可直接入账，或编辑后再入账：'))
+        .then((res) => { this.refreshQuota(); return this.pushAiResult(res, '识别到一张收据，已生成<span style="font-weight:700">预填记录</span>，确认无误可直接入账，或编辑后再入账：'); })
         .catch((e) => {
-          this.replaceLastTyping({ role: 'ai', html: '识别失败：' + ((e && e.errMsg) || '请稍后再试') });
+          const raw = (e && e.errMsg) || '';
+          const msg = /[一-龥]/.test(raw) ? raw : '图片可能不够清晰，换一张或拍近一点再试';
+          this.replaceLastTyping({ role: 'ai', html: '这张没认出来：' + msg });
         });
     }).catch(() => {
       wx.hideLoading();

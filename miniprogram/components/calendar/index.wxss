@@ -20,7 +20,8 @@
 }
 .cal__cell--empty { pointer-events: none; }
 .cal__cell.today { color: var(--accent-ink); font-weight: 700; }
-.cal__cell.sel { background: var(--accent); color: #fff; font-weight: 700; }
+/* 选中日：深湖蓝底白字（≥5:1）。亮青底白字 1.9:1，且选中日是选择器里最重要的数字 */
+.cal__cell.sel { background: var(--blue-700); color: #fff; font-weight: 700; }
 .cal__foot { display: flex; justify-content: center; margin-top: 20rpx; }
 .cal__today { font-size: 28rpx; color: var(--accent-ink); padding: 12rpx 28rpx; border-radius: var(--radius-pill); }
 .cal__today.pressed { background: rgba(0, 204, 249, 0.12); }
