@@ -4,6 +4,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
 const _ = db.command;
+const round6 = (n) => Math.round(n * 1e6) / 1e6;
 
 // 运行环境开关：仅当云函数环境变量 APP_ENV=dev 时，才允许脚本注入(seed)等危险操作。
 // 未配置（默认 prod）→ seed 禁用，公开仓库也无法被利用。开发时在云开发控制台把 APP_ENV 设为 dev。
@@ -50,20 +51,28 @@ function requireRole(member, min) {
   }
 }
 
-// 取 date 当日（或最近一次）1 单位 currency 折算成 base 的汇率
+// 取 date 当日（或最近一次）1 单位 currency 折算成 base 的汇率。
+// 快照统一以 CNY 为基准（quotes[X]=1 单位 X 折合多少 CNY），任意 base 经 CNY 枢轴换算：
+// base 每 1 currency = (CNY/currency) / (CNY/base)。修复非 CNY 基准账本取不到汇率的 blocker。
 async function getRate(date, base, currency) {
   if (currency === base) return { rate: 1, isFallback: false };
-  // 当日精确
-  const r = await db.collection('rates').where({ date, base }).get();
-  const exact = r.data[0];
-  if (exact && exact.quotes && exact.quotes[currency] != null) {
-    return { rate: exact.quotes[currency], isFallback: false };
+  // 当日精确 → 最近一个 <=date → 最近任意一天，均按 CNY 基准快照取
+  let doc = (await db.collection('rates').where({ date, base: 'CNY' }).get()).data[0];
+  let isFallback = false;
+  if (!doc) {
+    doc = (await db.collection('rates').where({ base: 'CNY', date: _.lte(date) }).orderBy('date', 'desc').limit(1).get()).data[0];
+    isFallback = true;
   }
-  // 回退：最近一个「含该币种」的汇率快照
-  const q = await db.collection('rates').where({ base }).orderBy('date', 'desc').limit(60).get();
-  const found = (q.data || []).find((d) => d.quotes && d.quotes[currency] != null);
-  if (found) return { rate: found.quotes[currency], isFallback: true };
-  throw new AppError('RATE_UNAVAILABLE', '汇率取不到');
+  if (!doc) {
+    doc = (await db.collection('rates').where({ base: 'CNY' }).orderBy('date', 'desc').limit(1).get()).data[0];
+    isFallback = true;
+  }
+  const cny = (doc && doc.quotes) || null;
+  if (!cny) throw new AppError('RATE_UNAVAILABLE', '汇率取不到');
+  const cCur = currency === 'CNY' ? 1 : cny[currency];
+  const cBase = base === 'CNY' ? 1 : cny[base];
+  if (!cCur || !cBase) throw new AppError('RATE_UNAVAILABLE', '汇率取不到');
+  return { rate: round6(cCur / cBase), isFallback };
 }
 
 const round2 = (n) => Math.round(n * 100) / 100;

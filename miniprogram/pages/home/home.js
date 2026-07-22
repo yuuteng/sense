@@ -95,9 +95,8 @@ Page({
 
   async load() {
     try {
-      // 登录闸门：未注册 → 登录页
-      const profile = await api.call('user', 'getProfile');
-      if (!profile.registered) { wx.reLaunch({ url: '/pages/login/login' }); return; }
+      // 无登录闸门：身份 = openid 静默注册（服务端 ensureUser 生成默认昵称头像），
+      // 微信审核不允许进入即强制授权；用户可在「我的」随时改昵称/头像
       const book = await api.call('book', 'getCurrent');
       // 无账本 → 引导创建
       if (!book) { wx.reLaunch({ url: '/pages/onboarding/onboarding' }); return; }

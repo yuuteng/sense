@@ -1,1 +1,35 @@
-.fab image { width: 52rpx; height: 52rpx; }
+/* 结算行两行布局：覆盖 app.wxss 的单行 .transfer */
+.transfer--rows { display: block; }
+.transfer--rows .transfer__flow { display: flex; align-items: center; gap: 16rpx; }
+.transfer--rows .transfer__who { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12rpx; }
+/* 名字用 view 截断（text 节点省略号真机不稳定，溢出会画到旁边元素上） */
+.transfer__name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--text-sm); font-weight: 500;
+}
+.transfer--rows .transfer__foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 20rpx;
+  margin-top: 20rpx;
+}
+.transfer--rows .transfer__amt { margin-left: 0; font-size: var(--text-base); }
+
+/* 金额行 + 结算币种胶囊（点击换该笔结算币种） */
+.transfer__amt-line { display: flex; align-items: center; gap: 12rpx; min-height: 88rpx; }
+.cur-chip {
+  display: inline-flex; align-items: center; gap: 4rpx;
+  padding: 4rpx 14rpx; border-radius: var(--radius-pill);
+  font-size: 22rpx; font-weight: 600; color: var(--accent-ink);
+  background: rgba(0, 204, 249, 0.10); border: 1rpx solid rgba(0, 204, 249, 0.28);
+}
+.cur-chip image { width: 22rpx; height: 22rpx; transform: rotate(90deg); }
+.cur-chip--flat { background: transparent; border-color: var(--border); color: var(--muted); }
+
+/* 分摊明细展开行：透明底，贴合页面背景 */
+.disc-row {
+  margin: 8rpx var(--space-5) 0;
+  padding: 24rpx 8rpx;
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: var(--text-sm); font-weight: 600;
+  border-radius: var(--radius-sm);
+}
+.disc-row--press { background: rgba(62, 69, 80, 0.05); }

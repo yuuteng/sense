@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-07-10（补记）
+
+**设计系统落地与全面 UX/无障碍打磨（`b7ca7da`）**
+- 新增 PRODUCT.md / DESIGN.md（品牌契约、双层墨水规则、湖心青命名色板与例外登记）；PRD 待定清单 2/4/5/6/7 拍板。
+- WCAG AA：铸墨水层（grey-600/blue-700/green-700/amber-700/red-700）全库文字换轨，tabBar/AI 气泡/日历/头像/占位符达标；danger 全管道清零；触控热区 ≥88rpx；reduced-motion 兜底。
+- 体验守卫：空态给出路、解散/清空两段式+输入核对、录入页未保存离开守卫、弹层真机滚动修复+防滚穿、键盘避让。
+- 功能：**展示币种改每账本一个**（settings.bookCurrency[bookId]，服务端 displayCurrencyOf 六处统一）；**成员维度统计**（P2：stats.getMemberData + 成员对比卡，付款人/应摊口径，点行钻取）；顺带修均摊应摊恒 0 隐性 bug；settle 金额按账本基准币种。
+- 性能：icons 缓存、分页增量 setData、单卡刷新 rebuildOne。
+
+**默认账本失效回退与文案层级（`17e61d4`）**
+- getCurrent：默认账本被解散/移出自动回退下一个有效账本并落库，前端 toast 告知（悬挂指针读端兜底，见 Learning.md）。
+- AI 一句话记账支持中文数字金额（三十五/一千五/两百零五）；parseNL 日期-币种词素边界修复。
+- 分账「标记结清」重做为事实型 settlements 抵扣文档（原 transferId 挂衍生方案必错位）。
+- 邀请弹层/账本列表徽章/统计饼卡文案与层级收敛。
+
 ## 2026-07-09
 
 **AI 语音输入（腾讯云 ASR）**

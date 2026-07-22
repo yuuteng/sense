@@ -22,13 +22,29 @@ async function getUser(openid) {
   const r = await db.collection('users').doc(openid).get().catch(() => null);
   return r && r.data ? r.data : null;
 }
+// 静默注册的随机身份：审核要求「先体验后授权」，首次进入不再强制填昵称头像，
+// 由 openid 稳定哈希生成默认昵称/首字头像/颜色，用户之后可随时在「我的」修改
+const NICK_ADJ = ['元气', '悠闲', '安然', '清爽', '温暖', '明快', '沉静', '奇思'];
+const NICK_NOUN = ['小鹿', '小猫', '小熊', '小狐', '白鲸', '刺猬', '企鹅', '水獭'];
+const AVATAR_COLORS = ['#00ccf9', '#7a5af8', '#f59e0b', '#10b981', '#f97316', '#ec4899', '#6366f1', '#14b8a6'];
+function genIdentity(openid) {
+  let h = 0;
+  for (const ch of String(openid)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  // 必须无符号移位（>>>）：h 超过 2^31 时 >> 会得到负数，负索引取出 undefined
+  const noun = NICK_NOUN[(h >>> 4) % NICK_NOUN.length];
+  return {
+    nickname: NICK_ADJ[h % NICK_ADJ.length] + noun,
+    avatarInitial: noun.slice(-1),
+    avatarColor: AVATAR_COLORS[(h >>> 8) % AVATAR_COLORS.length],
+  };
+}
 async function ensureUser(openid, channel) {
   let u = await getUser(openid);
   if (!u) {
-    // data 里不能带 _id（set 会整单失败），且失败必须抛出——静默吞错会导致用户文档
-    // 永远建不起来，登录后被 getProfile 判为未注册而死循环弹回登录页
+    // data 里不能带 _id（set 会整单失败），且失败必须抛出——静默吞错会导致用户文档永远建不起来
     // channel = 首次进入时的渠道（develop/trial/release），仅统计用；同一 openid 各渠道是同一人，清理时绝不按此删用户
-    u = { openid, nickname: '我', avatarColor: '#00ccf9', avatarInitial: '我', avatarFileID: '', registered: false, defaultBookId: '', settings: { displayCurrency: 'CNY', aiMessageLimit: 50 }, channel: channel || 'unknown', createdAt: db.serverDate() };
+    // registered 直接 true：身份即 openid，无需授权即可用全部功能（微信审核不允许进入即强制授权）
+    u = { openid, ...genIdentity(openid), avatarFileID: '', registered: true, defaultBookId: '', settings: { displayCurrency: 'CNY', aiMessageLimit: 50 }, channel: channel || 'unknown', createdAt: db.serverDate() };
     await db.collection('users').doc(openid).set({ data: u });
     u._id = openid;
   }
@@ -665,14 +681,24 @@ const record = {
 const rate = {
   async getDaily(p) {
     const base = p.base || 'CNY';
-    let r = await db.collection('rates').where({ date: p.date, base }).get();
-    let doc = r.data[0]; let isFallback = false;
+    // 快照统一以 CNY 为基准；请求任意 base 时按 CNY 枢轴换算出完整 quotes，
+    // 否则非 CNY 基准账本只会拿到 { base: 1 }，币种选择/切换/汇率全废。
+    let doc = (await db.collection('rates').where({ date: p.date, base: 'CNY' }).get()).data[0];
+    let isFallback = false;
     if (!doc) {
-      const q = await db.collection('rates').where({ base, date: _.lte(p.date) }).orderBy('date', 'desc').limit(1).get();
-      doc = q.data[0]; isFallback = true;
+      doc = (await db.collection('rates').where({ base: 'CNY', date: _.lte(p.date) }).orderBy('date', 'desc').limit(1).get()).data[0];
+      isFallback = true;
     }
+    if (!doc) { const q = await latestCnyQuotes(); if (q) { doc = { date: p.date, quotes: q }; isFallback = true; } }
     if (!doc) return { date: p.date, base, quotes: { [base]: 1 }, isFallback: true };
-    return { date: doc.date, base, quotes: doc.quotes, isFallback };
+    const cny = doc.quotes || {};
+    if (base === 'CNY') return { date: doc.date, base, quotes: cny, isFallback };
+    const qb = cny[base];
+    if (!qb) return { date: doc.date, base, quotes: { [base]: 1 }, isFallback: true };
+    const quotes = {};
+    Object.keys(cny).forEach((c) => { quotes[c] = round6(cny[c] / qb); });
+    quotes[base] = 1;
+    return { date: doc.date, base, quotes, isFallback };
   },
   // 实际拉取逻辑（供手动按钮与每日定时触发器共用）
   async _refresh() {
@@ -1844,7 +1870,33 @@ const settle = {
       fetchSettlements(p.bookId),
     ]);
     const base = (bk.data && bk.data.baseCurrency) || 'CNY';
-    const sym = CUR_SYMBOL[base] || base + ' ';
+    // 展示口径跟随「账本 × 用户」展示币种（与首页/统计一致）；内部欠款与结清抵扣仍固化在基准币，
+    // 仅展示时按最新汇率整体换算——所有数字同一系数缩放，净额零和与方案一致性不受影响。
+    // 每笔转账可另选结算币种（books.settleCur['from|to']），仅覆盖该行展示，不动内部台账。
+    const me0 = await getUser(ctx.openid);
+    const display = displayCurrencyOf(me0, p.bookId, base);
+    const q = await latestCnyQuotes();
+    const facTo = (to) => { // 基准币 → to 的最新换算系数；缺汇率返回 null
+      if (!to || to === base) return 1;
+      const qb = base === 'CNY' ? 1 : (q && q[base]);
+      const qd = to === 'CNY' ? 1 : (q && q[to]);
+      return (qb && qd) ? qb / qd : null;
+    };
+    let dispFactor = 1, dispCur = base;
+    const fd = facTo(display);
+    if (fd) { dispFactor = fd; dispCur = display; } // 缺汇率回退基准币展示
+    const disp = (n) => round2((n || 0) * dispFactor);
+    const sym = CUR_SYMBOL[dispCur] || dispCur + ' ';
+    const settleCur = (bk.data && bk.data.settleCur) || {};
+    // 该笔转账的展示币种与金额：对方选了结算币种则按它换算，否则跟随展示币种
+    const pairView = (from, to, amtBase) => {
+      const want = settleCur[`${from}|${to}`];
+      if (want && want !== dispCur) {
+        const f = facTo(want);
+        if (f) return { cur: want, amt: round2(amtBase * f) };
+      }
+      return { cur: dispCur, amt: disp(amtBase) };
+    };
     const paid = {}, share = {};
     Object.keys(mMap).forEach((o) => { paid[o] = 0; share[o] = 0; });
     let totalExpense = 0;
@@ -1875,11 +1927,13 @@ const settle = {
       const amt = round2(Math.min(debtors[i].v, creditors[j].v));
       if (amt > 0.001) {
         const f = who(debtors[i].o), t = who(creditors[j].o);
+        const pv = pairView(debtors[i].o, creditors[j].o, amt);
         transfers.push({ transferId: 't' + (tid++),
           fromOpenid: debtors[i].o, toOpenid: creditors[j].o, // 标记结清时回传，服务端据此落抵扣
           from: f.name, fromInitial: f.initial, fromColor: f.color, fromAvatar: f.avatar,
           to: t.name, toInitial: t.initial, toColor: t.color, toAvatar: t.avatar,
-          amount: amt, settled: false });
+          // amount 固化基准币（标记结清用）；amountDisp/cur 为该行结算币种视图；amountRef 为展示币种（合计用）
+          amount: amt, amountDisp: pv.amt, cur: pv.cur, amountRef: disp(amt), settled: false });
       }
       debtors[i].v -= amt; creditors[j].v -= amt;
       if (debtors[i].v < 0.001) i++; if (creditors[j].v < 0.001) j++;
@@ -1887,10 +1941,12 @@ const settle = {
     // 已结清列表（可撤销），新结清的在前
     const settled = stl.map((s) => {
       const f = who(s.from), t = who(s.to);
+      // 结清时如选了结算币种，金额快照（amountFx/currency）落在抵扣文档里，历史显示不随汇率漂移
       return { settlementId: s._id,
         from: f.name, fromInitial: f.initial, fromColor: f.color, fromAvatar: f.avatar,
         to: t.name, toInitial: t.initial, toColor: t.color, toAvatar: t.avatar,
-        amount: s.amount, settledAt: s.settledAt };
+        amount: s.amount, amountDisp: s.amountFx != null ? s.amountFx : disp(s.amount),
+        cur: s.currency || dispCur, amountRef: disp(s.amount), settledAt: s.settledAt };
     }).reverse();
     const me = ctx.openid;
     const splits = records.filter((r) => r.type === 'expense').map((r) => {
@@ -1898,10 +1954,10 @@ const settle = {
       const n = sp.members.length || 1;
       let detail;
       if (sp.mode === 'treat') detail = `仅${(mMap[r.payerOpenid] || {}).name || ''}承担`;
-      else if (sp.mode === 'even') detail = `${n} 人均摊 · 各 ${sym}${round2(r.amountConverted / n)}`;
+      else if (sp.mode === 'even') detail = `${n} 人均摊 · 各 ${sym}${round2(disp(r.amountConverted) / n)}`;
       else detail = `${n} 人分摊`;
       return {
-        title: r.title || r.categoryPath, amount: r.amountConverted,
+        title: r.title || r.categoryPath, amount: disp(r.amountConverted),
         payerName: `${(mMap[r.payerOpenid] || {}).name || ''}垫付`, detail,
         isForeign: r.currency !== r.baseCurrency, fx: r.currency !== r.baseCurrency ? `${r.amount} ${r.currency}` : '',
         avatars: sp.members.map((m) => ({ initial: (mMap[m.openid] || {}).initial || '?', color: (mMap[m.openid] || {}).color || '#999', avatarFileID: (mMap[m.openid] || {}).avatarFileID || '' })),
@@ -1909,14 +1965,15 @@ const settle = {
     });
     return {
       // myNet / 成员净额均为「冲抵后的剩余口径」：全部结清则归零，关心的是还差多少而非历史总账
-      summary: { myNet: net[me] || 0, totalExpense: round2(totalExpense), myPaid: round2(paid[me] || 0), myShare: round2(share[me] || 0), currency: base },
+      summary: { myNet: disp(net[me]), totalExpense: disp(totalExpense), myPaid: disp(paid[me]), myShare: disp(share[me]), currency: dispCur },
       transfers, settled,
-      members: Object.keys(mMap).map((o) => ({ name: mMap[o].name + (o === me ? '（我）' : ''), initial: mMap[o].initial, color: mMap[o].color, avatarFileID: mMap[o].avatarFileID || '', paid: round2(paid[o] || 0), share: round2(share[o] || 0), net: net[o] || 0 })),
+      members: Object.keys(mMap).map((o) => ({ name: mMap[o].name + (o === me ? '（我）' : ''), initial: mMap[o].initial, color: mMap[o].color, avatarFileID: mMap[o].avatarFileID || '', paid: disp(paid[o]), share: disp(share[o]), net: disp(net[o]) })),
       splits, splitCount: splits.length,
     };
   },
 
   // 标记结清：落一笔抵扣。写权限 rw 起（只读成员不产生入账类操作）
+  // amount 恒为基准币（台账口径）；前端传了结算币种则把「结清那一刻」的换算金额一并快照，历史显示不漂移
   async mark(p, ctx) {
     const m = await requireMember(p.bookId, ctx.openid); requireRole(m, 'rw');
     const amount = round2(Number(p.amount));
@@ -1924,12 +1981,28 @@ const settle = {
     if (!p.from || !p.to || p.from === p.to) throw new AppError('INVALID_PARAM', '结清双方不合法');
     const mm = await membersMap(p.bookId); // 双方须是本账本成员（含已移除：历史欠款可能涉及）
     if (!mm[p.from] || !mm[p.to]) throw new AppError('INVALID_PARAM', '结清双方不是账本成员');
-    await db.createCollection('settlements').catch(() => {});
-    const add = await db.collection('settlements').add({ data: {
+    const doc = {
       bookId: p.bookId, from: p.from, to: p.to, amount,
       settledBy: ctx.openid, settledAt: db.serverDate(),
-    } });
+    };
+    if (p.currency && CUR_SYMBOL[p.currency] && p.amountFx > 0) {
+      doc.currency = p.currency; doc.amountFx = round2(Number(p.amountFx));
+    }
+    await db.createCollection('settlements').catch(() => {});
+    const add = await db.collection('settlements').add({ data: doc });
     return { settlementId: add._id };
+  },
+
+  // 为某笔转账指定结算币种（按 from|to 记在账本上，双方都可见；仅改展示口径，不动台账）
+  async setCurrency(p, ctx) {
+    const m = await requireMember(p.bookId, ctx.openid); requireRole(m, 'rw');
+    if (!p.from || !p.to) throw new AppError('INVALID_PARAM', '缺少结算双方');
+    if (!p.currency || !CUR_SYMBOL[p.currency]) throw new AppError('INVALID_PARAM', '不支持的币种');
+    const bk = await db.collection('books').doc(p.bookId).get();
+    const map = (bk.data && bk.data.settleCur) || {};
+    map[`${p.from}|${p.to}`] = p.currency;
+    await db.collection('books').doc(p.bookId).update({ data: { settleCur: map } });
+    return { ok: true };
   },
 
   // 撤销结清：删抵扣文档，欠款回到方案里

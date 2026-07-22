@@ -1,12 +1,13 @@
 <image
-  wx:if="{{src}}"
+  wx:if="{{src && !failed}}"
   class="av"
   src="{{src}}"
   mode="aspectFill"
   style="width:{{size}}rpx;height:{{size}}rpx"
+  binderror="onImgError"
 ></image>
 <view
   wx:else
   class="av av--initial"
   style="width:{{size}}rpx;height:{{size}}rpx;background:{{bg}};font-size:{{fontSize}}rpx"
->{{initial}}</view>
+>{{initial || '?'}}</view>

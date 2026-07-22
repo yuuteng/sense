@@ -12,7 +12,6 @@
     "pages/export/export",
     "pages/onboarding/onboarding",
     "pages/settle/settle",
-    "pages/login/login",
     "pages/join/join",
     "pages/feedback/feedback",
     "pages/feedback-new/feedback-new",

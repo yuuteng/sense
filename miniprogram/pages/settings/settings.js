@@ -265,7 +265,8 @@ Page({
                 const g = getApp().globalData;
                 if (g) g.profile = null;
                 wx.showToast({ title: '已注销', icon: 'success' });
-                setTimeout(() => wx.reLaunch({ url: '/pages/login/login' }), 600);
+                // 无登录页闸门：回首页会以 openid 静默重建全新用户（默认昵称头像）
+                setTimeout(() => wx.reLaunch({ url: '/pages/home/home' }), 600);
               })
               .catch((e) => {
                 wx.hideLoading();
@@ -286,7 +287,7 @@ Page({
   resetData() {
     wx.showModal({
       title: '清空所有数据？',
-      content: '将删除全部账本/成员/记录/分类/会话、云存储图片与文件，以及所有用户登录信息，回到全新状态（需重新登录）。此操作不可恢复。',
+      content: '将删除全部账本/成员/记录/分类/会话、云存储图片与文件，以及所有用户资料，回到全新状态。此操作不可恢复。',
       confirmText: '继续',
       success: (res) => {
         if (!res.confirm) return;
@@ -320,7 +321,7 @@ Page({
       }
       try { wx.removeStorageSync(LAST_IMPORT_KEY); } catch (e) { /* 忽略 */ }
       wx.showToast({ title: '已清空', icon: 'success' });
-      setTimeout(() => wx.reLaunch({ url: '/pages/login/login' }), 600);
+      setTimeout(() => wx.reLaunch({ url: '/pages/home/home' }), 600);
     }).catch((e) => { wx.hideLoading(); api.toast(e); });
   },
 
