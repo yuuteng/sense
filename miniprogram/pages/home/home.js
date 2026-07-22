@@ -70,7 +70,7 @@ Page({
     if (j.currency === cur) amt = j.amount;
     else if (j.base === cur) {
       amt = j.amountConverted;
-      fx = fmt.symbolOf(j.currency) + fmt.fmt(j.amount);
+      fx = fmt.symbolOf(j.currency) + ' ' + fmt.fmt(j.amount);
       sub = `按 ${fmt.cnMonthDay(j.date)} 汇率`;
     } else return; // 展示币 ≠ 原币 ≠ 基准币：本地无法换算，等服务器
     const row = {
@@ -109,6 +109,8 @@ Page({
         api.call('record', 'list', { bookId: book.bookId, currency: cur, page: 0 }),
       ]);
       this.page = 0;
+      // mapItem 在 setData 求值期间就要用，不能读还没更新的 this.data.isSplit（切换账本时是旧值）
+      this._isSplit = book.type === 'split';
       this.setData({
         loading: false,
         needInit: false,
@@ -165,17 +167,23 @@ Page({
   },
 
   mapItem(it, cur) {
+    // 分账账本的支出行：身份显示付款人而非记录人（「谁先垫的钱」才是这本账的关键信息），
+    // 副行带分摊人数；收入与共享账本仍显示记录人。
+    // 名字与后缀分开渲染：名字可省略号收缩，后缀（付款 · N 人分摊）永不截断
+    const split = this._isSplit && it.type !== 'income';
     return {
       id: it.recordId,
       iconSrc: icons.get(it.icon, it.type === 'income' ? '#4a7d0b' : '#0089c0', 1.7),
       title: it.title || it.categoryTopName || (it.type === 'income' ? '收入' : '支出'),
-      who: it.recorderName,
-      whoInitial: it.recorderInitial,
-      whoColor: it.recorderColor,
-      whoAvatar: it.recorderAvatar || '',
+      // 付款人缺头像资料时用付款人名字首字兜底——绝不能借记录人的身份补（张冠李戴）
+      who: split ? (it.payerName || it.recorderName) : it.recorderName,
+      whoSub: split ? (it.splitCount ? `付款 · ${it.splitCount} 人分摊` : '付款 · 仅TA承担') : '',
+      whoInitial: split ? (it.payerInitial || (it.payerName || '?').slice(0, 1)) : it.recorderInitial,
+      whoColor: split ? (it.payerColor || '#97a7b7') : it.recorderColor,
+      whoAvatar: split ? (it.payerAvatar || '') : (it.recorderAvatar || ''),
       amount: fmt.signed(it.amountConverted, it.type, cur),
       in: it.type === 'income',
-      fx: it.isForeign ? (fmt.symbolOf(it.currency) + fmt.fmt(it.originalAmount)) : '',
+      fx: it.isForeign ? (fmt.symbolOf(it.currency) + ' ' + fmt.fmt(it.originalAmount)) : '',
       sub: it.isForeign ? `按 ${fmt.cnMonthDay(it.date)} 汇率` : '',
     };
   },

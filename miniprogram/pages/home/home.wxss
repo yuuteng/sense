@@ -16,3 +16,7 @@
   animation: mini-spin 0.8s linear infinite;
 }
 @keyframes mini-spin { to { transform: rotate(360deg); } }
+
+/* 分账账本副行：名字可收缩省略（view 截断，text 真机 ellipsis 不稳），「付款 · N 人分摊」后缀不截断 */
+.txn__who { max-width: 220rpx; flex-shrink: 1; }
+.txn__whosub { flex-shrink: 0; white-space: nowrap; }

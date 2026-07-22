@@ -2,8 +2,6 @@ const api = require('../../utils/api');
 const fmt = require('../../utils/format');
 const icons = require('../../utils/icons');
 
-function comma(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
-
 Page({
   data: {
     header: '',
@@ -11,6 +9,7 @@ Page({
     totalExpense: '', myPaid: '', myShare: '',
     transfers: [],
     members: [],
+    unit: '',
     splits: [],
     splitCount: 0,
     remain: '',
@@ -20,6 +19,10 @@ Page({
     loading: true,
     curVisible: false,
     curCode: 'CNY',
+    // 顶栏展示币种（与首页一致，独立于「单笔转账结算币种」的 picker）
+    dispCurVisible: false,
+    dispCurCode: 'CNY',
+    dispCurSym: '',
   },
 
   onLoad(query) {
@@ -29,6 +32,7 @@ Page({
         arrow: icons.get('arrowRight', '#748294', 2),
         check: icons.get('check', '#4a7d0b', 2.4),
         chevron: icons.get('chevron', '#748294', 2),
+        chevronDown: icons.get('chevronDown', '#748294', 2.2),
       },
     });
   },
@@ -52,6 +56,9 @@ Page({
       this.cur = cur;
       this.setData({
         header: `${bookName} · ${s.members.length} 人 · 分账账本`,
+        unit: fmt.symbolOf(cur),
+        dispCurCode: cur,
+        dispCurSym: fmt.symbolOf(cur),
         myNet: `你应${net >= 0 ? '收' : '付'} ${fmt.signedTotal(net, cur)}`,
         totalExpense: fmt.money(s.summary.totalExpense, cur),
         myPaid: fmt.money(s.summary.myPaid, cur),
@@ -77,8 +84,10 @@ Page({
         }))),
         members: s.members.map((m) => ({
           name: m.name, initial: m.initial || (m.name || '?').slice(0, 1), color: m.color || '#97a7b7', avatarFileID: m.avatarFileID || '',
-          paid: fmt.money(m.paid, cur), share: fmt.money(m.share, cur),
-          net: (m.net >= 0 ? '+' : '-') + comma(Math.abs(m.net)), pos: m.net >= 0,
+          // 单位在「成员维度」标题统一标注，三列均为纯数字，避免每格重复 kr 且净额独缺显突兀
+          paid: fmt.fmt(m.paid), share: fmt.fmt(m.share),
+          // 净额与垫付/应摊同精度（两位小数）：取整显示会让零头看似「丢了」，和转账方案对不上
+          net: (m.net >= 0 ? '+' : '-') + fmt.fmt(Math.abs(m.net)), pos: m.net >= 0,
         })),
         splits: s.splits.map((sp) => ({ ...sp, amountText: fmt.money(sp.amount, cur) })),
         splitCount: s.splitCount,
@@ -93,7 +102,7 @@ Page({
     // 合计恒用展示币种口径（amountRef）：各行可选不同结算币种，混币不能直加
     this.data.transfers.forEach((t) => { if (!t.settled) { left++; sum += t.amountRef; } });
     this.setData({
-      remain: left ? `${left} 笔待结清 · 折合 ${fmt.symbolOf(this.cur || 'CNY')}${comma(sum)}` : '已全部结清',
+      remain: left ? `${left} 笔待结清 · 折合 ${fmt.symbolOf(this.cur || 'CNY')} ${fmt.fmt(sum)}` : '已全部结清',
       allSettled: left === 0 && this.data.transfers.length > 0,
     });
   },
@@ -143,4 +152,18 @@ Page({
       .catch((err) => { this.load(); api.toast(err); });
   },
   closeCurPick() { this.setData({ curVisible: false }); },
+
+  // 顶栏展示币种：改本账本展示口径（每账本各一套），刷新整页金额；失败回滚
+  openDispCur() { this.setData({ dispCurVisible: true }); },
+  closeDispCur() { this.setData({ dispCurVisible: false }); },
+  onDispCurSelect(e) {
+    const code = e.detail.code;
+    this.setData({ dispCurVisible: false });
+    if (!code || code === this.data.dispCurCode) return;
+    const prev = { dispCurCode: this.data.dispCurCode, dispCurSym: this.data.dispCurSym };
+    this.setData({ dispCurCode: code, dispCurSym: fmt.symbolOf(code), loading: true });
+    api.call('settings', 'update', { displayCurrency: code, bookId: this.bookId })
+      .then(() => this.load())
+      .catch((err) => { this.setData({ ...prev, loading: false }); api.toast(err); });
+  },
 });

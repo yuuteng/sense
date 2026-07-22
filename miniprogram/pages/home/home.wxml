@@ -43,7 +43,7 @@
     <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="goSettle">
       <view class="li__ic" style="background:rgba(255,205,47,0.16)"><image src="{{settleIcon}}"></image></view>
       <view class="li__label">分账结算</view>
-      <view class="li__val">谁欠谁，一目了然 <image class="chevron" src="{{chevronIcon}}"></image></view>
+      <view class="li__val">查看结算 <image class="chevron" src="{{chevronIcon}}"></image></view>
     </view>
   </view>
 
@@ -66,7 +66,9 @@
           <view class="txn__title">{{it.title}}</view>
           <view class="txn__meta">
             <avatar src="{{it.whoAvatar}}" initial="{{it.whoInitial}}" color="{{it.whoColor}}" size="40"></avatar>
-            <text class="ellip">{{it.who}}</text>
+            <!-- 名字可收缩省略，后缀（付款 · N 人分摊）保持完整可见 -->
+            <view class="ellip txn__who">{{it.who}}</view>
+            <text wx:if="{{it.whoSub}}" class="txn__whosub">{{it.whoSub}}</text>
           </view>
         </view>
         <view class="txn__amt">

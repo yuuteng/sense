@@ -99,7 +99,7 @@ Page({
         whoAvatar: it.recorderAvatar || '',
         amount: fmt.signed(it.amountConverted, it.type, cur),
         in: it.type === 'income',
-        fx: it.isForeign ? (fmt.symbolOf(it.currency) + fmt.fmt(it.originalAmount)) : '',
+        fx: it.isForeign ? (fmt.symbolOf(it.currency) + ' ' + fmt.fmt(it.originalAmount)) : '',
         sub: it.isForeign ? `按 ${fmt.cnMonthDay(it.date)} 汇率` : '',
       })),
     }));

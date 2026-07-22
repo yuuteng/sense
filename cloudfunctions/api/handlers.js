@@ -16,6 +16,9 @@ function httpGetJson(url) {
   });
 }
 const round6 = (n) => Math.round(n * 1e6) / 1e6;
+// 汇率一律按有效数字保精度（小面值币种的汇率用 round6 只剩 2~4 位有效数字，
+// 误差经 1/rate 放大后金额差出几分到几毛），金额才用 round2/round6
+const rateSig = (n) => Number(Number(n).toPrecision(12));
 
 // —— 工具 ——
 async function getUser(openid) {
@@ -175,7 +178,7 @@ async function fetchAndStoreCnyQuotes() {
   const quotes = {};
   Object.keys(j.rates).forEach((c) => {
     const r = j.rates[c];
-    if (r > 0) quotes[c] = c === base ? 1 : round6(1 / r); // 1 单位外币 = ? 基准币
+    if (r > 0) quotes[c] = c === base ? 1 : rateSig(1 / r); // 1 单位外币 = ? 基准币（有效数字保精度）
   });
   const date = relDate(0); // 北京时间当天
   await db.collection('rates').doc(`${date}_${base}`).set({ data: { date, base, quotes, isFallback: false } });
@@ -233,6 +236,9 @@ function recCny(rec, quotes) {
 }
 // 记录换算到 display 币种（用记录当日汇率）
 function recToDisplay(rec, display, quotes) {
+  // 展示币种 = 记录原始币种：直接用原始金额。走「原币→基准币(round2)→展示币」往返会把
+  // 基准币的分级舍入放大回来（如 1000 ISK 固化成 €6.29 再换回来变 1000.78）
+  if (rec.currency === display && rec.amount != null) return round2(rec.amount);
   const cny = recCny(rec, quotes);
   if (display === 'CNY') return round2(cny);
   const qd = cnyPerUnit(quotes, display);
@@ -554,6 +560,9 @@ const record = {
         isForeign: rec.currency !== display, date: rec.date, // 仅当原币≠展示币才算外币
         recorderName: rec2.name || '', recorderInitial: rec2.initial || '', recorderColor: rec2.color || '#00ccf9', recorderAvatar: rec2.avatarFileID || '',
         payerName: pay.name || '', sameActor: rec.recorderOpenid === rec.payerOpenid,
+        payerInitial: pay.initial || '', payerColor: pay.color || '#00ccf9', payerAvatar: pay.avatarFileID || '',
+        // 分账账本副行「XX 付款 · N 人分摊」用：0 = 仅付款人承担（treat）或非分账记录
+        splitCount: rec.split && rec.split.mode !== 'treat' ? (rec.split.members || []).length : 0,
         categoryTopName: top.name, icon: top.icon,
       });
     });
@@ -585,6 +594,21 @@ const record = {
     const pay = mMap[rec.payerOpenid] || {};
     const top = topCategory(cMap, rec.categoryId);
     const canEdit = rec.recorderOpenid === ctx.openid || me.role === 'admin' || me.role === 'owner';
+    // 分账账本：分摊方式 + 参与成员（头像/名字），金额按展示币种口径
+    let splitInfo = null;
+    if (isSplit && rec.type === 'expense') {
+      const sp = rec.split || { mode: 'even', members: [] };
+      const list = (sp.members || []).map((m) => {
+        const v = mMap[m.openid] || {};
+        return { name: v.name || '成员', initial: v.initial || '?', color: v.color || '#97a7b7', avatarFileID: v.avatarFileID || '' };
+      });
+      const n = list.length || 1;
+      const dsym = CUR_SYMBOL[display] || display + ' ';
+      const modeLabel = (sp.mode === 'treat' || !list.length)
+        ? `仅${pay.name || '付款人'}承担`
+        : `${n} 人均摊 · 各 ${dsym}${round2(converted / n)}`;
+      splitInfo = { modeLabel, members: list };
+    }
     return {
       recordId: rec._id, type: rec.type, typeLabel: rec.type === 'income' ? '收入' : '支出', icon: top.icon, isSplit,
       categoryId: rec.categoryId, payerOpenid: rec.payerOpenid, split: rec.split || null,
@@ -594,6 +618,7 @@ const record = {
       isForeign: rec.currency !== display, note: rec.note || '', images: rec.images || [],
       recorder: { name: rec2.name, initial: rec2.initial, color: rec2.color, avatarFileID: rec2.avatarFileID || '' },
       payer: { name: pay.name || '', initial: pay.initial, color: pay.color, avatarFileID: pay.avatarFileID || '' },
+      splitInfo,
       canEdit, canDelete: canEdit,
     };
   },
@@ -606,7 +631,9 @@ const record = {
     let rate;
     try { rate = (await getRate(payload.date, base, payload.currency)).rate; }
     catch (e) { if (payload.rate > 0) rate = payload.rate; else throw e; } // 兜底用前端已展示的汇率
-    const amountConverted = round2(payload.amount * rate);
+    // 固化精度 6 位：round2 到基准币的「分」会在小面值展示币上放大回来
+    // （1000 ISK → €6.29 → 换回 1000.78），展示层各出口自会 round2
+    const amountConverted = round6(payload.amount * rate);
     const cMap = await categoriesMap(bookId);
     const cat = cMap[payload.categoryId];
     let categoryPath = '';
@@ -659,7 +686,7 @@ const record = {
       let rate;
       try { rate = (await getRate(date, rec.baseCurrency, curCode)).rate; }
       catch (e) { if (payload.rate > 0) rate = payload.rate; else throw e; }
-      data.rate = rate; data.amountConverted = round2(amt * rate);
+      data.rate = rate; data.amountConverted = round6(amt * rate); // 精度同 create：6 位固化
     }
     await db.collection('records').doc(p.recordId).update({ data });
     return { ok: true };
@@ -696,7 +723,7 @@ const rate = {
     const qb = cny[base];
     if (!qb) return { date: doc.date, base, quotes: { [base]: 1 }, isFallback: true };
     const quotes = {};
-    Object.keys(cny).forEach((c) => { quotes[c] = round6(cny[c] / qb); });
+    Object.keys(cny).forEach((c) => { quotes[c] = rateSig(cny[c] / qb); });
     quotes[base] = 1;
     return { date: doc.date, base, quotes, isFallback };
   },
@@ -1759,7 +1786,7 @@ const data = {
         let rate;
         if (currency === base) rate = 1;
         else if (row.rate > 0) rate = row.rate;
-        else if (row.amountConverted > 0) rate = round6(row.amountConverted / row.amount); // 由换算金额反推当日汇率
+        else if (row.amountConverted > 0) rate = rateSig(row.amountConverted / row.amount); // 由换算金额反推当日汇率
         else rate = (await getRate(row.date, base, currency)).rate;
         const path = row.categoryPath || '';
         const leaf = path.split('/').pop().trim();
@@ -1767,7 +1794,7 @@ const data = {
           bookId: p.bookId, type: row.type,
           title: row.title || leaf || (row.type === 'income' ? '导入收入' : '导入支出'),
           amount: row.amount, currency, rate, baseCurrency: base,
-          amountConverted: row.amountConverted != null ? row.amountConverted : round2(row.amount * rate),
+          amountConverted: row.amountConverted != null ? row.amountConverted : round6(row.amount * rate),
           categoryId: null,
           categoryPath: path || leaf || '其他', date: row.date,
           note: row.note || '', images: [], recorderOpenid: ctx.openid, payerOpenid: ctx.openid, split: null,

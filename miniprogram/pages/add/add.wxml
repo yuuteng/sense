@@ -14,7 +14,8 @@
   <view class="amount-display">
     <view class="amount-line">
       <text class="cur">{{curs[curIndex].symbol}}</text>
-      <input class="amount-input" type="digit" value="{{amount}}" placeholder="0" placeholder-class="input-ph" bindinput="onAmountInput" focus="{{amountFocus}}" />
+      <!-- bindblur 必须同步 amountFocus=false：受控 focus 停在 true 时，收起键盘后再点输入框不会重新弹起 -->
+      <input class="amount-input" type="digit" value="{{amount}}" placeholder="0" placeholder-class="input-ph" bindinput="onAmountInput" focus="{{amountFocus}}" bindblur="onAmountBlur" />
     </view>
     <view class="fx-hint">{{fxHint}}</view>
     <view class="cur-pick" hover-class="pressed" hover-stay-time="80" bindtap="openCur">{{curLabel}} <image class="chevron" src="{{ic.chevron}}"></image></view>

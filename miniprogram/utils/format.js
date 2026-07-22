@@ -3,6 +3,9 @@ const { SYMBOL } = require('./currency');
 
 function symbolOf(code) { return SYMBOL[code] || ''; }
 
+// 窄空格：币种符号与数字之间留一丝呼吸感（-¥1,047 太挤；kr1,000 直接粘连难读）
+const THIN = ' ';
+
 // 12000 -> "12,000.00"
 function fmt(n) {
   const parts = (Math.round((n || 0) * 100) / 100).toFixed(2).split('.');
@@ -10,18 +13,18 @@ function fmt(n) {
   return parts.join('.');
 }
 
-// 金额 + 币种符号，如 money(42.3) -> "¥42.30"
-function money(n, code = 'CNY') { return symbolOf(code) + fmt(n); }
+// 金额 + 币种符号，如 money(42.3) -> "¥ 42.30"
+function money(n, code = 'CNY') { return symbolOf(code) + THIN + fmt(n); }
 
 // 带正负号：收入 +，支出 -
 function signed(n, type, code = 'CNY') {
   const sign = type === 'income' ? '+' : '-';
-  return sign + symbolOf(code) + fmt(Math.abs(n));
+  return sign + symbolOf(code) + THIN + fmt(Math.abs(n));
 }
 
 // 合计带号（正负由数值决定）
 function signedTotal(n, code = 'CNY') {
-  return (n >= 0 ? '+' : '-') + symbolOf(code) + fmt(Math.abs(n));
+  return (n >= 0 ? '+' : '-') + symbolOf(code) + THIN + fmt(Math.abs(n));
 }
 
 // 'YYYY-MM-DD' -> '今天/昨天 · M 月 D 日' 或 'M 月 D 日'

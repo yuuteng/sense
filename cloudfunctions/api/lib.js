@@ -5,6 +5,9 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const round6 = (n) => Math.round(n * 1e6) / 1e6;
+// 汇率精度按「有效数字」而非小数位：小面值→大面值的汇率（如 ISK→EUR ≈ 0.0062882）
+// 用 round6 只剩 4 位有效数字，误差经 1/rate 放大后统计口径会差出几分钱
+const rateSig = (n) => Number(Number(n).toPrecision(12));
 
 // 运行环境开关：仅当云函数环境变量 APP_ENV=dev 时，才允许脚本注入(seed)等危险操作。
 // 未配置（默认 prod）→ seed 禁用，公开仓库也无法被利用。开发时在云开发控制台把 APP_ENV 设为 dev。
@@ -72,7 +75,7 @@ async function getRate(date, base, currency) {
   const cCur = currency === 'CNY' ? 1 : cny[currency];
   const cBase = base === 'CNY' ? 1 : cny[base];
   if (!cCur || !cBase) throw new AppError('RATE_UNAVAILABLE', '汇率取不到');
-  return { rate: round6(cCur / cBase), isFallback };
+  return { rate: rateSig(cCur / cBase), isFallback };
 }
 
 const round2 = (n) => Math.round(n * 100) / 100;

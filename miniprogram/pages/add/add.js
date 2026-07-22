@@ -230,6 +230,11 @@ Page({
     return out;
   },
 
+  // 收起键盘时同步受控焦点状态：focus 停留 true 会导致「再点输入框键盘不弹」
+  onAmountBlur() {
+    if (this.data.amountFocus) this.setData({ amountFocus: false });
+  },
+
   // 未保存离开守卫：填了内容（金额/备注/图片）且未保存时，返回/手势离开先确认，防误滑丢输入
   syncUnloadGuard() {
     const dirty = !this._saved && (this.data.amount || this.data.note || this.data.photos.length);

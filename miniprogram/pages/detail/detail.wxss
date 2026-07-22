@@ -1,1 +1,5 @@
 /* detail 页面样式继承自 app.wxss，无额外覆盖 */
+
+/* 分摊行：头像叠排 + 方式文案（split-avatars 的 margin-left:auto 会把头像推到最右，这里恢复自然排列） */
+.split-val { display: flex; align-items: center; gap: 16rpx; }
+.split-val .split-avatars { margin-left: 0; }

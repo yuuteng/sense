@@ -1,6 +1,11 @@
 <view class="screen" style="padding-bottom:calc(60rpx + env(safe-area-inset-bottom))">
   <loading show="{{loading}}"></loading>
-  <nav-bar back="{{true}}" center="{{true}}" title="分账结算" sub="{{header}}"></nav-bar>
+  <nav-bar back="{{true}}" title="分账结算" sub="{{header}}">
+    <view slot="right" class="cur-pill" hover-class="cur-pill--press" hover-stay-time="80" bindtap="openDispCur">
+      {{dispCurSym}} {{dispCurCode}}
+      <image src="{{ic.chevronDown}}" style="width:24rpx;height:24rpx"></image>
+    </view>
+  </nav-bar>
 
   <!-- 概览：总支出 + 我的净额 -->
   <view class="summary">
@@ -41,7 +46,7 @@
   <view class="foot-note left" style="padding-top:16rpx">系统按每笔的付款人与分摊自动算出「谁欠谁」，并合并为最少转账笔数。金额按各笔记账当天的汇率换算，之后不再变动。</view>
 
   <!-- 成员维度统计 -->
-  <view class="section-label">成员维度</view>
+  <view class="section-label">成员维度 <text class="muted">单位 {{unit}}</text></view>
   <view class="card--flush" style="border-top:1rpx solid var(--border);border-bottom:1rpx solid var(--border)">
     <view wx:for="{{members}}" wx:key="name" wx:for-item="m" class="mstat">
       <view class="mstat__name"><avatar src="{{m.avatarFileID}}" initial="{{m.initial}}" color="{{m.color}}" size="40"></avatar><text class="ellip">{{m.name}}</text></view>
@@ -59,6 +64,7 @@
     <image class="disclosure__chev" src="{{ic.chevron}}"></image>
   </view>
   <currency-picker visible="{{curVisible}}" current="{{curCode}}" bind:select="onCurSelect" bind:close="closeCurPick"></currency-picker>
+  <currency-picker visible="{{dispCurVisible}}" current="{{dispCurCode}}" bind:select="onDispCurSelect" bind:close="closeDispCur"></currency-picker>
 
   <view wx:if="{{discOpen}}" class="card--flush" style="border-top:1rpx solid var(--border);border-bottom:1rpx solid var(--border)">
     <view wx:for="{{splits}}" wx:key="title" wx:for-item="sp" class="split-row">

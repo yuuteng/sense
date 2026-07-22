@@ -52,6 +52,16 @@
         <avatar src="{{d.payer.avatarFileID}}" initial="{{d.payer.initial}}" color="{{d.payer.color}}" size="40"></avatar>{{d.payer.name}}
       </view>
     </view>
+    <!-- 分账账本：分摊方式与参与成员 -->
+    <view wx:if="{{d.splitInfo}}" class="field-row">
+      <view class="field-row__label">分摊</view>
+      <view class="field-row__val split-val">
+        <view class="split-avatars">
+          <avatar wx:for="{{d.splitInfo.members}}" wx:key="index" wx:for-item="av" src="{{av.avatarFileID}}" initial="{{av.initial}}" color="{{av.color}}" size="44" class="av"></avatar>
+        </view>
+        <text class="num">{{d.splitInfo.modeLabel}}</text>
+      </view>
+    </view>
     <view class="field-row">
       <view class="field-row__label">备注</view>
       <view class="field-row__val" style="font-weight:400">{{d.note}}</view>

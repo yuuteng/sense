@@ -31,7 +31,7 @@ Page({
         isForeign: r.isForeign,
         isSplit: r.isSplit,
         displayAmount: fmt.signed(r.amountConverted, r.type, disp),
-        originalAmount: fmt.symbolOf(r.currency) + fmt.fmt(r.amount),
+        originalAmount: fmt.symbolOf(r.currency) + ' ' + fmt.fmt(r.amount),
         rate: `1 ${r.currency} ≈ ${fmt.money(r.rate, disp)}`,
         convertedAmount: fmt.money(r.amountConverted, disp),
         fixNote: `这笔账按记账当天（${fmt.cnMonthDay(r.date)}）的「${r.currency} → ${disp}」汇率换算，结果保存后不再变：以后汇率涨跌，这笔的金额也不会跟着变。`,
@@ -40,6 +40,7 @@ Page({
         images: r.images || [],
         recorder: r.recorder,
         payer: r.payer,
+        splitInfo: r.splitInfo || null,
         canEdit: r.canEdit,
       };
       this.setData({ d, loading: false, iconSrc: icons.get(r.icon || 'dots', '#3e4550', 1.6) });
