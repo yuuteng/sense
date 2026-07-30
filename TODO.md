@@ -78,3 +78,51 @@
 - 图表库扩展 / PDF 报表增强 / 批量导入向导 —— PRD P3+。
 - 技术挂起（2026-07-10 audit 遗留）：ECharts 485KB 分包异步化（需 componentPlaceholder + 真机验证）、云存储缩略图（依赖数据万象开通）、onShow 全量重取加脏检查缓存。
 - 待拍板细节见 PRD「七、待定问题清单」（仅剩 1/3/8/10 四项开放）。
+
+---
+
+## 四、2026-07-30 自动化测试轮次遗留
+
+> 本轮用 `miniprogram-automator` 跑了 126 + 76 条用例，修掉 2 个 P0（`record.list` 展示币种、`add.save()` 幂等），
+> 详见 `automation/report/{qa-bugs,bug-triage}.md`。以下是 PM triage 判定「本轮不做」但已确认存在的事项。
+
+### 建议尽快做
+
+- [ ] **`dissolveBook` 连带清理 `settings.bookCurrency[bookId]`**（`handlers.js:114` 附近）。
+  解散账本后各成员用户文档里的该键成为孤儿：`displayCurrencyOf`(handlers.js:60-63) 只按当前 bookId 查，永不命中，**功能无影响**，但**每次解散账本都累积一个**（本轮测试就积了 3 个）。属 Learning.md 2026-07-10「悬挂指针型 bug」家族，从源头收口比事后手删有意义。
+- [ ] **固化展示币种口径的契约用例**（`automation/tests/`，防复发成本最低的手段）。
+  断言「所有回传 `displayCurrency` 的 handler，传 `currency` 参数与不传的返回值逐字相等」。本轮 BUG-01 的铁证就是这条断言（复测 `r1-fix01.js` 已是成品：四种调法 不传/ISK/JPY/CNY 返回逐字相同）。displayCurrency 口径已在 Learning.md:35-36 复盘过一次仍复发，写下的教训不会自己执行，断言会。
+- [ ] **人工补测：记账页带图片时连点保存**（本轮唯一真实测试缺口）。
+  自动化无法附加真实图片，而 `uploadPhotos()` 耗时更长、幂等窗口更宽。FIX-02 的其余 8 条验收标准已通过。
+
+### P2
+
+- [ ] **CSV / Excel 导出「换算金额」列未标币种**（`dataio.js:21`）。值是基准币金额但表头无币种码；PDF 有 `baseCurrency` 标注、JSON 有 `book.baseCurrency`，只有 CSV/Excel 让读表人无从判断。建议列名改 `换算金额(${baseCurrency})`，但涉及导入侧列名匹配（`handlers.js:1723` 附近），需同步核对再动。
+- [x] ~~**新建账本时展示币种默认值反直觉**（UX）~~ ✅ **已解决**（2026-07-30，随「删掉设置页全局默认」顺带修好，采用的正是当时列的候选解②：注册时不写死 CNY，留空让基准币兜底）。实测三种基准币：base=EUR→首页 `€`、ISK→`kr`、JPY→`¥`，无需手动改胶囊。
+- [ ] **其他写入口的幂等标志复核**（本轮只修了 `add.js`）。`pages/settings` 多处无 mask 的批量操作（:132/:164/:214/:314/:336/:352/:368）、`pages/export`(:138/:151，有 mask 无标志，重复触发会重复生成文件/重复发信)。`onboarding.js:46`、`feedback-new.js:58`、`ai.js:277` 已有防护，前两者的 catch-only 复位即正确范本。
+
+### 已拍板并实施（2026-07-30 晚，见「五、Round 2」）
+
+- [x] ~~settle 页展示金额随汇率漂移~~ **用户拍板必须改**：已改为按金额加权的日期固化系数 `F`，逐笔明细走各自当日汇率。
+- [x] ~~PRD 4.8 / 4.3「默认展示币种」措辞勘误~~ **被更大的决定取代**：用户决定**删掉设置页该入口本身**，顶栏胶囊成为唯一入口。措辞勘误作废，改为实质产品变更（PRD 改后原文见 `automation/report/spec-round2.md` 第 4 节，待落笔）。
+- [x] ~~新建账本时展示币种默认值反直觉（上面第 101 行那条）~~ **随删除全局默认顺带解决**：链条变成「账本覆盖 > 基准币」，`ensureUser` 不再预填 `CNY`，新建 EUR 账本直接显示 €。
+
+### 测试基建
+
+### 测试基建
+
+- [ ] **`automation/` 目录尚未入 git**（`report/` 已加 .gitignore 忽略）。决定保留哪些用例后再入库：`lib.js`（连接/等待/选择器封装，本轮最贵的产出）与 `smoke.js`（动态读 app.json，零选择器零维护）建议常驻；流程走查类用例（t1/t3/t5/t6/t7）选择器耦合重、失败响亮，可每轮重新生成。判断标准：**失败是否静默** —— 静默失败的断言（金额口径、幂等）留，响亮失败的（白屏、点不动）不留。
+- [x] ~~历史汇率快照无法构造，「汇率固化」类需求无法自动化验收~~ **已解决**：新增 `seed.injectRateSnapshot { date, quotes }` 与 `seed.deleteRateSnapshot { date }`（`isDevUser` 门控、幂等）。此前 `fetchAndStoreCnyQuotes` 只写当天、`rate.getDaily` 也只补当天，导致只能验「数字变了」、验不了「数字没变」——而不漂移正是需求的全部目的。**这两个接口应作为常驻测试基建保留，不要清理。**
+- [ ] **`automation/` 里注入的假汇率必须清理干净**。`rates` 集合里残留 `injected: true` 的快照会让真实账本的历史金额算错（`quotesAt` 会就近取到假快照）。每轮测试收尾必须核对 `rates` 无 `injected` 残留，建议写成常驻收尾断言而非靠人记得。
+
+---
+
+## 五、Round 2 遗留（2026-07-30 晚，用户拍板两项产品变更之后）
+
+> 完整方案 `automation/report/spec-round2.md`；本节只记「已确认存在但本轮不做」的事项。
+
+- [ ] **按币种小数位取整**（P2，跨全站展示层）。全站**没有** `CUR_DECIMALS` 元数据：`miniprogram/utils/format.js:11` 的 `fmt()` 对所有币种硬编码 `.toFixed(2)`，服务端 `lib.js:18` 只有 `CUR_SYMBOL`。于是 ISK / JPY / KRW / VND 会显示 `kr 1,431.74` 这类**该币种不存在的小数**。改动要同时动 `lib.js`、`miniprogram/utils/currency.js` 与 `format.js` 的 `fmt/money/signed/signedTotal`，并影响 settle 的取整粒度（本轮统一用 0.01 是为了与展示层一致——若改成按币种小数位，settle 的分空间粒度要同步改，否则会出现「取整到 1 kr 但显示 .00」的新矛盾）。**单独立项，别顺手改。**
+- [ ] **settle `splits` 明细回传体积**（P2）。逐笔回传给前端，大账本响应体积失控。`fetchBookRecords` 的分页已在本轮修好（原 `.limit(1000)` 无分页会静默截断、结算结果错误），但 `splits` 仍是全量映射。应分页或限条数。
+- [ ] **F ≠ 1（多币种账本）时「枢轴成员」仍可能差 0.01**（P3，PM 判定本轮不预先处理）。`display === base` 时显示层与台账层是同一套整数分，自洽精确成立。F ≠ 1 时展示额 `round2(amtBase × F)` 与展示净额 `round2(netBase × F)` 是两条取整路径，仍可能差 0.01，**但只影响方案中出现 2 笔以上转账的成员**（贪心保证每笔至少结清一端，3 人账本最多 1 个）。
+  已备好的改法（实测确认存在再启用）：对出现在方案中的成员，`members[].net` 与 `summary.myNet` 的展示值**由其展示层转账金额之和反推**，而非独立 `round2(netBase × F)`。代价是 `net ≠ paid − share` 可能差 0.01（需用户自己做减法才会发现，优先级低于「净额 vs 转账行」）。语义上说得通——`handlers.js` 里 myNet 的注释本就定义为「冲抵后还差多少」。
+- [ ] **`dissolveBook` 连带清理 `settings.bookCurrency[bookId]`**（沿用第四节那条，未做）。删掉全局默认后账本级覆盖成为唯一来源，孤儿键的清理更有必要了。

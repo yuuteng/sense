@@ -120,6 +120,12 @@ Page({
     } catch (e) { this.setData({ loading: false }); api.toast(e); }
   },
 
+  // setTimeout 不随页面销毁取消、wx.navigateBack 也不绑页面实例：保存成功后 600ms 内用户自己返回，
+  // 定时器仍会从新的栈顶再弹一页（编辑流 home→detail→add 会被多弹一层回到 home）。必须显式清理。
+  onUnload() {
+    if (this._navTimer) clearTimeout(this._navTimer);
+  },
+
   mapCats(tree) {
     return (tree || []).map((c) => ({
       key: c.name, id: c.categoryId, icon: c.icon,
@@ -237,7 +243,9 @@ Page({
 
   // 未保存离开守卫：填了内容（金额/备注/图片）且未保存时，返回/手势离开先确认，防误滑丢输入
   syncUnloadGuard() {
-    const dirty = !this._saved && (this.data.amount || this.data.note || this.data.photos.length);
+    // !! 必须留着：&&/|| 返回操作数本身（金额串 "5.01" / 图片数 2），下一行是严格相等去重，
+    // 不转布尔会导致每次按键的值都不同 → 去重永久失效 → enableAlertBeforeUnload 被反复重调
+    const dirty = !!(!this._saved && (this.data.amount || this.data.note || this.data.photos.length));
     if (dirty === this._guardOn) return;
     this._guardOn = dirty;
     if (dirty && wx.enableAlertBeforeUnload) {
@@ -393,6 +401,13 @@ Page({
     const amount = parseFloat(this.data.amount) || 0;
     if (amount <= 0) { wx.showToast({ title: '请输入金额', icon: 'none' }); return; }
     if (!this.data.book) { wx.showToast({ title: '账本信息加载中，请稍候', icon: 'none' }); return; }
+    // 已成功入账但页面仍留存（导航失败等）：只提示、绝不解锁——账已落库，解锁再点就是重复入账。
+    // 飞行途中（_saving 真、_saved 假）静默 return：那时遮罩在，不需要提示。
+    if (this._saving) {
+      if (this._saved) wx.showToast({ title: '这笔已保存，请返回', icon: 'none' });
+      return;
+    }
+    this._saving = true;
     wx.showLoading({ title: '保存中…', mask: true });
     try {
       const images = await this.uploadPhotos();
@@ -436,7 +451,15 @@ Page({
       this.syncUnloadGuard(); // 已保存，解除离开确认
       wx.hideLoading();
       wx.showToast({ title: this.editId ? '已更新' : '已保存', icon: 'success' });
-      setTimeout(() => wx.navigateBack({ delta: 1, fail() { wx.switchTab({ url: '/pages/home/home' }); } }), 600);
-    } catch (e) { wx.hideLoading(); api.toast(e); }
+      // 回调统一用箭头函数：方法简写 fail() {} 里的 this 是框架传的 options 对象，不是页面实例，
+      // 写 this._xxx 会静默无效。timer 存 id 供 onUnload 清理（见 onUnload 注释）。
+      this._navTimer = setTimeout(() => wx.navigateBack({
+        delta: 1,
+        fail: () => wx.switchTab({
+          url: '/pages/home/home',
+          fail: () => wx.showToast({ title: '已保存，请手动返回', icon: 'none', duration: 3000 }),
+        }),
+      }), 600);
+    } catch (e) { this._saving = false; wx.hideLoading(); api.toast(e); }
   },
 });

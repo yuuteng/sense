@@ -1,0 +1,27 @@
+const { connect, apiCall, sleep } = require("./lib");
+const ICE = "9cef38726a522d5f008ef25d7a291933";
+const r2 = (n) => Math.round(n * 100) / 100;
+(async () => {
+  const { mini } = await connect();
+  const rd = await apiCall(mini, "rate", "getDaily", { date: "2026-07-22", base: "CNY" });
+  const eur = rd.success && rd.data.quotes.EUR;
+  console.log("07-22 生效快照 date=" + (rd.success && rd.data.date) + " EUR=" + eur);
+  const l = await apiCall(mini, "record", "list", { bookId: ICE, page: 0, withSummary: true });
+  const items = [];
+  ((l.success && l.data.groups) || []).forEach((g) => (g.items || []).forEach((i) => items.push(i)));
+  const exp = items.filter((i) => i.type === "expense");
+  console.log("原币金额(EUR):", JSON.stringify(exp.map((i) => i.originalAmount)));
+  console.log("record.list 每笔(已各自 round2):", JSON.stringify(exp.map((i) => i.amountConverted)));
+  const sumRounded = exp.reduce((a, i) => a + i.amountConverted, 0);
+  const full = exp.map((i) => i.originalAmount * eur);
+  const sumFull = full.reduce((a, b) => a + b, 0);
+  console.log("每笔全精度:", JSON.stringify(full.map((x) => Number(x.toFixed(6)))));
+  console.log("Σ(先各自 round2 再相加) =", r2(sumRounded), "  <- record.list / 首页 / records 页 的口径");
+  console.log("round2(Σ全精度)        =", r2(sumFull), "  <- settle.summary.totalExpense 的口径");
+  console.log("差值 =", r2(sumRounded) - r2(sumFull));
+  const s = await apiCall(mini, "settle", "get", { bookId: ICE });
+  console.log("settle.summary.totalExpense 实测 =", s.success && s.data.summary.totalExpense);
+  console.log("settle.splits 每笔(走 recToDisplay, 各自 round2) =", JSON.stringify(s.success && s.data.splits.map((x) => x.amount)));
+  console.log("Σ settle.splits =", r2((s.success ? s.data.splits : []).reduce((a, x) => a + x.amount, 0)));
+  process.exit(0);
+})().catch((e) => { console.error("U9 FATAL:", e.message); process.exit(1); });

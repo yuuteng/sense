@@ -1,0 +1,12 @@
+{
+  "name": "sense-automation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sense 小程序自动化测试 (miniprogram-automator)",
+  "scripts": {
+    "smoke": "node smoke.js"
+  },
+  "dependencies": {
+    "miniprogram-automator": "^0.12.1"
+  }
+}

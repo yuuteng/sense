@@ -16,15 +16,6 @@
     <image class="chevron" src="{{ic.chevron}}"></image>
   </view>
 
-  <view class="group__title">偏好</view>
-  <view class="group group--flat">
-    <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="openCur">
-      <view class="li__ic"><image src="{{ic.currency}}"></image></view>
-      <view class="li__label">默认展示币种</view>
-      <view class="li__val">{{curLabel}} <image class="chevron" src="{{ic.chevron}}"></image></view>
-    </view>
-  </view>
-
   <view class="group__title">账本与数据</view>
   <view class="group group--flat">
     <view class="li" hover-class="pressed" hover-stay-time="80" bindtap="goBooks">
@@ -99,8 +90,6 @@
       <view class="li__val">不可恢复 <image class="chevron" src="{{ic.chevron}}"></image></view>
     </view>
   </view>
-
-  <currency-picker visible="{{curVisible}}" current="{{curCode}}" bind:select="onCur" bind:close="closeCur"></currency-picker>
 
   <!-- 导入结果面板（半屏） -->
   <view wx:if="{{importResult}}" class="imp-mask" bindtap="closeImportResult">

@@ -106,7 +106,7 @@ Page({
       const sym = fmt.symbolOf(cur);
       const [summary, list] = await Promise.all([
         api.call('stats', 'getMonthlySummary', { bookId: book.bookId }),
-        api.call('record', 'list', { bookId: book.bookId, currency: cur, page: 0 }),
+        api.call('record', 'list', { bookId: book.bookId, page: 0 }),
       ]);
       this.page = 0;
       // mapItem 在 setData 求值期间就要用，不能读还没更新的 this.data.isSplit（切换账本时是旧值）
@@ -155,7 +155,7 @@ Page({
     try {
       const cur = this.data.curCode;
       const list = await api.call('record', 'list', {
-        bookId: this.data.currentBookId, currency: cur, page: (this.page || 0) + 1,
+        bookId: this.data.currentBookId, page: (this.page || 0) + 1,
       });
       this.page = list.page;
       // 增量追加：path-syntax 只传新页数据，避免每翻一页都全量重传已加载列表

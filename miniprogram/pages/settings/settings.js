@@ -1,6 +1,5 @@
 const api = require('../../utils/api');
 const icons = require('../../utils/icons');
-const cur = require('../../utils/currency');
 const fmt = require('../../utils/format');
 
 // 最近一次导入结果的本地缓存键（关面板后可从导入行摘要重新打开）
@@ -10,9 +9,6 @@ Page({
   data: {
     ic: {},
     profile: { nickname: '', avatarInitial: '我', avatarColor: '#0089c0', avatarFileID: '', bookCount: 0, defaultBookName: '' },
-    curCode: 'CNY',
-    curLabel: cur.label('CNY'),
-    curVisible: false,
     importVal: '',
     importResult: null, // 导入结果面板：{ success, failed, createdCategories, failures[], allOk }
     fbUnread: 0,
@@ -31,7 +27,6 @@ Page({
     this.setData({
       versionLabel,
       ic: {
-        currency: icons.get('currency', '#0089c0', 1.7),
         list: icons.get('list', '#0089c0', 1.7),
         book: icons.get('book', '#0089c0', 1.7),
         download: icons.get('download', '#0089c0', 1.7),
@@ -64,16 +59,13 @@ Page({
 
   async load() {
     try {
-      const [profile, s, fb] = await Promise.all([
+      const [profile, fb] = await Promise.all([
         api.call('user', 'getProfile'),
-        api.call('settings', 'get'),
         api.call('feedback', 'unreadCount').catch(() => ({ count: 0 })),
       ]);
       getApp().globalData.profile = profile;
       this.setData({
         profile,
-        curCode: s.displayCurrency,
-        curLabel: cur.label(s.displayCurrency),
         fbUnread: fb.count || 0,
         loading: false,
       });
@@ -118,14 +110,6 @@ Page({
         wx.showToast({ title: '头像已更新', icon: 'success' });
       })
       .catch((err) => { this.setData({ 'profile.avatarFileID': prev }); api.toast(err); });
-  },
-
-  openCur() { this.setData({ curVisible: true }); },
-  closeCur() { this.setData({ curVisible: false }); },
-  onCur(e) {
-    const code = e.detail.code;
-    this.setData({ curCode: code, curLabel: cur.label(code), curVisible: false });
-    api.call('settings', 'update', { displayCurrency: code }).catch(api.toast);
   },
 
   refreshRates() {

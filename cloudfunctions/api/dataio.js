@@ -7,6 +7,10 @@
 // 缺关键字段（日期/金额）或值非法的行跳过并记录原因，导入结果反馈成功/失败条数与原因。
 
 const round2 = (n) => Math.round(n * 100) / 100;
+// 中间固化值必须比展示精度高：amountConverted 用 round6（与 lib.js:7 及 record.create/update 一致）。
+// 用 round2 固化会在小面值展示币上把误差放大回来（ISK 约 159 倍 → 0.005×159 ≈ 0.78），
+// 使「日聚合×系数」与「逐笔换算」两条路径落到不同的分上。
+const round6 = (n) => Math.round(n * 1e6) / 1e6;
 const p2 = (n) => String(n).padStart(2, '0');
 
 // ============ 导出 ============
@@ -194,7 +198,7 @@ function normalizeImportRows(raws) {
       categoryPath: normCategoryPath(m.category, m.subcategory),
       title: String(m.title == null ? '' : m.title).trim(),
       note,
-      amountConverted: Number.isFinite(conv) && conv > 0 ? round2(conv) : null,
+      amountConverted: Number.isFinite(conv) && conv > 0 ? round6(conv) : null,
       rate: Number.isFinite(rate) && rate > 0 ? rate : null,
     });
   });

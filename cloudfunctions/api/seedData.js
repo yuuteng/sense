@@ -31,6 +31,10 @@ function at(dateStr, hour) {
 function frac(n) { return ((n * 9301 + 49297) % 233280) / 233280; }
 function pick(arr, n) { return arr[Math.floor(frac(n) * arr.length) % arr.length]; }
 function round2(x) { return Math.round(x * 100) / 100; }
+// 中间固化值必须比展示精度高：amountConverted 用 round6（与 lib.js:7 及 record.create/update 一致）。
+// 用 round2 固化会在小面值展示币上把误差放大回来（ISK 约 159 倍 → 0.005×159 ≈ 0.78），
+// 使「日聚合×系数」与「逐笔换算」两条路径落到不同的分上。
+function round6(x) { return Math.round(x * 1e6) / 1e6; }
 
 // 假成员（独立于真实用户体系）
 const FAKES = [
@@ -93,7 +97,7 @@ function build(me) {
     _id: f.openid, openid: f.openid, nickname: f.nickname,
     avatarColor: f.color, avatarInitial: f.nickname.slice(0, 1), avatarFileID: '',
     registered: true, defaultBookId: '',
-    settings: { displayCurrency: 'CNY', aiMessageLimit: 50 },
+    settings: { aiMessageLimit: 50 },
     createdAt: at(bjDate(-360), 9), seed: true, seedBy: me,
   }));
 
@@ -152,7 +156,7 @@ function build(me) {
     const who = pick(writers, sn + idx * 17);
     records.push({
       bookId, type: 'expense', title: item.t,
-      amount, currency, rate, baseCurrency: 'CNY', amountConverted: round2(amount * rate),
+      amount, currency, rate, baseCurrency: 'CNY', amountConverted: round6(amount * rate),
       categoryId: catId[`${bookId}|${item.cat}|${item.sub}`] || catId[`${bookId}|${item.cat}|`],
       categoryPath: item.sub ? `${expByKey[item.cat].name} / ${item.sub}` : expByKey[item.cat].name,
       date, note: '', images: [],
@@ -213,7 +217,7 @@ function build(me) {
     const rate = currency === 'CNY' ? 1 : fxRate(currency, date);
     records.push({
       bookId: BOOK_SPLIT, type: 'expense', title: s.t,
-      amount: s.amt, currency, rate, baseCurrency: 'CNY', amountConverted: round2(s.amt * rate),
+      amount: s.amt, currency, rate, baseCurrency: 'CNY', amountConverted: round6(s.amt * rate),
       categoryId: catId[`${BOOK_SPLIT}|other|`],
       categoryPath: '其他', date, note: '', images: [],
       recorderOpenid: s.payer, payerOpenid: s.payer,

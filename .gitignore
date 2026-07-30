@@ -20,6 +20,9 @@ Thumbs.db
 dist/
 build/
 
+# 自动化测试产物
+automation/report/
+
 # Claude Code 本机个人配置（保留 skills/ 与 devlog.md 入库）
 .claude/settings.local.json
 

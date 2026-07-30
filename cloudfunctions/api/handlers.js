@@ -47,20 +47,25 @@ async function ensureUser(openid, channel) {
     // data 里不能带 _id（set 会整单失败），且失败必须抛出——静默吞错会导致用户文档永远建不起来
     // channel = 首次进入时的渠道（develop/trial/release），仅统计用；同一 openid 各渠道是同一人，清理时绝不按此删用户
     // registered 直接 true：身份即 openid，无需授权即可用全部功能（微信审核不允许进入即强制授权）
-    u = { openid, ...genIdentity(openid), avatarFileID: '', registered: true, defaultBookId: '', settings: { displayCurrency: 'CNY', aiMessageLimit: 50 }, channel: channel || 'unknown', createdAt: db.serverDate() };
+    // settings 不预填 displayCurrency：写死具体值会永久遮蔽「按账本基准币兜底」这一级（见 displayCurrencyOf 注释）
+    u = { openid, ...genIdentity(openid), avatarFileID: '', registered: true, defaultBookId: '', settings: { aiMessageLimit: 50 }, channel: channel || 'unknown', createdAt: db.serverDate() };
     await db.collection('users').doc(openid).set({ data: u });
     u._id = openid;
   }
   return u;
 }
 
-// 展示币种解析（PRD 待定 5 已拍板：每账本各设一个，全局给默认）：
-// 优先级 = 该用户在该账本的覆盖值 > 用户全局默认 > 账本基准币种。
-// 覆盖值存 users.settings.bookCurrency[bookId]，跟随「账本 × 用户」，与图表布局同一归属模型。
+// 展示币种解析（用户 2026-07-30 拍板删掉设置页「默认展示币种」入口）：
+// 优先级 = 该用户在该账本的覆盖值 > 账本基准币种。
+// 覆盖值存 users.settings.bookCurrency[bookId]，跟随「账本 × 用户」，与图表布局同一归属模型；
+// 唯一写入口是各页顶栏币种胶囊（必带 bookId）。
+// 原中间级 s.displayCurrency（全局默认）已移除：ensureUser 注册时把它写死 'CNY'，
+// 于是「未单独设置的账本按基准币显示」这条兜底永远不可达——用户建 EUR 账本却看到 CNY。
+// 三级回退链里中间级一旦预填具体值，就等于永久遮蔽最后一级，宁可留空。
 function displayCurrencyOf(u, bookId, base) {
   const s = (u && u.settings) || {};
   const byBook = s.bookCurrency || {};
-  return (bookId && byBook[bookId]) || s.displayCurrency || base || 'CNY';
+  return (bookId && byBook[bookId]) || base || 'CNY';
 }
 const COLLECTIONS = ['users', 'books', 'members', 'categories', 'records', 'rates', 'chartLayouts', 'aiMessages', 'feedbacks', 'admins', 'files', 'settlements'];
 async function ensureCollections() {
@@ -159,15 +164,28 @@ async function seedDefaultCategories(bookId) {
     if (subDocs.length) await db.collection('categories').add({ data: subDocs });
   }));
 }
+// 全量取某账本记录（结算用）。**必须分页**：原先是 `.limit(1000)` 无分页，超 1000 条的账本会被
+// 静默截断——多出的记录完全不参与净额，结算结果错误且不报任何错。
+// field 投影只留结算与逐笔展示要用的字段；`baseCurrency` 供 recToDisplay → recCny 用，不能省。
 async function fetchBookRecords(bookId) {
-  const r = await db.collection('records').where({ bookId }).orderBy('date', 'desc').orderBy('createdAt', 'desc').limit(1000).get();
-  return r.data;
+  const out = [];
+  for (let skip = 0; skip < 100000; skip += 1000) {
+    const r = await db.collection('records').where({ bookId })
+      .field({ type: 1, amountConverted: 1, date: 1, payerOpenid: 1, split: 1, title: 1, categoryPath: 1, currency: 1, amount: 1, baseCurrency: 1 })
+      .orderBy('date', 'desc').orderBy('createdAt', 'desc')
+      .skip(skip).limit(1000).get();
+    out.push(...(r.data || []));
+    if ((r.data || []).length < 1000) break;
+  }
+  return out;
 }
 function monthOf(dateStr) { return (dateStr || '').slice(0, 7); }
 
 // —— 展示币种换算 ——
-// 记录里 amountConverted 固化在账本基准币；切换「展示币种」只改变汇总口径（用最新汇率整体换算），
-// 不重算历史每笔（符合 PRD）。汇率快照以 CNY 为基准，quotes[X]=1 单位 X 折合多少 CNY。
+// 记录里 amountConverted 固化在账本基准币；切换「展示币种」只改变汇总口径，不重算历史每笔。
+// **换算一律按「该笔记账当日」的汇率**（见下方 quotesAt / recToDisplay / dayFactor / factorAt），
+// 结果随记录日期固化、不随今日汇率漂移。最新汇率（latestCnyQuotes）只用于「现在就要转这笔钱」
+// 的场景 —— 即 settle 里 settleCur 指定的单笔结算币种。汇率快照以 CNY 为基准，quotes[X]=1 单位 X 折合多少 CNY。
 let _lazyRateTried = false; // 单次云函数实例内避免重复外呼
 
 // 拉取实时 CNY 基准汇率并入库（供每日定时、手动刷新、懒加载共用）
@@ -252,6 +270,49 @@ function dayFactor(rateIndex, date, base, display) {
   const qb = cnyPerUnit(q, base);
   const qd = cnyPerUnit(q, display);
   return (qb && qd) ? qb / qd : 1;
+}
+// dayFactor 的「缺汇率返回 null」版本。dayFactor 在「display===base」与「该日取不到汇率」两种
+// 情况都返回 1，无法区分，而「回退基准币展示」需要知道是哪一种。dayFactor 原样保留（8 处调用方依赖）。
+function factorAt(rateIndex, date, base, display) {
+  if (!display || display === base) return 1;
+  const q = quotesAt(rateIndex, date);
+  const qb = cnyPerUnit(q, base);
+  const qd = cnyPerUnit(q, display);
+  return (qb && qd) ? qb / qd : null;
+}
+
+// 逐笔「记账当日」汇率聚合成员流水：一次遍历同时产出基准币与展示币两套 + 计数。
+// settle.get 与 stats.getMemberData 共用这一个口径出口，避免两处再次分叉（此前 settle 用最新汇率、
+// getMemberData 用逐笔当日，同用 splitShares 却在下游换算层分了叉）。
+// 全程全精度浮点，不做任何取整 —— 取整只允许发生在最终展示输出那一次。
+// kind: 'expense' 走 payer/shares 两个桶，'income' 走 recorder 桶。
+// 注意：调用方可能已在查询层按 type 过滤（此时 field 投影里没有 type 字段），故只在 type 存在时才校验。
+function aggregateMemberFlows(records, rateIndex, base, display, kind) {
+  const K = kind === 'income' ? 'income' : 'expense';
+  const mk = () => ({ base: {}, disp: {}, count: {}, totalBase: 0, totalDisp: 0 });
+  const payer = mk(), shares = mk(), recorder = mk();
+  let missDays = 0, counted = 0;
+  // 合计不受 openid 缺失影响（与重构前 getMemberData 的 total 累加位置一致，保证返回值逐字不变）
+  const push = (b, o, vb, vd) => {
+    b.totalBase += vb; b.totalDisp += vd;
+    if (!o) return;
+    b.base[o] = (b.base[o] || 0) + vb;
+    b.disp[o] = (b.disp[o] || 0) + vd;
+    b.count[o] = (b.count[o] || 0) + 1;
+  };
+  (records || []).forEach((r) => {
+    if (r.type && r.type !== K) return;
+    counted += 1;
+    const f0 = factorAt(rateIndex, r.date, base, display);
+    if (f0 == null) missDays += 1;
+    const f = f0 == null ? 1 : f0;
+    const A = r.amountConverted || 0;
+    if (K === 'income') { push(recorder, r.recorderOpenid, A, A * f); return; }
+    push(payer, r.payerOpenid, A, A * f);
+    const sh = splitShares(r);
+    Object.keys(sh).forEach((o) => push(shares, o, sh[o], sh[o] * f));
+  });
+  return { payer, shares, recorder, missDays, counted };
 }
 // 服务端聚合：按（日期 × 收/支）汇总基准币金额，只回日汇总。
 // 回传量 ∝ 有记账的天数（一年 ≤ 730 行），与记录条数无关；分批翻页防天数极多。
@@ -478,9 +539,13 @@ const record = {
     // 按「天」分页：每页 pageSize 个记账日（整天取，保证每日分组与合计完整），page 从 0 起
     const pageSize = Math.min(60, Math.max(5, Number(p.pageSize) || 20));
     const page = Math.max(0, Number(p.page) || 0);
-    const bk = await db.collection('books').doc(p.bookId).get().catch(() => null);
+    // 账本与用户并行读（串行多一次 DB 往返会顶到云函数超时 -504003）
+    const [bk, u] = await Promise.all([
+      db.collection('books').doc(p.bookId).get().catch(() => null),
+      getUser(ctx.openid),
+    ]);
     const base = (bk && bk.data && bk.data.baseCurrency) || 'CNY';
-    const display = p.currency || base;      // 前端传来的展示币种
+    const display = displayCurrencyOf(u, p.bookId, base); // 服务端权威口径，不信任 p.currency
     // 可选筛选（统计钻取用）：日期范围 / 收支类型 / 顶级分类（自动包含其全部子分类）
     const cMap = await categoriesMap(p.bookId);
     const match = { bookId: p.bookId };
@@ -888,7 +953,10 @@ const stats = {
 
   // 某月按「成员」聚合（成员维度统计卡，PRD P2）。
   // kind=expense 按付款人（scope=paid）或按应摊（scope=share，分账账本）；kind=income 恒按记录人。
-  // 口径与其他图表一致：逐笔按记录当日汇率换算到该用户该账本的展示币种；应摊走 splitShares（与 settle 同源）。
+  // 口径与其他图表一致：逐笔按记录当日汇率换算到该用户该账本的展示币种。
+  // 聚合走 aggregateMemberFlows —— 与 settle.get 共用同一个**换算口径出口**。
+  // （原注释说「应摊走 splitShares，与 settle 同源」是假的：两处确实共享 splitShares，但分叉在其
+  //   下游的换算层——settle 当时乘的是最新汇率。共享中间层只统一了一半，必须共享到口径出口。）
   async getMemberData(p, ctx) {
     await requireMember(p.bookId, ctx.openid);
     const month = /^\d{4}-\d{2}$/.test(p.month || '') ? p.month : relDate(0).slice(0, 7);
@@ -909,16 +977,10 @@ const stats = {
       recs.push(...(r.data || []));
       if ((r.data || []).length < 1000) break;
     }
-    const sums = {}, counts = {};
-    const add = (o, v) => { if (!o) return; sums[o] = (sums[o] || 0) + v; counts[o] = (counts[o] || 0) + 1; };
-    let total = 0;
-    recs.forEach((r0) => {
-      const f = dayFactor(rateIndex, r0.date, base, display);
-      if (kind === 'income') { const v = r0.amountConverted * f; add(r0.recorderOpenid, v); total += v; return; }
-      if (scope === 'paid') { const v = r0.amountConverted * f; add(r0.payerOpenid, v); total += v; return; }
-      const sh = splitShares(r0);
-      Object.keys(sh).forEach((o) => { const v = sh[o] * f; add(o, v); total += v; });
-    });
+    // 与 settle.get 共用同一个逐笔当日汇率聚合出口（重构，返回值逐字不变）
+    const flows = aggregateMemberFlows(recs, rateIndex, base, display, kind);
+    const bucket = kind === 'income' ? flows.recorder : (scope === 'paid' ? flows.payer : flows.shares);
+    const sums = bucket.disp, counts = bucket.count, total = bucket.totalDisp;
     const members = Object.keys(sums).map((o) => {
       const m = mMap[o];
       return {
@@ -1472,11 +1534,11 @@ const ai = {
 const settings = {
   async get(_p, ctx) {
     const u = await ensureUser(ctx.openid, ctx.channel);
-    return { displayCurrency: u.settings.displayCurrency, aiMessageLimit: u.settings.aiMessageLimit };
+    return { aiMessageLimit: u.settings.aiMessageLimit };
   },
   async update(p, ctx) {
     const u = await ensureUser(ctx.openid, ctx.channel);
-    // 带 bookId = 设置该账本的展示币种（每账本一个，PRD 待定 5）；不带 = 改全局默认
+    // 展示币种一律跟随账本，必须带 bookId（每账本一个，PRD 待定 5）
     if (p.displayCurrency && p.bookId) {
       await requireMember(p.bookId, ctx.openid);
       await db.collection('users').doc(ctx.openid).update({
@@ -1485,7 +1547,9 @@ const settings = {
       return { ok: true };
     }
     const s = { ...u.settings };
-    if (p.displayCurrency) s.displayCurrency = p.displayCurrency;
+    // 全局默认展示币种入口已删：不带 bookId 的 displayCurrency 一律忽略，但**不抛错** ——
+    // 老客户端可能仍在发这种请求，抛错会让它弹一个用户无法理解的错误 toast。
+    if (p.displayCurrency) console.warn('[settings.update] 已忽略无 bookId 的 displayCurrency（全局默认入口已移除）:', p.displayCurrency);
     if (p.aiMessageLimit) s.aiMessageLimit = p.aiMessageLimit;
     await db.collection('users').doc(ctx.openid).update({ data: { settings: s } });
     return { ok: true };
@@ -1874,6 +1938,44 @@ function splitShares(rec) {
   return out;
 }
 
+// 零和守恒地把全精度净额离散化成「整数分」（最大余额法 / 截断 + 余数分配）。
+// 输入 netFull[o] = 全精度基准币净额（已含 settlements 抵扣），Σ ≈ 0；输出 cents[o] 整数分，**Σ cents === 0 精确成立**。
+// 为什么必须零和守恒：round2 非线性，`Σ round2(x) ≠ round2(Σ x)`。各成员独立取整后和不再为 0，
+// 于是「成员净额」与「转账行金额」变成两条互不相干的取整路径 —— 同一屏「你应收 454.13」而两行加起来 454.14，
+// 那就是 REG-02。两者必须共用同一套离散化结果才自洽。
+// 为什么用「截断 + 余数分配」而不是「各自 Math.round 再把残差塞给最大的一方」：
+// 后者会给**真实净额恰为 0 的成员**凭空造出一条 0.01 债务（页面显示某人要转 0.01，而这人一分不欠）。
+// 截断法天然免疫 —— 净额为 0 者余数也为 0，被显式跳过。
+// 够分的证明：Σc = Σ(raw − rem) = −Σrem ⟹ residual = Σrem；每个 |rem| < 1 而其和为整数
+// ⟹ |residual| < 「余数非零的成员数」⟹ 永远有足够候选，不会分不完。
+function toBalancedCents(netFull) {
+  const rows = Object.keys(netFull).map((o) => {
+    const raw = (netFull[o] || 0) * 100;
+    const c = Math.trunc(raw);          // 朝零截断：|c| ≤ |raw|
+    return { o, raw, c, rem: raw - c }; // rem 与 raw 同号，|rem| < 1
+  });
+  let residual = -rows.reduce((s, r) => s + r.c, 0);   // = Σrem，待分配的分数
+  // 三级排序（|余数| → |净额| → openid）：保证同一批数据在任何时候、任何成员那里算出完全一致的
+  // 方案 —— 转账方案必须账本级唯一，否则 A 的手机说「你欠 Bob」、B 的手机说「你欠 Carol」。
+  // |余数| 的比较必须带容差：数学上相等的余数（如 3 人均摊时人人都是 2/3）经 ×100 后会因浮点
+  // 噪声差出 ~1e-12，使第一级永不判平、后两级形同虚设 —— 那 1 分会按浮点尾数而非「谁金额大」分配。
+  const remCmp = (x, y) => { const d = Math.abs(y.rem) - Math.abs(x.rem); return Math.abs(d) < 1e-9 ? 0 : d; };
+  rows.sort((a, b) => remCmp(a, b)
+    || Math.abs(b.raw) - Math.abs(a.raw)
+    || (a.o < b.o ? -1 : 1));
+  const step = residual > 0 ? 1 : -1;
+  for (let i = 0; residual !== 0 && i < rows.length; i++) {
+    const r = rows[i];
+    if (r.rem === 0) break;                  // 余数为 0 的成员绝不动：否则给真实净额为 0 的人造出幻影债务
+    if (Math.sign(r.rem) !== step) continue; // 只补方向一致的，避免把误差推大
+    r.c += step; residual -= step;
+  }
+  // 按上面的证明这里恒为 0；非 0 说明输入不是零和（上游算错），记日志而不是静默出错
+  if (residual !== 0) console.error('[toBalancedCents] 余数未分配完，输入可能非零和', { residual, rows: rows.map((r) => [r.o, r.raw]) });
+  const out = {}; rows.forEach((r) => { out[r.o] = r.c; });
+  return out;
+}
+
 // 全量取某账本的结清抵扣（settlements 集合，条数少，分页取全）
 async function fetchSettlements(bookId) {
   const out = [];
@@ -1891,27 +1993,51 @@ async function fetchSettlements(bookId) {
 const settle = {
   async get(p, ctx) {
     await requireMember(p.bookId, ctx.openid);
-    const [records, mMap, bk, stl] = await Promise.all([
+    // 并行取全部依赖：原先 getUser 与 latestCnyQuotes 是 Promise.all 之后的两处串行 await，
+    // 新增 loadRateIndex 若再串行会多一次 DB 往返，容易顶到云函数超时 -504003
+    const [records, mMap, bk, stl, me0, rateIndex] = await Promise.all([
       fetchBookRecords(p.bookId), membersMap(p.bookId),
       db.collection('books').doc(p.bookId).get(),
-      fetchSettlements(p.bookId),
+      fetchSettlements(p.bookId), getUser(ctx.openid), loadRateIndex(),
     ]);
     const base = (bk.data && bk.data.baseCurrency) || 'CNY';
-    // 展示口径跟随「账本 × 用户」展示币种（与首页/统计一致）；内部欠款与结清抵扣仍固化在基准币，
-    // 仅展示时按最新汇率整体换算——所有数字同一系数缩放，净额零和与方案一致性不受影响。
+    // 展示口径跟随「账本 × 用户」展示币种（与首页/统计一致）；内部欠款与结清抵扣仍固化在基准币。
+    // 展示换算用**按金额加权的日期固化系数** F = Σ(A_r × f_r) / Σ A_r（f_r = 该笔记账当日的
+    // 基准币→展示币系数）：F 不随「今天」变化，只在记录增删改时变，故历史金额不再漂移；
+    // 且 disp(totalBase) 恰等于逐笔精确换算之和，总额与首页/统计精确一致。
+    // 之所以仍用「单一系数缩放」而非每成员各自精确累加：转账方案必须账本级唯一（display 是按调用者
+    // 解析的，若各自精确累加，不同成员的净额相对大小会变，贪心会给出不同配对，A 的手机说「你欠 Bob」、
+    // B 的手机说「你欠 Carol」，而 settle.mark 按 from|to 落库会直接冲突）。
+    // 代价：成员表 paid/share/net 是「基准币 × F」，不等于该成员逐笔精确累加（各成员支出的日期分布
+    // ≠ 账本整体），跨月汇率波动大时可差百分之几。取舍理由是净额与转账行同屏必须严格自洽。
     // 每笔转账可另选结算币种（books.settleCur['from|to']），仅覆盖该行展示，不动内部台账。
-    const me0 = await getUser(ctx.openid);
     const display = displayCurrencyOf(me0, p.bookId, base);
     const q = await latestCnyQuotes();
-    const facTo = (to) => { // 基准币 → to 的最新换算系数；缺汇率返回 null
+    // 基准币 → to 的**最新**换算系数；缺汇率返回 null。只服务 settleCur 指定的单笔结算币种
+    // （语义是「现在就要把这笔钱转出去」，用最新汇率才对），不参与 F。
+    const facTo = (to) => {
       if (!to || to === base) return 1;
       const qb = base === 'CNY' ? 1 : (q && q[base]);
       const qd = to === 'CNY' ? 1 : (q && q[to]);
       return (qb && qd) ? qb / qd : null;
     };
+    // 逐笔按记账当日汇率聚合（与 stats.getMemberData 同一出口）
+    const flows = aggregateMemberFlows(records, rateIndex, base, display, 'expense');
+    const paid = flows.payer.base, share = flows.shares.base;
+    const totalExpense = flows.payer.totalBase;
     let dispFactor = 1, dispCur = base;
-    const fd = facTo(display);
-    if (fd) { dispFactor = fd; dispCur = display; } // 缺汇率回退基准币展示
+    if (display !== base) {
+      // 每一笔都取不到当日汇率（rates 整体为空或缺该币种）→ 回退基准币展示，不报错
+      const allMiss = flows.counted > 0 && flows.missDays === flows.counted;
+      if (!allMiss) {
+        if (totalExpense > 0) { dispFactor = flows.payer.totalDisp / totalExpense; dispCur = display; }
+        else {
+          // 无支出记录可加权（金额全为 0），只需把币种标签定下来
+          const fb = factorAt(rateIndex, relDate(0), base, display);
+          if (fb != null) { dispFactor = fb; dispCur = display; }
+        }
+      }
+    }
     const disp = (n) => round2((n || 0) * dispFactor);
     const sym = CUR_SYMBOL[dispCur] || dispCur + ' ';
     const settleCur = (bk.data && bk.data.settleCur) || {};
@@ -1924,47 +2050,48 @@ const settle = {
       }
       return { cur: dispCur, amt: disp(amtBase) };
     };
-    const paid = {}, share = {};
-    Object.keys(mMap).forEach((o) => { paid[o] = 0; share[o] = 0; });
-    let totalExpense = 0;
-    records.forEach((r) => {
-      if (r.type !== 'expense') return;
-      totalExpense += r.amountConverted;
-      paid[r.payerOpenid] = (paid[r.payerOpenid] || 0) + r.amountConverted;
-      const sh = splitShares(r); // 与成员统计同口径；旧数据无 share 字段时按 mode 现算，修掉「均摊应摊恒为 0」的隐性坑
-      Object.keys(sh).forEach((o) => { share[o] = (share[o] || 0) + sh[o]; });
-    });
+    // 净额与抵扣全程全精度，不中间取整：每成员各自 round2 后 Σnet 会 ±0.01，
+    // 让贪心吐出 0.01 的互欠垃圾行。取整只在 disp() 输出那一次。
     const net = {};
-    Object.keys(mMap).forEach((o) => { net[o] = round2((paid[o] || 0) - (share[o] || 0)); });
+    Object.keys(mMap).forEach((o) => { net[o] = (paid[o] || 0) - (share[o] || 0); });
     // 抵扣：已结清的转账视同「from 已付给 to」，双方净额向 0 冲抵。
     // 全部结清后各净额归零，之后的新记录只产生增量欠款。
     stl.forEach((s) => {
-      net[s.from] = round2((net[s.from] || 0) + s.amount);
-      net[s.to] = round2((net[s.to] || 0) - s.amount);
+      net[s.from] = (net[s.from] || 0) + s.amount;
+      net[s.to] = (net[s.to] || 0) - s.amount;
     });
-    // 最少转账（基于冲抵后的剩余净额）
-    const creditors = Object.keys(net).filter((o) => net[o] > 0).map((o) => ({ o, v: net[o] })).sort((a, b) => b.v - a.v);
-    const debtors = Object.keys(net).filter((o) => net[o] < 0).map((o) => ({ o, v: -net[o] })).sort((a, b) => b.v - a.v);
+    // 零和守恒离散化：净额与转账金额共用这一套整数分，两条取整路径合并成一条
+    const cents = toBalancedCents(net);
+    // 最少转账（跑在整数分上）。亚分净额的成员 cents 为 0，**自动被这里的筛选排除**，
+    // 因此不再需要任何金额阈值（原先的 >0.001 / <0.001 epsilon 已删）。
+    const creditors = Object.keys(cents).filter((o) => cents[o] > 0).map((o) => ({ o, v: cents[o] }))
+      .sort((a, b) => b.v - a.v || (a.o < b.o ? -1 : 1));
+    const debtors = Object.keys(cents).filter((o) => cents[o] < 0).map((o) => ({ o, v: -cents[o] }))
+      .sort((a, b) => b.v - a.v || (a.o < b.o ? -1 : 1));
     const who = (o) => {
       const m = mMap[o] || {};
       return { name: m.name || '成员', initial: m.initial || '?', color: m.color || '#999', avatar: m.avatarFileID || '' };
     };
     const transfers = []; let i = 0, j = 0, tid = 1;
-    while (i < debtors.length && j < creditors.length) {
-      const amt = round2(Math.min(debtors[i].v, creditors[j].v));
-      if (amt > 0.001) {
-        const f = who(debtors[i].o), t = who(creditors[j].o);
-        const pv = pairView(debtors[i].o, creditors[j].o, amt);
-        transfers.push({ transferId: 't' + (tid++),
-          fromOpenid: debtors[i].o, toOpenid: creditors[j].o, // 标记结清时回传，服务端据此落抵扣
-          from: f.name, fromInitial: f.initial, fromColor: f.color, fromAvatar: f.avatar,
-          to: t.name, toInitial: t.initial, toColor: t.color, toAvatar: t.avatar,
-          // amount 固化基准币（标记结清用）；amountDisp/cur 为该行结算币种视图；amountRef 为展示币种（合计用）
-          amount: amt, amountDisp: pv.amt, cur: pv.cur, amountRef: disp(amt), settled: false });
-      }
+    // 终止性可证明（不再是靠兜底）：amt 恒为 ≥1 的整数，每轮至少一端精确归零并推进指针，
+    // 故循环次数 ≤ 债务人数 + 债权人数。guard 保留但已降级为断言，正常永不触发。
+    let guard = debtors.length + creditors.length + 8;
+    while (i < debtors.length && j < creditors.length && guard-- > 0) {
+      const amt = Math.min(debtors[i].v, creditors[j].v); // 整数分，≥1
+      const f = who(debtors[i].o), t = who(creditors[j].o);
+      const amtBase = amt / 100; // 整数分 → 基准币，天然干净 2 位小数
+      const pv = pairView(debtors[i].o, creditors[j].o, amtBase);
+      transfers.push({ transferId: 't' + (tid++),
+        fromOpenid: debtors[i].o, toOpenid: creditors[j].o, // 标记结清时回传，服务端据此落抵扣
+        from: f.name, fromInitial: f.initial, fromColor: f.color, fromAvatar: f.avatar,
+        to: t.name, toInitial: t.initial, toColor: t.color, toAvatar: t.avatar,
+        // amount 固化基准币（标记结清用，必须是干净的 2 位数）；amountDisp/cur 为该行结算币种视图；amountRef 为展示币种（合计用）
+        amount: amtBase, amountDisp: pv.amt, cur: pv.cur, amountRef: disp(amtBase), settled: false });
       debtors[i].v -= amt; creditors[j].v -= amt;
-      if (debtors[i].v < 0.001) i++; if (creditors[j].v < 0.001) j++;
+      if (debtors[i].v <= 0) i++;
+      if (creditors[j].v <= 0) j++;
     }
+    if (guard <= 0) console.error('[settle.get] 贪心未在预期轮数内收敛（整数分下不应发生）', { bookId: p.bookId, i, j, transfers: transfers.length });
     // 已结清列表（可撤销），新结清的在前
     const settled = stl.map((s) => {
       const f = who(s.from), t = who(s.to);
@@ -1979,22 +2106,32 @@ const settle = {
     const splits = records.filter((r) => r.type === 'expense').map((r) => {
       const sp = r.split || { mode: 'even', members: [] };
       const n = sp.members.length || 1;
+      // 逐笔按**该笔当日**汇率换算，与首页/records/详情页逐字同源（不走 F —— F 只用于聚合量）
+      const amtDisp = recToDisplay(r, dispCur, quotesAt(rateIndex, r.date));
       let detail;
       if (sp.mode === 'treat') detail = `仅${(mMap[r.payerOpenid] || {}).name || ''}承担`;
-      else if (sp.mode === 'even') detail = `${n} 人均摊 · 各 ${sym}${round2(disp(r.amountConverted) / n)}`;
+      else if (sp.mode === 'even') detail = `${n} 人均摊 · 各 ${sym}${round2(amtDisp / n)}`;
       else detail = `${n} 人分摊`;
       return {
-        title: r.title || r.categoryPath, amount: disp(r.amountConverted),
+        title: r.title || r.categoryPath, amount: amtDisp,
         payerName: `${(mMap[r.payerOpenid] || {}).name || ''}垫付`, detail,
-        isForeign: r.currency !== r.baseCurrency, fx: r.currency !== r.baseCurrency ? `${r.amount} ${r.currency}` : '',
+        // 外币判定跟展示币种比（与 record.list 对齐），原先跟 baseCurrency 比属同类不一致
+        isForeign: r.currency !== dispCur, fx: r.currency !== dispCur ? `${r.amount} ${r.currency}` : '',
         avatars: sp.members.map((m) => ({ initial: (mMap[m.openid] || {}).initial || '?', color: (mMap[m.openid] || {}).color || '#999', avatarFileID: (mMap[m.openid] || {}).avatarFileID || '' })),
       };
     });
+    // 净额一律由 cents 派生（**不要**另算一遍 round2(net[o])）：那就是 REG-02 的成因 ——
+    // 两条独立的取整路径必然对不上。转账行的 amount 同样来自 cents，故两者精确自洽。
+    const netOf = (o) => disp((cents[o] || 0) / 100);
+    // 总支出**定义为**明细行显示值之和（不是 disp(totalBase)）。用户验证「总支出」的唯一手段
+    // 就是把明细行加起来，所以让它满足那个检查；disp(totalBase) 满足的是「未取整总量的取整」——
+    // 没有用户能观察到那个性质。records 已在内存里（splits 就是它生成的），逐笔求和零额外成本。
+    const totalExpenseShown = round2(splits.reduce((s, x) => s + x.amount, 0));
     return {
       // myNet / 成员净额均为「冲抵后的剩余口径」：全部结清则归零，关心的是还差多少而非历史总账
-      summary: { myNet: disp(net[me]), totalExpense: disp(totalExpense), myPaid: disp(paid[me]), myShare: disp(share[me]), currency: dispCur },
+      summary: { myNet: netOf(me), totalExpense: totalExpenseShown, myPaid: disp(paid[me]), myShare: disp(share[me]), currency: dispCur },
       transfers, settled,
-      members: Object.keys(mMap).map((o) => ({ name: mMap[o].name + (o === me ? '（我）' : ''), initial: mMap[o].initial, color: mMap[o].color, avatarFileID: mMap[o].avatarFileID || '', paid: disp(paid[o]), share: disp(share[o]), net: disp(net[o]) })),
+      members: Object.keys(mMap).map((o) => ({ name: mMap[o].name + (o === me ? '（我）' : ''), initial: mMap[o].initial, color: mMap[o].color, avatarFileID: mMap[o].avatarFileID || '', paid: disp(paid[o]), share: disp(share[o]), net: netOf(o) })),
       splits, splitCount: splits.length,
     };
   },
@@ -2387,6 +2524,202 @@ const seed = {
     if (!isDevUser(ctx.openid)) throw new AppError('NO_PERMISSION', '非开发者禁止操作');
     const result = await clearSeedData(ctx.openid);
     return { ok: true, result };
+  },
+
+  // 注入指定日期的 CNY 基准汇率快照（**仅测试用**）。
+  // 线上 fetchAndStoreCnyQuotes 只写当天、rate.getDaily 也只补当天，没有任何接口能造出历史汇率差，
+  // 于是「金额不随汇率漂移」这件事根本无法验收（只能验「数字变了」，验不了「数字没变」）。
+  // quotes 形如 { EUR: 7.8, ISK: 0.055 }（1 单位该币 = ? CNY），CNY 恒为 1，自动补齐。
+  // 幂等：同一 (date, base=CNY) 用固定 _id 覆盖写，可重跑。
+  async injectRateSnapshot(p, ctx) {
+    if (!isDevUser(ctx.openid)) throw new AppError('NO_PERMISSION', '非开发者禁止注入汇率');
+    const date = String(p.date || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new AppError('INVALID_PARAM', 'date 需为 YYYY-MM-DD');
+    const src = p.quotes;
+    if (!src || typeof src !== 'object' || !Object.keys(src).length) throw new AppError('INVALID_PARAM', '缺少 quotes');
+    const quotes = { CNY: 1 };
+    Object.keys(src).forEach((c) => {
+      const v = Number(src[c]);
+      // 只收已知币种的正数报价，避免脏键污染快照
+      if (CUR_SYMBOL[c] && v > 0) quotes[c] = c === 'CNY' ? 1 : rateSig(v);
+    });
+    if (Object.keys(quotes).length < 2) throw new AppError('INVALID_PARAM', 'quotes 里没有可用的币种报价');
+    await db.collection('rates').doc(`${date}_CNY`)
+      .set({ data: { date, base: 'CNY', quotes, isFallback: false, injected: true } });
+    return { ok: true, date, base: 'CNY', currencies: Object.keys(quotes).length, quotes };
+  },
+
+  // 删除指定日期的汇率快照（**仅测试用**，配合 injectRateSnapshot 做清理）
+  async deleteRateSnapshot(p, ctx) {
+    if (!isDevUser(ctx.openid)) throw new AppError('NO_PERMISSION', '非开发者禁止删除汇率');
+    const date = String(p.date || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new AppError('INVALID_PARAM', 'date 需为 YYYY-MM-DD');
+    const r = await db.collection('rates').doc(`${date}_CNY`).remove().catch(() => ({ stats: { removed: 0 } }));
+    return { ok: true, date, removed: (r.stats && r.stats.removed) || 0 };
+  },
+
+  // 重固化 amountConverted 到 round6（**仅开发者**，dryRun 默认 true）。
+  // 背景：record.create/update 早已是 round6，但 seedData 与 dataio 两条写入路径一直是 round2
+  // （已随本轮修好）。存量记录里 round2 固化的那些，会让「日聚合 × 系数」与「逐笔换算」落到
+  // 不同的分上（round2 的误差经 ISK 约 159 倍放大可达 0.78；round6 ≤8e-5，必然同分）。
+  // 缺 rate 的记录一律跳过：从 round2 值反推 rate 再乘回去是恒等式，恢复不了精度。
+  // 幂等：重算值与现值相同则不写。dryRun 时只统计不写。
+  async refixAmountConverted(p, ctx) {
+    if (!isDevUser(ctx.openid)) throw new AppError('NO_PERMISSION', '非开发者禁止执行重固化');
+    const dryRun = p.dryRun !== false;
+    const where = p.bookId ? { bookId: p.bookId } : { _id: _.exists(true) };
+    const recs = [];
+    for (let skip = 0; skip < 200000; skip += 1000) {
+      const r = await db.collection('records').where(where)
+        .field({ bookId: 1, amount: 1, rate: 1, amountConverted: 1, currency: 1, baseCurrency: 1, date: 1, title: 1, seed: 1, createdAt: 1 })
+        .skip(skip).limit(1000).get();
+      recs.push(...(r.data || []));
+      if ((r.data || []).length < 1000) break;
+    }
+    // 账本名（报告可读性）
+    const bookIds = [...new Set(recs.map((r) => r.bookId))].filter(Boolean);
+    const bookName = {};
+    for (let i = 0; i < bookIds.length; i += 100) {
+      const b = await db.collection('books').where({ _id: _.in(bookIds.slice(i, i + 100)) }).limit(100).get().catch(() => ({ data: [] }));
+      (b.data || []).forEach((x) => { bookName[x._id] = x.name; });
+    }
+    const changes = [], noRate = [], byBook = {};
+    const bump = (bid, k, d) => {
+      const g = byBook[bid] || (byBook[bid] = { bookId: bid, name: bookName[bid] || '(未知账本)', total: 0, change: 0, noRate: 0, maxDiff: 0 });
+      g[k] += 1; if (d != null && d > g.maxDiff) g.maxDiff = d;
+    };
+    recs.forEach((r) => {
+      bump(r.bookId, 'total');
+      const rate = Number(r.rate), amt = Number(r.amount);
+      if (!(rate > 0) || !Number.isFinite(amt)) {
+        noRate.push({ recordId: r._id, bookId: r.bookId, bookName: bookName[r.bookId] || '', title: r.title || '', date: r.date, amount: r.amount, currency: r.currency, rate: r.rate, amountConverted: r.amountConverted });
+        bump(r.bookId, 'noRate');
+        return;
+      }
+      const next = round6(amt * rate);
+      const cur = r.amountConverted;
+      if (cur === next) return; // 幂等：已是 round6 结果
+      const diff = Math.abs((Number(cur) || 0) - next);
+      changes.push({ recordId: r._id, bookId: r.bookId, bookName: bookName[r.bookId] || '', title: r.title || '',
+        date: r.date, amount: amt, currency: r.currency, baseCurrency: r.baseCurrency, rate,
+        old: cur, new: next, diff: Math.round(diff * 1e8) / 1e8, seed: !!r.seed });
+      bump(r.bookId, 'change', diff);
+    });
+    changes.sort((a, b) => b.diff - a.diff);
+    // 定位 QA 报的那笔 700 CNY：报出它的归属（演示 seed / 存量 / 导入）供反推待修范围
+    const probe700 = recs.filter((r) => r.currency === 'CNY' && Math.abs(Number(r.amount) - 700) < 0.001)
+      .map((r) => ({ recordId: r._id, bookName: bookName[r.bookId] || '', title: r.title || '', date: r.date,
+        amount: r.amount, rate: r.rate, amountConverted: r.amountConverted, baseCurrency: r.baseCurrency,
+        seed: !!r.seed, createdAt: r.createdAt,
+        wouldChange: Number(r.rate) > 0 ? round6(Number(r.amount) * Number(r.rate)) !== r.amountConverted : false }));
+    let written = 0;
+    if (!dryRun) {
+      for (let i = 0; i < changes.length; i += 20) {
+        await Promise.all(changes.slice(i, i + 20).map((c) => db.collection('records').doc(c.recordId)
+          .update({ data: { amountConverted: c.new } })
+          .then(() => { written += 1; })
+          .catch((e) => { console.error('[refix] 写失败', c.recordId, e); })));
+      }
+    }
+    return {
+      dryRun,
+      summary: {
+        recordsScanned: recs.length, books: bookIds.length,
+        toChange: changes.length, skippedNoRate: noRate.length,
+        maxDiff: changes.length ? changes[0].diff : 0, written,
+      },
+      byBook: Object.values(byBook),
+      changes: changes.slice(0, 200),        // 明细截断，统计值是全量
+      changesTruncated: Math.max(0, changes.length - 200),
+      noRate: noRate.slice(0, 50), noRateTruncated: Math.max(0, noRate.length - 50),
+      probe700,
+    };
+  },
+
+  // 一次性迁移：删掉「全局默认展示币种」入口后，把各 (用户 × 账本) 迁移前的**生效口径**
+  // 物化成账本级覆盖，保证「删的是入口、不是各账本的显示口径」——迁移后所见必须不变。
+  // dryRun 默认 true：必须显式传 dryRun:false 才会真写。幂等、可重跑（只补空缺，不覆盖已有值）。
+  async migrateDisplayCurrency(p, ctx) {
+    if (!isDevUser(ctx.openid)) throw new AppError('NO_PERMISSION', '非开发者禁止执行迁移');
+    const dryRun = p.dryRun !== false;
+    // 旧优先级链的副本（账本覆盖 > 用户全局默认 > 账本基准币）。必须自带一份：
+    // displayCurrencyOf 已删掉中间级，拿它算不出「迁移前的生效值」。
+    const oldEffective = (u, bookId, base) => {
+      const s = (u && u.settings) || {};
+      const byBook = s.bookCurrency || {};
+      return (bookId && byBook[bookId]) || s.displayCurrency || base || 'CNY';
+    };
+    // 1) 全部成员关系（所有用户 × 所有账本，不止当前用户），分页取完
+    const members = [];
+    for (let skip = 0; skip < 100000; skip += 100) {
+      const r = await db.collection('members').skip(skip).limit(100).get();
+      members.push(...r.data);
+      if (r.data.length < 100) break;
+    }
+    const alive = members.filter((m) => m.status !== 'removed');
+    // 2) 批量取账本基准币与用户 settings
+    const bookIds = [...new Set(alive.map((m) => m.bookId))].filter(Boolean);
+    const openids = [...new Set(alive.map((m) => m.openid))].filter(Boolean);
+    const books = {}, users = {};
+    for (let i = 0; i < bookIds.length; i += 100) {
+      const r = await db.collection('books').where({ _id: _.in(bookIds.slice(i, i + 100)) }).limit(100).get();
+      r.data.forEach((b) => { books[b._id] = b; });
+    }
+    for (let i = 0; i < openids.length; i += 100) {
+      const r = await db.collection('users').where({ _id: _.in(openids.slice(i, i + 100)) }).limit(100).get();
+      r.data.forEach((u) => { users[u._id] = u; });
+    }
+    // 3) 逐组合定去向
+    const plan = [], skipped = [];
+    alive.forEach((m) => {
+      const u = users[m.openid], bk = books[m.bookId];
+      const uname = (u && u.nickname) || '(无用户文档)';
+      const bname = (bk && bk.name) || '(账本不存在)';
+      const row = { openid: m.openid, nickname: uname, bookId: m.bookId, bookName: bname };
+      if (!bk) { skipped.push({ ...row, reason: 'book_missing（悬挂成员记录，账本已不存在）' }); return; }
+      const base = bk.baseCurrency || 'CNY';
+      const existing = ((u && u.settings && u.settings.bookCurrency) || {})[m.bookId];
+      if (existing) { skipped.push({ ...row, base, reason: `already_set（已有账本级覆盖 ${existing}，不动）` }); return; }
+      const eff = oldEffective(u, m.bookId, base);
+      // 生效值 == 基准币时不必写：新逻辑本就回落基准币，不写同样「所见不变」，
+      // 且能保留「该账本未单独设置」的语义（日后改基准币仍会跟着变）。
+      if (eff === base) { skipped.push({ ...row, base, reason: `same_as_base（生效值 ${eff} == 基准币，新逻辑自动回落，无需写入）` }); return; }
+      plan.push({ ...row, base, globalDefault: (u && u.settings && u.settings.displayCurrency) || '(无)', write: eff });
+    });
+    // 4) 待清理的遗留全局默认字段
+    const stale = Object.values(users)
+      .filter((u) => u.settings && u.settings.displayCurrency)
+      .map((u) => ({ openid: u._id, nickname: u.nickname || '', displayCurrency: u.settings.displayCurrency }));
+    // 5) 执行（dryRun 时一律不写）
+    let written = 0, fieldsRemoved = 0;
+    if (!dryRun) {
+      const byUser = {};
+      plan.forEach((x) => {
+        byUser[x.openid] = byUser[x.openid] || {};
+        byUser[x.openid]['settings.bookCurrency.' + x.bookId] = x.write;
+      });
+      for (const openid of Object.keys(byUser)) {
+        await db.collection('users').doc(openid).update({ data: byUser[openid] })
+          .then(() => { written += Object.keys(byUser[openid]).length; })
+          .catch((e) => { console.error('[migrate] 写覆盖失败', openid, e); });
+      }
+      for (const s of stale) {
+        await db.collection('users').doc(s.openid).update({ data: { 'settings.displayCurrency': _.remove() } })
+          .then(() => { fieldsRemoved += 1; })
+          .catch((e) => { console.error('[migrate] 删全局默认字段失败', s.openid, e); });
+      }
+    }
+    return {
+      dryRun,
+      summary: {
+        membersTotal: members.length, membersAlive: alive.length,
+        books: bookIds.length, users: openids.length,
+        toWrite: plan.length, toSkip: skipped.length,
+        staleGlobalFields: stale.length,
+        written, fieldsRemoved,
+      },
+      plan, skipped, stale,
+    };
   },
 
   // 按渠道清理测试数据：删除开发版/体验版创建的账本（级联记录/成员/分类/布局/AI 会话/图片）与反馈工单。

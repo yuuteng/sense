@@ -40,7 +40,7 @@ Page({
     try {
       const list = await this.fetch(0);
       this.page = 0;
-      const cur = list.displayCurrency || 'CNY';
+      const cur = list.displayCurrency;
       this.cur = cur;
       const s = list.summary || { income: 0, expense: 0, count: 0 };
       const sumParts = [];
